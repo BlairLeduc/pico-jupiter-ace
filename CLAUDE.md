@@ -22,7 +22,8 @@ diff against xAce (cloned at `52d89b2`, built headless) is clean line for
 line through boot and a typed line, with xAce's errata named in
 `tools/trace-diff.py` and `xace-trace.c`; xAce loaded an archive `.tap`.
 **Outstanding:** xAce has no `.ace` loader, so the done-when's `.ace` check
-needs another reference (an owner decision); CI on the PR. **Not checked:**
+needs another reference (an owner decision). CI green on both jobs for PR
+#2, 2026-10-03, with the trace diff run there too. **Not checked:**
 the field's line numbers and INT length against the schematic (they are
 MAME's, as runtime configuration); character-RAM and open-bus read values;
 anything on the device. The Ace powers on to a blank screen with a cursor,

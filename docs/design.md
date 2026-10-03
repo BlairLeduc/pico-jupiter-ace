@@ -1188,7 +1188,8 @@ fail with the SHA-1 check removed). §16 is updated with what the ROM
 settled. xAce runs the same ROM, loads an archive `.tap`, and the trace
 diffs of boot and of a typed line are clean (§13.4). *Outstanding:* xAce
 cannot load a `.ace` (it has no loader), so that part of the done-when needs
-the owner's decision on another reference; CI on the PR. *Not verified:*
+the owner's decision on another reference. CI ran green on both jobs for
+PR #2, 2026-10-03, the trace diff included. *Not verified:*
 anything on the device (the firmware does not link `ace.c` until M7, so
 tier 1's placement is unchecked); the field's line numbers and INT timing
 against the schematic; character RAM and open-bus read values.
