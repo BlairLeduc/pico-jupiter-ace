@@ -11,8 +11,8 @@ cmake_minimum_required(VERSION 3.18)
 option(PICO_ACE_HOST "Build the portable core and its host tests, with no Pico SDK" OFF)
 
 # Every fixed capacity lives in src/core/config.h; nothing here duplicates one.
-# M0 has no core sources yet: the core is its headers until M1 adds z80.c.
 set(PICO_ACE_CORE_SOURCES
+    src/core/z80.c
 )
 
 set(PICO_ACE_WARNINGS -Wall -Wextra -Werror)
@@ -91,8 +91,10 @@ else()
     endif()
 
     # How much of the core's hot path runs from SRAM (src/core/hot.h).
-    # Nothing is measured yet, so nothing moves (design.md §3.2, M2).
+    # Nothing is measured yet, so nothing moves (design.md §3.2, M2). The
+    # core library needs it too: that is where the marked functions are.
     set(PICO_ACE_RAM_TIER 0 CACHE STRING "Hot-code SRAM tier, 0-2 (src/core/hot.h)")
+    target_compile_definitions(pico_ace_core PRIVATE PICO_ACE_RAM_TIER=${PICO_ACE_RAM_TIER})
 
     # clk_peri does not follow clk_sys by default; the SPI baud and the
     # audio carrier are re-applied in code as well (hardware-notes.md §3).

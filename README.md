@@ -10,10 +10,11 @@ against the Raspberry Pi Pico SDK.
 
 ## Status
 
-**Design only, as of 2026-10-03.** Nothing is built and nothing has been
-measured. The design is complete enough to start from, and the first
-milestone, M0 (a build skeleton and a firmware banner), is next. There is no
-firmware to download yet.
+**Early, as of 2026-10-03.** The build skeleton (M0) and the Z80 (M1) are
+done: the CPU passes ZEXDOC, ZEXALL and FUSE's per-opcode tests on the
+workstation. The next milestone, M2, runs the Z80 on the board to measure
+whether 150 MHz is fast enough. Nothing emulates the Ace yet, and there is
+no firmware worth downloading.
 
 ## What it is meant to do
 

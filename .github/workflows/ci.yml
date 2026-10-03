@@ -20,8 +20,14 @@ jobs:
       - name: Build
         run: cmake --build build/host -j
 
+      # ZEXDOC, ZEXALL and FUSE's tests are GPL and not committed. Without
+      # them those tests skip, and a skipped ZEXALL is an unverified CPU
+      # (design.md §5.4), so CI fetches them every run.
+      - name: Fetch the Z80 test suites
+        run: tools/fetch-test-suites.sh
+
       - name: Test
-        run: ctest --test-dir build/host --output-on-failure --no-tests=error
+        run: ctest --test-dir build/host --output-on-failure --no-tests=error -j 4
 
   firmware:
     name: pico2 UF2

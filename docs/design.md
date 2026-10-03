@@ -19,8 +19,9 @@ This document applies the lessons. It does not repeat them. Where a decision
 just follows a lesson, it cites the lesson and moves on, and the space goes
 to what is different about the Ace.
 
-**Status, 2026-10-03.** Draft. Nothing is built and nothing has been
-measured. Every number about the Ace below comes from secondary knowledge
+**Status, 2026-10-03.** M0 and M1 are done: the skeleton, and the Z80 on
+the host (§15.2). Nothing has been measured on the device beyond M0's
+banner. Every number about the Ace below comes from secondary knowledge
 until §16's table says otherwise. Every performance figure is an
 **estimate** and is labelled as one (EL §14.4).
 
@@ -410,6 +411,29 @@ tests pass here under the new names.
   IM 1, and IM 2 reads whatever floats on the bus during acknowledge (§16).
 - No per-T-state bus accuracy (EL §3.1). Wait states are applied per access
   where §6.4 says so, at instruction granularity.
+- **Q**, the flags register's shadow: `SCF` and `CCF` take X and Y from
+  `(Q ^ F) | A`, where Q is F if the previous instruction wrote the flags
+  and 0 if not (Patrik Rak's measurements of NMOS Z80s). FUSE cannot see
+  this, since every FUSE test starts with Q at zero, so our own test checks
+  it (§5.4).
+
+**Where the sources disagree, FUSE's tests decide**, because they are what
+M1 is checked against. Four choices follow, settled 2026-10-03 against
+FUSE's `tests.expected` from its repository's master branch:
+
+- **Repeating block instructions keep the single instruction's flags.**
+  `LDIR`, `CPIR`, `INIR`, `OTIR` and their `D` forms have been measured since
+  to change H, P/V, X and Y on each repeat. FUSE does not model that, and its
+  `edb2_1`, which stops `INIR` part-way, expects `INI`'s flags. No known Ace
+  program depends on the difference.
+- **A `JR cc` or `DJNZ` not taken does not read its displacement.** A real Z80
+  does read it, but a read with no side effects cannot be seen on the Ace's
+  bus, and FUSE's access order omits it.
+- **`HALT` leaves PC on itself** and runs again as a NOP until an interrupt
+  steps past it. A real Z80 advances PC and ignores what it fetches. The two
+  push the same return address and differ only in the PC a snapshot shows.
+- **IM 0 executes only an `RST`**, from the bus byte. On the Ace that byte is
+  believed to be `$FF` (§16), `RST $38`, the same as IM 1.
 
 ### 5.2 Implementation
 
@@ -423,11 +447,18 @@ Labels-as-values (computed `goto`) dispatch is a GCC option worth one
 measured experiment in the perf pass, against a control build (EL §12). It is
 not the starting point.
 
+**As built in M1** (`src/core/z80.c`), the CPU state stays in `z80_t` and is
+reached through its pointer, not copied into locals. Locals are the first
+experiment in M2, with M1's code as the control. The memory fast path is the
+page table of §6.1 (`page_t`, defined in `z80.h`), with the bus's functions
+behind a NULL page, so the host tests use the same path. A test that logs
+every access leaves every page NULL.
+
 ### 5.3 The run loop
 
 ```
 while (t < slice_end):
-    if int_line && iff1 && !ei_delay: accept interrupt (IM 1: 13 T)
+    if int_line && iff1 && !int_blocked: accept interrupt (IM 1: 13 T)
     if halted: fast-forward to min(slice_end, next INT edge); R += skipped/4; continue
     execute one instruction
 ```
@@ -450,11 +481,24 @@ both edges (§11.1).
 |---|---|---|
 | **ZEXDOC** and **ZEXALL** (Cringle) | documented and undocumented flag results over every instruction group | run under a minimal CP/M BDOS stub (`CALL 5`, functions 2 and 9). A run takes minutes on the host; register it as a long test |
 | **FUSE's Z80 tests** (`tests.in`/`tests.expected`) | per-opcode T-states, memory and port access sequences, `MEMPTR` | **the cycle table asserted by execution** (EL §3.3) |
-| Interrupt tests (ours) | `EI` delay, `HALT` wake, IM 1/IM 2 timing, INT held vs. pulsed | written against the Z80 user manual |
+| Behaviour tests (ours, `test_z80_behaviour`) | `EI` delay, `HALT` and `R`, IM 0/1/2, INT held vs. pulsed, the `LD A,I` P/V quirk, NMI and `RETN`, `ED` holes, the run contract, prefix chains, Q | written against the Z80 user manual and Rak's measurements; each rule beside a control that must fail |
 
 Fetch the binaries with `tools/fetch-test-suites.sh` into a gitignored
 directory, and commit none (both suites are GPL). A missing binary makes the
-test exit 77, and **a skipped ZEXALL is an unverified CPU** (EL §3.3).
+test exit 77, and **a skipped ZEXALL is an unverified CPU** (EL §3.3). CI
+fetches them on every run.
+
+`test_z80_fuse` checks every register, `MEMPTR`, I, R, the IFFs, IM, the
+halt state, the T-states, all 64 KiB of memory, and the order of memory and
+port accesses with their addresses and data. It does not check when within
+an instruction each access happens, or FUSE's contention events: the
+emulator is exact per instruction, not per T-state (§5.1).
+
+**The harness was shown to fail**, 2026-10-03, with one bug planted at a
+time in a copy of the tree: `DJNZ` taken at 12 T, `LD A,(nn)` leaving
+`MEMPTR` at `nn`, `EX (SP),HL` writing its two bytes in the other order, and
+`BIT n,(HL)` taking X and Y from the operand each fail FUSE. `SCF` without Q
+passes FUSE, as expected, and fails `test_z80_behaviour`.
 
 ---
 
@@ -997,6 +1041,14 @@ tests pass (§5.4); a missing binary makes its test report skipped, not
 passed.
 *Measured:* ZEXALL wall time on the workstation (a regression marker only).
 *Leaves out:* the Ace, the page table, `HALT` fast-forward.
+*Done, 2026-10-03* (Apple M1 Pro, Apple clang 21; suites fetched that
+day): all 1,356 FUSE tests pass on registers, `MEMPTR`, T-states, memory and
+access order; ZEXDOC and ZEXALL pass all 67 groups each; the behaviour tests
+pass, each with its control (§5.4). ZEXALL took 90.6 s in a Debug build and
+26.4 s in Release, for 46.7 G T-states. *Not verified:* CI running the
+fetched suites (from this commit on); per-access timing within an
+instruction and contention, which are out of scope (§5.1); the CPU state in
+locals (§5.2), left for M2 to measure.
 
 #### M2. The Z80 on the board: the performance gate
 
