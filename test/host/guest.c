@@ -98,14 +98,17 @@ void guest_press(guest_t *g, uint8_t code, bool alt) {
 
 void guest_type(guest_t *g, const char *s) {
     for (; *s; s++) {
-        uint8_t c = (uint8_t)*s;
-        if (c == '\n') c = PICOCALC_KEY_ENTER;
-        else if (c == '\b') c = PICOCALC_KEY_BACKSPACE;
-        else if (c < 0x20u || c > 0x7Eu) {
-            fprintf(stderr, "guest_type: no PicoCalc key for 0x%02X\n", c);
+        picocalc_event_t ev[KEYMAP_TEXT_EVENTS];
+        unsigned n = keymap_picocalc_text((uint8_t)*s, ev);
+        if (n == 0) {
+            fprintf(stderr, "guest_type: no PicoCalc key for 0x%02X\n", (uint8_t)*s);
             abort();
         }
-        guest_press(g, c, false);
+        for (unsigned i = 0; i < n; i++) keymatrix_event(&g->k, ev[i].state, ev[i].code);
+        if (!guest_settle(g, 100)) {
+            fprintf(stderr, "guest_type: 0x%02X still held after 100 fields\n", (uint8_t)*s);
+            abort();
+        }
     }
 }
 

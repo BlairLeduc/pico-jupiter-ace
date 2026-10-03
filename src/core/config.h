@@ -66,6 +66,17 @@
 
 #define ACE_SNAPSHOT_COUNT      3u  /* §4.4: three, and the third is the point */
 
+/* ---- The panel (design.md §7.4; hardware-notes.md §4) ----------------- */
+
+#define ACE_PANEL_W           320u
+#define ACE_PANEL_H           320u
+#define ACE_SCREEN_W          (ACE_SCREEN_COLS * ACE_GLYPH_COLS)   /* 256 */
+#define ACE_SCREEN_H          (ACE_SCREEN_ROWS * ACE_GLYPH_ROWS)   /* 192 */
+#define ACE_SCREEN_X           32u  /* the guest 1:1, centred across        */
+#define ACE_SCREEN_Y           64u  /* with a 64-row band above and below    */
+#define ACE_LINEBUF_COUNT       2u  /* DMA ping-pong (HW §4.6)              */
+#define ACE_LINEBUF_PIXELS  ACE_PANEL_W
+
 /* ---- Timing (design.md §2.1, §11) ------------------------------------ */
 
 #define ACE_CPU_HZ        3250000u  /* 6.5 MHz crystal / 2                 */

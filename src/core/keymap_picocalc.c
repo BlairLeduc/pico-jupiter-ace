@@ -195,3 +195,31 @@ uint8_t keymap_picocalc_canonical(uint8_t code) {
     default:                 return code;
     }
 }
+
+unsigned keymap_picocalc_text(uint8_t ch, picocalc_event_t out[KEYMAP_TEXT_EVENTS]) {
+    uint8_t mod = 0, code;
+    if (ch == '\r' || ch == '\n') {
+        code = PICOCALC_KEY_ENTER;
+    } else if (ch == 0x08u || ch == 0x7Fu) {
+        code = PICOCALC_KEY_BACKSPACE;
+    } else if (ch == 0x1Bu) {
+        code = PICOCALC_KEY_ESC;
+    } else if (ch >= 0x01u && ch <= 0x1Au) {
+        /* Ctrl passes the key through unchanged (hardware-notes.md §6.3). */
+        mod = PICOCALC_KEY_CTRL;
+        code = (uint8_t)('a' + ch - 1u);
+    } else if (ch >= 0x20u && ch <= 0x7Eu) {
+        code = ch;
+        /* A code that is not its own key's base is a Shift chord. */
+        if (keymap_picocalc_canonical(ch) != ch) mod = PICOCALC_KEY_SHIFT_L;
+    } else {
+        return 0;
+    }
+
+    unsigned n = 0;
+    if (mod) out[n++] = (picocalc_event_t){ KEY_EV_PRESSED, mod };
+    out[n++] = (picocalc_event_t){ KEY_EV_PRESSED, code };
+    out[n++] = (picocalc_event_t){ KEY_EV_RELEASED, code };
+    if (mod) out[n++] = (picocalc_event_t){ KEY_EV_RELEASED, mod };
+    return n;
+}

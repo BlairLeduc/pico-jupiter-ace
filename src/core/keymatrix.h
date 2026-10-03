@@ -85,6 +85,20 @@ uint8_t keymap_picocalc_canonical(uint8_t code);
 #define KEY_EV_HELD      2u
 #define KEY_EV_RELEASED  3u
 
+/* One southbridge FIFO entry (hardware-notes.md §6.2). */
+typedef struct { uint8_t state, code; } picocalc_event_t;
+
+/* The most events one ASCII byte takes: a modifier around a key. */
+#define KEYMAP_TEXT_EVENTS 4u
+
+/* The events a PicoCalc sends for one ASCII byte, so that text from the
+ * UART or a host test arrives the way typing would (design.md §9.1).
+ * Printable characters are themselves, inside Shift where the PicoCalc
+ * types them as a Shift chord; CR and LF are Enter, BS and DEL Backspace,
+ * ESC is Esc, and the other control characters are Ctrl with a letter.
+ * Returns the count, 0 for a byte no key sends. */
+unsigned keymap_picocalc_text(uint8_t ch, picocalc_event_t out[KEYMAP_TEXT_EVENTS]);
+
 /* ---- the held-key set ------------------------------------------------ */
 
 typedef struct {

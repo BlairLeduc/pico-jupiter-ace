@@ -99,6 +99,41 @@ int main(void) {
     CHECK(keymap_picocalc_canonical('!') == '1', "! is 1");
     CHECK(keymap_picocalc_canonical(':') == ';', ": is ;");
 
+    /* ---- text as PicoCalc events: the UART's path (§9.1) ------------- */
+    {
+        picocalc_event_t ev[KEYMAP_TEXT_EVENTS];
+        CHECK(keymap_picocalc_text('a', ev) == 2 && ev[0].state == KEY_EV_PRESSED &&
+                  ev[0].code == 'a' && ev[1].state == KEY_EV_RELEASED && ev[1].code == 'a',
+              "a is a press and a release");
+        CHECK(keymap_picocalc_text('!', ev) == 4 && ev[0].code == PICOCALC_KEY_SHIFT_L &&
+                  ev[1].code == '!' && ev[2].code == '!' && ev[2].state == KEY_EV_RELEASED &&
+                  ev[3].code == PICOCALC_KEY_SHIFT_L && ev[3].state == KEY_EV_RELEASED,
+              "! is inside Shift, as the PicoCalc types it");
+        CHECK(keymap_picocalc_text('A', ev) == 4 && ev[0].code == PICOCALC_KEY_SHIFT_L,
+              "A is inside Shift");
+        CHECK(keymap_picocalc_text('`', ev) == 2, "` is a key of its own");
+        CHECK(keymap_picocalc_text('\r', ev) == 2 && ev[0].code == PICOCALC_KEY_ENTER,
+              "CR is Enter");
+        CHECK(keymap_picocalc_text('\n', ev) == 2 && ev[0].code == PICOCALC_KEY_ENTER,
+              "LF is Enter");
+        CHECK(keymap_picocalc_text(0x7Fu, ev) == 2 && ev[0].code == PICOCALC_KEY_BACKSPACE,
+              "DEL is Backspace");
+        CHECK(keymap_picocalc_text(0x1Bu, ev) == 2 && ev[0].code == PICOCALC_KEY_ESC,
+              "ESC is Esc");
+        CHECK(keymap_picocalc_text(0x09u, ev) == 4 && ev[0].code == PICOCALC_KEY_CTRL &&
+                  ev[1].code == 'i' && ev[3].code == PICOCALC_KEY_CTRL,
+              "^I is Ctrl+i");
+        CHECK(keymap_picocalc_text(0x00u, ev) == 0 && keymap_picocalc_text(0x80u, ev) == 0 &&
+                  keymap_picocalc_text(0x1Cu, ev) == 0,
+              "bytes no key sends give no events");
+        /* Every printable byte's events reach a binding in the table. */
+        for (unsigned c = 0x20; c < 0x7F; c++) {
+            unsigned n = keymap_picocalc_text((uint8_t)c, ev);
+            CHECK(n >= 2 && entry_for(ev[n == 4 ? 1 : 0].code, false),
+                  "'%c' sends a code with no binding", c);
+        }
+    }
+
     /* ---- the held set: pacing (§9.1) ---------------------------------- */
     {
         /* Press and release in one poll: the key is down for exactly

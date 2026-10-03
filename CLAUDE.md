@@ -158,8 +158,8 @@ core were verified on a Plus 2 W, and `design.md` §4.6 says which files to
 
 ## Build and test
 
-As of M5 these work, except `tools/uart-type.sh` (M6, which turns UART bytes
-into key events).
+As of M6 these all work; until M7, `tools/uart-type.sh`'s events are logged
+rather than typed at a guest.
 
 ```sh
 # host: src/core/ with the system compiler, no Pico SDK, under CTest
