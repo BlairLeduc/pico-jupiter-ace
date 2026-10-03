@@ -89,7 +89,7 @@ static int test_halt(void) {
     uint32_t t = 0;
     for (int k = 0; k < 200; k++)
         t += z80_step(c);
-    CHECK(t == 800, "200 halted steps took %u T", t);
+    CHECK(t == 800, "200 halted steps took %u T", (unsigned)t);
     CHECK(c->halted && c->pc == 0x0001, "pc %04x", c->pc);
     CHECK(z80_r(c) == ((r0 + 200) & 0x7F), "R %02x, from %02x", z80_r(c), r0);
 
@@ -220,7 +220,7 @@ static int test_run_contract(void) {
     /* ED holes are counted NOPs of 8 T. */
     static const uint8_t holes[] = { 0xED, 0x00, 0xED, 0x77, 0xED, 0xFF };
     c = boot(holes, sizeof holes);
-    CHECK(z80_run(c, 24) == 24 && c->ed_holes == 3, "%u holes", c->ed_holes);
+    CHECK(z80_run(c, 24) == 24 && c->ed_holes == 3, "%u holes", (unsigned)c->ed_holes);
 
     /* A run of prefixes is one 4 T step each, and no interrupt comes
      * between a prefix and its opcode. */
@@ -238,7 +238,7 @@ static int test_run_contract(void) {
     memset(mem, 0xFD, sizeof mem);
     z80_set_int(c, true);
     uint32_t t = z80_run(c, 100000);
-    CHECK(t >= 100000 && t < 100004, "%u T", t);
+    CHECK(t >= 100000 && t < 100004, "%u T", (unsigned)t);
     return 0;
 }
 

@@ -202,7 +202,7 @@ int main(void) {
     FILE *fexp = suite_open("tests.expected", "r");
 
     static uint8_t init_mem[65536];
-    char line[1024], name[64];
+    char line[1024], name[sizeof line];
     int tests = 0, failed = 0;
 
     for (;;) {
