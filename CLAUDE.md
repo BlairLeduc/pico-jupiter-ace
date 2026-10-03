@@ -9,8 +9,25 @@ Raspberry Pi Pico SDK. The guest is a Z80A at 3.25 MHz with an 8 KiB Forth
 ROM, a 32×24 character display from 768 bytes of screen RAM and 1 KiB of
 character RAM, a 40-key matrix, and a one-bit speaker and tape port.
 
-**Implementation status, 2026-10-03: M2 done.** The next milestones are M3,
-the Ace on the host, and M6, board bring-up (`docs/design.md` §15).
+**Implementation status, 2026-10-03: M3 done.**
+The next milestones are M4 and M5 on the host and M6, board bring-up
+(`docs/design.md` §15).
+
+**M3, the Ace on the host** (`src/core/ace.c`, `test/host/guest.c`,
+`tools/trace/`), done 2026-10-03 on the workstation (Apple M1 Pro, Apple
+clang 21). The real ROM boots to its cursor in the 3K, 19K and 51K machines
+and runs `2 2 + .` to `4  OK`; 88,192 T from power-on to the prompt in the
+19K. Bus, field and ROM-embedding tests pass with their controls. The trace
+diff against xAce (cloned at `52d89b2`, built headless) is clean line for
+line through boot and a typed line, with xAce's errata named in
+`tools/trace-diff.py` and `xace-trace.c`; xAce loaded an archive `.tap`.
+xAce has no `.ace` loader; the owner moved that check to M11 (design.md
+§18 item 6). CI green on both jobs for PR #2, 2026-10-03, with the trace
+diff run there too. **Not checked:**
+the field's line numbers and INT length against the schematic (they are
+MAME's, as runtime configuration); character-RAM and open-bus read values;
+anything on the device. The Ace powers on to a blank screen with a cursor,
+not to `OK`.
 
 **M2, the Z80 on the board** (`src/bench/`, `src/port/bench_main.c`), on
 the Plus 2 W (id `7458DC82A89AAC12`) at 150 MHz, gcc 15.2 `-O3`,
@@ -60,7 +77,8 @@ shows the form.
 **Settled decisions** (`docs/design.md` §18, 2026-10-03): the power-on
 machine is the **19K** Ace; **the Ace ROM ships in the repository and is
 embedded in the firmware**, under the permission in `roms/COPYING.md`; the host clock is **150 MHz** only, with 300 MHz deferred; `.ace`
-snapshots are **imported, not exported**; the licence is **GPL-3.0**. Do not
+snapshots are **imported, not exported**, and wait for M11, which also
+chooses their reference emulator; the licence is **GPL-3.0**. Do not
 reopen these without the owner.
 
 ## The documents
@@ -111,7 +129,7 @@ core were verified on a Plus 2 W, and `design.md` §4.6 says which files to
 
 ## Build and test
 
-As of M2 these work, except `tools/uart-type.sh` (M6, which turns UART bytes
+As of M3 these work, except `tools/uart-type.sh` (M6, which turns UART bytes
 into key events).
 
 ```sh
@@ -133,6 +151,10 @@ tools/uart-log.sh 30 out/run.log &   # capture UART1 first, so the banner is in 
 tools/flash.sh                       # reset halt + resume, never reset run (HW §2.7)
 tools/flash.sh build/pico/pico-ace-bench.elf   # M2's bench; embeds ZEXDOC if fetched
 tools/uart-type.sh '2 2 + .\r'       # type at the guest over the same UART
+
+# trace diff against xAce (design.md §13.4); CI runs the second line too
+tools/trace/build-xace.sh            # clones xAce at a pinned commit into out/trace
+tools/trace-diff.py run --keys '2 2 + .\n'
 ```
 
 Both targets build under `-Wall -Wextra -Werror`, and CI builds both on every

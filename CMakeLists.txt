@@ -12,8 +12,17 @@ option(PICO_ACE_HOST "Build the portable core and its host tests, with no Pico S
 
 # Every fixed capacity lives in src/core/config.h; nothing here duplicates one.
 set(PICO_ACE_CORE_SOURCES
+    src/core/ace.c
     src/core/z80.c
 )
+
+# The Ace ROM, embedded from roms/ace.rom at build time and refused unless
+# its SHA-1 is the one ace_rom.h names (design.md §10.2).
+file(STRINGS ${CMAKE_CURRENT_SOURCE_DIR}/src/core/ace_rom.h PICO_ACE_ROM_SHA1
+     REGEX "^#define ACE_ROM_SHA1 ")
+string(REGEX REPLACE ".*\"([0-9a-f]+)\".*" "\\1" PICO_ACE_ROM_SHA1 "${PICO_ACE_ROM_SHA1}")
+set(PICO_ACE_ROM ${CMAKE_CURRENT_SOURCE_DIR}/roms/ace.rom)
+set(PICO_ACE_EMBED_ROM ${CMAKE_CURRENT_SOURCE_DIR}/cmake/embed_rom.cmake)
 
 set(PICO_ACE_WARNINGS -Wall -Wextra -Werror)
 
@@ -29,8 +38,16 @@ endfunction()
 # The core as a library both targets link. Headers only while it has no
 # sources; a STATIC library, built with our warnings, once it has.
 function(pico_ace_core_library)
+    set(rom_c ${CMAKE_BINARY_DIR}/generated/ace_rom.c)
+    add_custom_command(
+        OUTPUT ${rom_c}
+        COMMAND ${CMAKE_COMMAND} -DROM=${PICO_ACE_ROM} -DSHA1=${PICO_ACE_ROM_SHA1}
+                -DOUT=${rom_c} -P ${PICO_ACE_EMBED_ROM}
+        DEPENDS ${PICO_ACE_ROM} ${PICO_ACE_EMBED_ROM}
+        COMMENT "pico-ace: embedding roms/ace.rom, checked by SHA-1"
+        VERBATIM)
     if (PICO_ACE_CORE_SOURCES)
-        add_library(pico_ace_core STATIC ${PICO_ACE_CORE_SOURCES})
+        add_library(pico_ace_core STATIC ${PICO_ACE_CORE_SOURCES} ${rom_c})
         target_include_directories(pico_ace_core PUBLIC src/core)
         target_compile_options(pico_ace_core PRIVATE ${PICO_ACE_WARNINGS})
     else()
@@ -81,8 +98,8 @@ else()
     endif()
 
     # How much of the core's hot path runs from SRAM (src/core/hot.h).
-    # M2 measured tier 2 against 0; tier 1 stays empty until the Ace's bus
-    # exists (design.md §3.2). M12 chooses the one that ships. The core library needs it too: that is where the
+    # M2 measured tier 2 against 0; tier 1 holds the Ace's bus slow path
+    # and even port since M3 (design.md §3.2). M12 chooses the one that ships. The core library needs it too: that is where the
     # marked functions are.
     set(PICO_ACE_RAM_TIER 0 CACHE STRING "Hot-code SRAM tier, 0-2 (src/core/hot.h)")
     target_compile_definitions(pico_ace_core PRIVATE PICO_ACE_RAM_TIER=${PICO_ACE_RAM_TIER})

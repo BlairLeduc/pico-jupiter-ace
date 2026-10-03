@@ -113,16 +113,19 @@ source and confidence. It becomes a `#define` only once settled (EL §14.2).
 | `$3000–$3FFF` | 1 KiB user RAM, mirrored four times | system variables at `$3C00`; dictionary grows up from there |
 | `$4000–$FFFF` | expansion RAM if fitted, otherwise unpopulated | a 16 KiB pack fills `$4000–$7FFF` |
 
-Three facts here decide behaviour, and none is confirmed:
+Three facts here decide behaviour. M3 settled what the ROM needs of two of
+them (§16), but not the hardware's values:
 
 - **What a read of character RAM returns.** The CPU cannot read it back, but a
   read returns *something*, and a program that tests it would see that.
-  Settle from the schematic and the ROM.
-- **What unpopulated memory reads.** The ROM sizes RAM at boot by writing and
-  reading back (to be confirmed by reading the ROM), so the value of an
-  unpopulated read decides where RAMTOP lands. EL §4.1 says to model open bus
-  rather than assume `$FF`. Settle what the Ace's bus actually floats to.
-- **Which mirror the ROM writes the screen through.** This decides how much
+  Settle from the schematic. `$FF` meanwhile, as configuration.
+- **What unpopulated memory reads.** The ROM sizes RAM at boot by writing
+  `$FC` a page at a time from `$3D00` and reading it back (`$0028`), so any
+  value but `$FC` puts RAMTOP in the right place. EL §4.1 says to model open
+  bus rather than assume `$FF`. What the Ace's bus actually floats to is
+  still to settle; `$FF` meanwhile, as configuration.
+- **Which mirror the ROM writes the screen through.** The waiting one,
+  `$2400` (and the character set through `$2C00`). This decides how much
   wait-state modelling matters (§6.4).
 
 ### 2.3 I/O
@@ -223,7 +226,8 @@ Z80's unknown cost per instruction.
 Two things work in the Ace's favour. The Atom's ~100 Thumb instructions per
 guest instruction included a VIA tick and an IRQ line on every instruction,
 and the Ace has no devices to tick (§2.6). A `HALT` fast-forward would also
-help if the ROM waits for keys by halting (§5.3).
+help if the ROM waits for keys by halting (§5.3). It does not: M3 found it
+spins at the prompt (§16).
 
 **Measured, M2, 2026-10-03** (Plus 2 W, RP2350B rev 2, id
 `7458DC82A89AAC12`; 150 MHz; gcc 15.2 `-O3`; `pico-ace-bench` at
@@ -505,7 +509,10 @@ while (t < slice_end):
 **`HALT` fast-forward** jumps time to the next event instead of interpreting
 NOPs, and keeps `R` exact. If the ROM halts while it waits for a key, idle at
 the prompt becomes nearly free. On the 6502, idle at the prompt was the
-heaviest workload (EL §12). Find out by reading the ROM in M3.
+heaviest workload (EL §12). **M3 found that it does not** (§16): the prompt
+spins on a flag at `$059B` that the interrupt sets, so fast-forward cannot
+help there. The ROM does halt once a word in `VLIST` (`$0679`), and a program
+may, so M12 measures it on those.
 
 **The INT line is a level with a duration**, not a pulse at a point. A Z80
 samples INT at the end of each instruction. If the Ace holds INT for a fixed
@@ -579,7 +586,9 @@ a restart that behaves as a power-on (EL §10).
 Zero-filled RAM (EL §9.2), with one thing to look for: **a random seed the ROM
 keeps in RAM**. If Ace Forth's random-number word reads a seed that zero RAM
 leaves stuck, seed it from the RP2350's TRNG in firmware and from a constant
-in host tests. Settle this in M3 by reading the ROM.
+in host tests. **Settled in M3: there is none.** The ROM has no random-number
+word; the manual's `RND` is user code that seeds from FRAMES (`$3C2B`), which
+counts fields from power-on (§16).
 
 ### 6.4 Video memory wait states
 
@@ -977,6 +986,39 @@ other emulator "could not be got working". Here the reference is built in
 M3, loads one archive `.tap` and one `.ace`, and stays in use, so M13's
 recording check has a working reference waiting for it.
 
+**As built in M3, 2026-10-03.** `tools/trace/build-xace.sh` clones
+[xAce](https://github.com/lawrencewoodman/xAce) at `52d89b2` and compiles its
+`z80.c` and `tape.c` where they stand, with one line added by `sed` (a trace
+hook at the top of the CPU loop, where the registers are locals). Its X11
+front end is not built at all: `tools/trace/xace-trace.c` replaces
+`xmain.c`, so no X11 headers are needed. `ace-trace` (host build) is our
+half; `tools/trace-diff.py run --keys …` runs both and diffs them. CI runs
+it on every push.
+
+There is **no resync**. xAce's interrupt is a wall-clock `SIGALRM` and its
+timing has errata, so the driver makes the two keep the same time instead:
+INT over the same window of each field (taken at most once, since xAce
+clears no IFF on accepting it), 13 T for the acknowledge xAce does not
+count, and its two timing errata corrected against the Z80 manual (`LD C,n`,
+`LD E,n`, `LD L,n`, `LD A,n` at 4 T instead of 7; `RES`/`SET b,(HL)` at 12
+instead of 15). The traces then agree line for line, and every difference
+left is in a named class: registers' power-on values (`$FFFF` here, 0 in
+xAce), F's bits 3 and 5 (xAce does not model them), and two flag errata
+(`ADC HL,ss` sets N in xAce; its `BIT` never sets S). The first `HALT`
+ends the comparison, because xAce's `HALT` is a NOP.
+
+Results, `out/m3-trace-diff.log`: boot to the prompt and 10 fields, 59,690
+instructions, no divergence; boot, typing `2 2 + .` and running it, 915,615
+instructions, no divergence; `VLIST`, 295,812 instructions to the ROM's
+first `HALT` at `$0679`, no divergence. A taken `JR` planted at 13 T was
+caught at the fourth instruction. xAce loaded an archive tape (`TutTut-122.zip`
+from the Ace archive) through this ROM: `LOAD TUTTUT` gave
+`Dict: TUTTUT     OK` (`out/m3-xace-tape.log`).
+
+**xAce has no `.ace` loader**, so it cannot be the reference for snapshots.
+MAME's `jupace` has one (`snapshot_cb`), but MAME is read here, not run.
+Which reference checks `.ace` is M11's to choose (§18 item 6).
+
 ### 13.5 Soak
 
 30 minutes on battery with a Forth program that prints, beeps and reads the
@@ -992,7 +1034,7 @@ EL §12, with these workloads, scripted over the UART, one boot each:
 
 | Workload | Why |
 |---|---|
-| idle at `OK` | the ROM's key wait; shows whether `HALT` fast-forward pays |
+| idle at `OK` | the ROM's key wait, a spin rather than a `HALT` (§16) |
 | compute: a tight Forth `DO … LOOP` with arithmetic | the inner interpreter |
 | scrolling: `VLIST` repeated | screen writes and band presents |
 | sound: `BEEP` in a loop | speaker edges |
@@ -1125,13 +1167,31 @@ by SHA-1 (pico-atom's `guest.c` adapted); a text dump of screen RAM; **xAce
 built from its own checkout** with the trace tool started (§13.4).
 *Done when:* the harness boots the real ROM to the `OK` prompt in every RAM
 configuration and the dumped screen shows it; xAce runs the same ROM and
-loads one archive `.tap` and one `.ace`, and the first trace diff of boot
+loads one archive `.tap`, and the first trace diff of boot
 to `OK` is clean or its divergences are explained; the bus tests of §13.2 pass;
 the build-time SHA-1 check refuses a corrupted copy of `roms/ace.rom`; **§16 is updated** with everything the
 ROM settles (IM mode, RAM sizing and the unpopulated read, `HALT` use, RNG
 seed, tape routine addresses), each with how it was settled.
 *Measured:* T-states from reset to the first `OK`.
 *Leaves out:* pixels, keys, sound.
+*Done, 2026-10-03* (Apple M1 Pro, Apple clang 21). The `.ace` part of the
+done-when was moved to M11 the same day (§18 item 6). The Ace
+powers on to a blank screen with the cursor (`$97`) on the bottom line, not
+to `OK`, which it prints only after a line runs. So the harness boots to
+the cursor and then types `2 2 + .` into the matrix, and reads back
+`2 2 + . 4  OK` on the top line, in all three machines (`test_boot`,
+`out/m3-boot.log`). **Measured:** 86,272 T from power-on to the cursor in
+the 3K machine, 88,192 in the 19K and 92,032 in the 51K (about 27 ms; the
+difference is the RAM-sizing loop). The bus tests pass (`test_bus`), the
+field tests pass with their controls (`test_field`), and the build refuses
+a ROM with one byte changed or one byte short (`test_rom_embed`, shown to
+fail with the SHA-1 check removed). §16 is updated with what the ROM
+settled. xAce runs the same ROM, loads an archive `.tap`, and the trace
+diffs of boot and of a typed line are clean (§13.4). CI ran green on both
+jobs for PR #2, 2026-10-03, the trace diff included. *Not verified:*
+anything on the device (the firmware does not link `ace.c` until M7, so
+tier 1's placement is unchecked); the field's line numbers and INT timing
+against the schematic; character RAM and open-bus read values.
 
 #### M4. Video on the host
 
@@ -1244,18 +1304,21 @@ leaves the same RAM as the ROM's routine; no underruns during any load.
 *Depends on:* M10.
 *Build:* `.ace` import (§10.5) with RAM-size refusal; `.sav` save and load
 with two-pass load; the Snapshot page (F2).
-*Done when:* `.ace` files from the archive load and run in the matching RAM
+*Done when:* a reference emulator chosen here loads the same archive
+`.ace` (moved from M3, §18 item 6); `.ace` files from the archive load and run in the matching RAM
 configuration and are refused in the wrong one, naming the size needed; the
 host `.sav` round trip (150 fields identical) passes; a torn or foreign
 `.sav` leaves the running machine unchanged.
 *Measured:* snapshot load time.
 *Leaves out:* `.ace` export (§18).
+*Open:* the reference emulator that checks `.ace` import. xAce has no
+loader (§13.4); MAME's `jupace` has one but is not run here (§18 item 6).
 
 #### M12. Performance pass and soak
 
 *Depends on:* M11.
-*Build:* the scripted workloads (§14); `HALT` fast-forward if M3 found the
-ROM halts; SRAM placement tiers, each in its own build directory with
+*Build:* the scripted workloads (§14); `HALT` fast-forward if `VLIST` and
+programs show it pays (M3 found the ROM halts in `VLIST`, not at the prompt); SRAM placement tiers, each in its own build directory with
 symbols checked (HW §9.8); the computed-goto experiment and CPU state in
 locals, both optional after M2's margin (§3.2, §5.2).
 *Done when:* every change is measured against a control build in the same
@@ -1314,29 +1377,30 @@ runtime configuration (EL §14.2).
 | Constant | Believed | Primary source | Confidence |
 |---|---|---|---|
 | CPU clock | 3.25 MHz | schematic (crystal, divider) | high |
-| T-states per line | 208 (416 pixel clocks ÷ 2) | schematic; MAME `jupace` | medium |
-| Lines per field | 312 | schematic; MAME | medium |
-| First active line, INT line | — | schematic; MAME; trace diff | low |
-| INT duration | — | schematic (the INT generator) | low |
+| T-states per line | 208 (416 pixel clocks ÷ 2) | schematic; MAME `jupace` | medium. MAME's source read 2026-10-03: `set_raw(6.5_MHz_XTAL, 416, …, 312, …)`. Not yet against the schematic |
+| Lines per field | 312 | schematic; MAME | medium. MAME agrees (above); FRAMES counts one a field under it (`test_field`) |
+| First active line, INT line | 56 and 248 | schematic; MAME; trace diff | medium-low. MAME's (192 lines drawn from 56; INT set at line 248), read 2026-10-03, are `ace_config_default`'s, still runtime configuration. A redraw after INT is finished at line 56 (`test_field`) |
+| INT duration | 8 lines, 1,664 T | schematic (the INT generator) | medium. MAME clears INT at line 256. **Bounded by the ROM**, 2026-10-03: its handler opens with a ~800 T delay and reaches `EI` at `$017C` 1,819 T after INT rises at idle, so INT held much past ~1,800 T would be taken twice; FRAMES (`$3C2B`) counts once a field at 1,664 T and twice at 2,500 (`test_field`) |
 | IM 2 vector byte (bus float on acknowledge) | `$FF` | schematic | low |
-| ROM size and hashes | 8,192 bytes; SHA-1 `597ba8a1…` (§10.2) | `roms/ace.rom`, hashed 2026-10-03; halves match the CRCs remembered from MAME's `jupace` driver, still to be checked against its source | high |
-| Video and character RAM mirrors | §2.2 | schematic; ROM's own addresses | medium |
+| ROM size and hashes | 8,192 bytes; SHA-1 `597ba8a1…` (§10.2) | `roms/ace.rom`, hashed 2026-10-03 | **settled** 2026-10-03: both halves' CRC32 and SHA-1 match `ROM_LOAD` in MAME's `src/mame/cantab/jupace.cpp` |
+| Video and character RAM mirrors | §2.2 | schematic; ROM's own addresses | medium-high. The ROM writes the screen at `$2400`, workspace at `$2700`, the character set at `$2C00` and keeps its variables at `$3C00`, and boots in all three machines with §6.1's table (`test_boot`, 2026-10-03). MAME's map agrees, but reads character RAM back |
 | Which mirror waits, and for how long | `$2400`/`$2C00` wait during active display | schematic | medium / low |
-| Character RAM read value | — | schematic | low |
-| Unpopulated read value | — | schematic; ROM's RAM sizing | low |
+| Character RAM read value | `$FF` (`cram_read`) | schematic | low. Runtime configuration. MAME reads it back as RAM, xAce too |
+| Unpopulated read value | `$FF` (`open_bus`) | schematic; ROM's RAM sizing | low for the value; **what the ROM needs is settled**, 2026-10-03: its sizing at `$0028` writes `$FC` a page at a time from `$3D00` and stops at the first page that does not read it back, so any value but `$FC` works. RAMTOP (`$3C18`) is `$4000`, `$8000` and `$0000` in the three machines (`test_boot`) |
 | User RAM mirrors with a pack fitted | still mirrored at `$3000–$3BFF` | pack schematic | low |
 | Port decode | A0 only | schematic; ROM | medium |
-| Keyboard matrix | §2.4 | **ROM, executed** | medium |
-| Port read bits D5–D7 | tape on D5, rest high | schematic; ROM's tape loader | low |
-| `IN` vs `OUT` speaker direction | `IN` one way, `OUT` the other | schematic; ROM's `BEEP` | medium |
+| Keyboard matrix | §2.4 | **ROM, executed** | medium. MAME's table agrees with §2.4. The cells typed through the ROM so far (letters, digits, SPACE, ENTER, SHIFT, SYMBOL SHIFT with K and M) all type what §2.4 says, 2026-10-03. The full sweep is M5's |
+| Port read bits D5–D7 | tape on D5, rest high | schematic; ROM's tape loader | low-medium. MAME's `io_r` agrees: `$FF`, D5 cleared by the tape signal |
+| `IN` vs `OUT` speaker direction | `IN` one way, `OUT` the other | schematic; ROM's `BEEP` | medium. MAME: `IN` low, `OUT` high, which `ace.c` follows. MAME also takes the tape output from **D3 of the `OUT`**, not from the access, which contradicts §2.3; settle in M13. The prompt makes no edge: its key scan is all `IN`s (`test_boot`) |
 | Display polarity | set bits white | ROM, executed, against photographs | medium-high |
-| ROM uses IM 1 | yes | ROM | medium |
-| ROM halts when waiting for a key | — | ROM | unknown |
-| RNG seed location | — | ROM | unknown |
-| Key minimum hold, in fields | — | **ROM, executed** | unknown |
+| ROM uses IM 1 | yes | ROM | **settled** 2026-10-03: `IM 1` at `$008E`, `EI` at `$009F`; IM is 1 at the prompt in every machine (`test_boot`). The handler is at `$013A` |
+| ROM halts when waiting for a key | no | ROM | **settled** 2026-10-03, by execution: at the prompt it spins on FLAGS (`$3C28`) bit 5 at `$059B`, which the interrupt sets on ENTER, and never halts (`test_boot`). It does `HALT` once a word in `VLIST` (`$0679`), found by the trace diff |
+| RNG seed location | none | ROM | **settled** 2026-10-03: the ROM has no random-number word (its dictionary names were listed). The manual's `RND` keeps its own seed and seeds it from FRAMES (`$3C2B`), which the interrupt counts, so zeroed RAM leaves nothing stuck (§6.3) |
+| Key minimum hold, in fields | 3 scans | **ROM, executed** | partly read 2026-10-03: the interrupt's scan (`$0310`) counts a held key down from `$20` in `$3C27`, takes it on the third consecutive field that sees it, repeats it 30 fields later and then every 4. A key held 4 fields with 4 between types once each (`test_boot`). M5 settles the hold and gap the replay uses |
 | `.tap` block layout | §10.3 | ROM tape routines; archive files | medium-low |
 | `.ace` snapshot encoding | §10.5 | xAce/EightyOne docs; sample files | low |
 | Tape signal timings | — | ROM tape routines | unknown |
+| Tape block routines | load `$18A7`, save `$1820` | ROM | medium: xAce patches the ROM at these two addresses, and with them loaded an archive `.tap` through this ROM, 2026-10-03 (`out/m3-xace-tape.log`). Read the routines in M10 before trapping them (§10.3) |
 
 Record how each was settled, and the date, in this table when it changes.
 
@@ -1395,6 +1459,11 @@ The owner's decisions, each with its date. None is open as of 2026-10-03.
    The same as pico-atom, so §4.6's files move across as they are. Each one
    brings its `THIRD-PARTY.md` entry with it (ClockworkPi's LCD init values
    in `lcd.c`, FatFs's `ffconf.h`).
+6. **Snapshots wait for their milestone; M3 needs no `.ace` reference.**
+   *Decided 2026-10-03.* M3 found that xAce has no `.ace` loader (§13.4).
+   Snapshots are not a critical feature, so the check that a reference
+   emulator loads an archive `.ace` leaves M3's done-when, and choosing a
+   reference for `.ace` is left to M11 (§15.2), which builds the import.
 
 ---
 
