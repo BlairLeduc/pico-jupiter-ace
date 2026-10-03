@@ -26,8 +26,9 @@ harness in all three machines. The ROM needs a key held 3 fields and 1 up
 replay uses 4 and 2, 6 fields a key. Planted bugs (arrows swapped, no
 unshift, a 2-field hold) each fail a test. The ROM types SHIFT+SYMBOL
 SHIFT+key as SYMBOL SHIFT+key, so `unshift` is for matrix fidelity, not
-the ROM's text. **Not checked:** real southbridge events (M6) and typing
-on the device (M7); game layouts are M15.
+the ROM's text. CI green on both jobs for PR #4, 2026-10-03. **Not
+checked:** real southbridge events (M6) and typing on the device (M7);
+game layouts are M15.
 
 **M4, video on the host** (`src/core/render.c`, `snappool.c`, `font.c`),
 done 2026-10-03 on the workstation (Apple M1 Pro, Apple clang 21). Five
