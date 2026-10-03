@@ -14,6 +14,8 @@ option(PICO_ACE_HOST "Build the portable core and its host tests, with no Pico S
 set(PICO_ACE_CORE_SOURCES
     src/core/ace.c
     src/core/font.c
+    src/core/keymap_picocalc.c
+    src/core/keymatrix.c
     src/core/render.c
     src/core/snappool.c
     src/core/z80.c

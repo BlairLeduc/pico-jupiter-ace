@@ -38,6 +38,17 @@
 #define ACE_KEY_ROWS            8u  /* half-rows, selected by A8-A15       */
 #define ACE_KEY_COLS            5u  /* keys on D0-D4 of each               */
 
+/* The PicoCalc's events, replayed into the matrix (design.md §9.1). */
+#define ACE_KEY_EVENT_QUEUE    64u  /* southbridge FIFO holds 31 (HW §6.2) */
+#define ACE_KEY_HELD_MAX        8u  /* keys down at once                   */
+
+/* The ROM's scan takes a key on the third consecutive field that sees it
+ * and needs one field with no key down before the next; it repeats a key
+ * held 33 fields (ROM $0310, executed 2026-10-03, §16). The replay holds
+ * and gaps one field longer than that, for a scan the guest delays. */
+#define ACE_KEY_MIN_FIELDS      4u
+#define ACE_KEY_GAP_FIELDS      2u
+
 /* ---- Video (design.md §2.5, §4.4) ------------------------------------ */
 
 #define ACE_SCREEN_COLS        32u

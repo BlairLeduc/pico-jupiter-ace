@@ -9,9 +9,25 @@ Raspberry Pi Pico SDK. The guest is a Z80A at 3.25 MHz with an 8 KiB Forth
 ROM, a 32×24 character display from 768 bytes of screen RAM and 1 KiB of
 character RAM, a 40-key matrix, and a one-bit speaker and tape port.
 
-**Implementation status, 2026-10-03: M4 done.**
-The next milestones are M5 on the host and M6, board bring-up
-(`docs/design.md` §15).
+**Implementation status, 2026-10-03: M5 done.**
+The host-only milestones are finished; next is M6, board bring-up, then
+M7 (`docs/design.md` §15).
+
+**M5, the keyboard on the host** (`src/core/keymatrix.c`,
+`keymap_picocalc.c`), done 2026-10-03 on the workstation (Apple M1 Pro,
+Apple clang 21). The ROM sweep (40 cells alone, with SHIFT, SYMBOL SHIFT
+and both) replaced design.md §2.4 and is kept in `test_keyboard`. It
+corrected two beliefs: up is SHIFT+6 and down SHIFT+7, and SHIFT+3 types
+`3` (no TRUE VIDEO; INVERSE VIDEO toggles). Every printable PicoCalc entry
+types its character through `keymatrix` and the ROM; the editing keys, the
+Alt layer and BREAK (`ERROR 3`) by their effect; `2 2 + .` through the
+harness in all three machines. The ROM needs a key held 3 fields and 1 up
+(4 fields a key), with controls at 2 held and 0 up that lose keys; the
+replay uses 4 and 2, 6 fields a key. Planted bugs (arrows swapped, no
+unshift, a 2-field hold) each fail a test. The ROM types SHIFT+SYMBOL
+SHIFT+key as SYMBOL SHIFT+key, so `unshift` is for matrix fidelity, not
+the ROM's text. **Not checked:** real southbridge events (M6) and typing
+on the device (M7); game layouts are M15.
 
 **M4, video on the host** (`src/core/render.c`, `snappool.c`, `font.c`),
 done 2026-10-03 on the workstation (Apple M1 Pro, Apple clang 21). Five
@@ -141,7 +157,7 @@ core were verified on a Plus 2 W, and `design.md` §4.6 says which files to
 
 ## Build and test
 
-As of M3 these work, except `tools/uart-type.sh` (M6, which turns UART bytes
+As of M5 these work, except `tools/uart-type.sh` (M6, which turns UART bytes
 into key events).
 
 ```sh
@@ -220,6 +236,9 @@ without the SDK is what keeps SDK headers out of `src/core/`.
   redefines a character changes every cell showing it while the screen
   bytes stay identical. The dirty diff marks cells by changed glyph as well
   as changed byte (§7.3). A screen-only diff leaves stale glyphs for ever.
+- **`keymatrix_field` owns `ace_t.keys`** and rewrites it every field.
+  Host tests type through it (`guest_type`, `guest_press`) with PicoCalc
+  codes; only a test that sweeps the ROM's own map writes cells directly.
 - **Every even-port access moves the speaker**: `IN` one way, `OUT` the
   other, including the `IN`s that only read the keyboard (§8). Do not filter
   out "keyboard-only" reads.

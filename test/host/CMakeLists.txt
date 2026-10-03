@@ -2,6 +2,7 @@
 # system compiler and no Pico SDK. One binary per area; exit 77 is a skip.
 
 set(PICO_ACE_HOST_TESTS
+    test_keymap
     test_skeleton
     test_z80_behaviour
     test_z80_fuse
@@ -26,6 +27,7 @@ set(PICO_ACE_GUEST_TESTS
     test_bus
     test_field
     test_golden
+    test_keyboard
     test_render
     test_snappool
 )
