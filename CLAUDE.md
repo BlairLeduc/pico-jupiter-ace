@@ -26,8 +26,8 @@ ring overflows or dropped log lines (`out/m6-soak.log`). Measured: blits
 of 23.90–23.93 ms for 320×320 and 11.475 ms for 256×192 (wire and DMA
 alone, ~9.5 % over the wire math); an I²C transaction 4,825–4,845 µs. The
 captured Alt+I sequence, Alt let go first, is now a `test_keymap` case.
-The southbridge reports version 0, as on pico-atom's board. **Not
-checked:** the shipping build (`PICO_ACE_UART=OFF`) on the device, which
+The southbridge reports version 0, as on pico-atom's board. CI green on
+both jobs for PR #5, 2026-10-03. **Not checked:** the shipping build (`PICO_ACE_UART=OFF`) on the device, which
 was only built; anything with the guest (M7).
 
 **M5, the keyboard on the host** (`src/core/keymatrix.c`,
