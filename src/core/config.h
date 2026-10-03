@@ -46,7 +46,12 @@
 
 #define ACE_CHARSET_GLYPHS    128u
 #define ACE_GLYPH_ROWS          8u
+#define ACE_GLYPH_COLS          8u  /* one byte a glyph row, bit 7 left    */
 #define ACE_CHARSET_BYTES   (ACE_CHARSET_GLYPHS * ACE_GLYPH_ROWS) /* 1,024 */
+
+/* The row generator's LUT (§7.2): every glyph-row byte as its pixels,
+ * 256 x 8 RGB565, 4 KiB. It belongs to the presenter, not ace_t. */
+#define ACE_RENDER_LUT_ENTRIES 256u
 
 #define ACE_SNAPSHOT_COUNT      3u  /* §4.4: three, and the third is the point */
 

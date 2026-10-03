@@ -13,6 +13,9 @@ option(PICO_ACE_HOST "Build the portable core and its host tests, with no Pico S
 # Every fixed capacity lives in src/core/config.h; nothing here duplicates one.
 set(PICO_ACE_CORE_SOURCES
     src/core/ace.c
+    src/core/font.c
+    src/core/render.c
+    src/core/snappool.c
     src/core/z80.c
 )
 
