@@ -19,6 +19,32 @@ foreach(t ${PICO_ACE_HOST_TESTS})
     set_tests_properties(${t} PROPERTIES SKIP_RETURN_CODE 77)
 endforeach()
 
+# The tests that run the real ROM (§13.3). It is embedded in the core,
+# so they never skip.
+set(PICO_ACE_GUEST_TESTS
+    test_boot
+    test_bus
+    test_field
+)
+foreach(t ${PICO_ACE_GUEST_TESTS})
+    add_executable(${t} ${t}.c guest.c)
+    target_link_libraries(${t} PRIVATE pico_ace_core)
+    target_include_directories(${t} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+    target_compile_options(${t} PRIVATE ${PICO_ACE_WARNINGS})
+    add_test(NAME ${t} COMMAND ${t})
+endforeach()
+
+# The build's ROM check, run on a corrupted copy (§10.2).
+add_executable(test_rom_embed test_rom_embed.c)
+target_link_libraries(test_rom_embed PRIVATE pico_ace_core)
+target_include_directories(test_rom_embed PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_options(test_rom_embed PRIVATE ${PICO_ACE_WARNINGS})
+target_compile_definitions(test_rom_embed PRIVATE
+    PICO_ACE_ROM_PATH="${PICO_ACE_ROM}"
+    PICO_ACE_CMAKE="${CMAKE_COMMAND}"
+    PICO_ACE_EMBED_ROM="${PICO_ACE_EMBED_ROM}")
+add_test(NAME test_rom_embed COMMAND test_rom_embed)
+
 # ZEXDOC and ZEXALL: one binary, two tests, each minutes long (§5.4). The
 # programs are fetched, not committed; without them both report skipped.
 add_executable(test_z80_zex test_z80_zex.c)
