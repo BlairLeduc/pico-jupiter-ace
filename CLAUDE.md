@@ -9,9 +9,26 @@ Raspberry Pi Pico SDK. The guest is a Z80A at 3.25 MHz with an 8 KiB Forth
 ROM, a 32×24 character display from 768 bytes of screen RAM and 1 KiB of
 character RAM, a 40-key matrix, and a one-bit speaker and tape port.
 
-**Implementation status, 2026-10-03: M5 done.**
-The host-only milestones are finished; next is M6, board bring-up, then
-M7 (`docs/design.md` §15).
+**Implementation status, 2026-10-03: M6 done.**
+Next is M7, the Ace on the device (`docs/design.md` §15).
+
+**M6, board bring-up** (`src/port/southbridge.c`, `lcd.c`, `kbd.c`,
+`log.c`, `display.c`, `main.c`), on the Plus 2 W (id `7458DC82A89AAC12`,
+RP2350B rev 2) at 150 MHz, gcc 15.2, firmware `e73791c`, 2026-10-03. The
+drivers are pico-atom's, renamed. The test pattern was looked at on the
+panel at 75 MHz SPI: grey panel-edge frame, white border on the 256×192
+rectangle at (32,64), red, green, blue and yellow in the right corners.
+Every key pressed was logged with its code and its release (Shift, Ctrl,
+Alt, arrows, Esc, Break, F1–F5, F10, Insert by Shift+Enter and Alt+I);
+modifiers send `held` while down. `tools/uart-type.sh` bytes arrive as
+the events a press sends. A 655 s run: 19,651 polls, **0 I²C errors**, no
+ring overflows or dropped log lines (`out/m6-soak.log`). Measured: blits
+of 23.90–23.93 ms for 320×320 and 11.475 ms for 256×192 (wire and DMA
+alone, ~9.5 % over the wire math); an I²C transaction 4,825–4,845 µs. The
+captured Alt+I sequence, Alt let go first, is now a `test_keymap` case.
+The southbridge reports version 0, as on pico-atom's board. **Not
+checked:** the shipping build (`PICO_ACE_UART=OFF`) on the device, which
+was only built; anything with the guest (M7).
 
 **M5, the keyboard on the host** (`src/core/keymatrix.c`,
 `keymap_picocalc.c`), done 2026-10-03 on the workstation (Apple M1 Pro,

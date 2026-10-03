@@ -573,6 +573,18 @@ Two conclusions to design against:
   it deletes the expansion. That is the trade against §2.3's memory arithmetic:
   8 bpp costs ~17 % of present time and saves 100 KB.
 
+**With the source cost removed, the wire and DMA alone run ~9.5 % over the
+wire math.** Measured on a **Plus 2 W (RP2350B), 2026-10-03**, at 75 MHz:
+two RGB565 line buffers filled once, then sent row after row through the
+polled-DMA ping-pong of §4.6 in one window, eight runs each:
+
+| Region | Pixels | Wire math | Wall time |
+|---|---:|---:|---:|
+| Full screen 320×320 | 102,400 | 21.8 ms | **23.90–23.93 ms** |
+| 256×192 | 49,152 | 10.5 ms | **11.475–11.476 ms** |
+
+That is the floor any renderer adds its own cost to.
+
 Frame ceilings, if you present serially on one core:
 
 | Strategy | Present cost | Ceiling |
@@ -917,6 +929,9 @@ but it cannot get around the swallowed Shift+arrow chords.
 
 - **Each transaction costs 4–5 ms of wall time** at 10 kHz. That is the single
   most expensive routine operation on this machine, and it is why §5.4 exists.
+  A FIFO read of an empty FIFO (a one-byte register write, then a two-byte
+  read) measured **4,825–4,845 µs** over a 655 s run of 19,651 polls at 30 Hz,
+  with **zero** failed transactions (Plus 2 W, 2026-10-03).
 - **Poll from your frame loop, in thread context** — at 25–60 Hz — not from a
   timer IRQ. Same cost, but it lands somewhere you can account for it and it
   cannot preempt anything.
@@ -959,6 +974,13 @@ shifted punctuation for held-state identity, while retaining the translated
 press for text input. The captured stream left no keys stuck after this
 normalization. For actions requiring a fresh key press, consult prior down
 state and require release before rearming; do not rely on state 1 alone.
+
+Retranslation goes further when Alt is the modifier let go. Alt+I sends Insert
+(`0xd1`, §6.3). Let go of Alt while I is still down, and the MCU's
+auto-repeat arrives as more **presses of `i`**, then the release as `i`; no
+release of Insert is ever sent (captured on a Plus 2 W, 2026-10-03). So a
+held-key set must decide which physical key an Insert is when it arrives:
+under Alt it is I, otherwise Enter.
 
 Backspace is `0x08` and Enter is `0x0a`. Alt `0xa1`, both Shift keys
 `0xa2`/`0xa3`, and Ctrl `0xa5` were observed; Symbol `0xa4` was not.

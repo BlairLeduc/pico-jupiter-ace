@@ -330,6 +330,22 @@ int main(void) {
         fields(1);
         CHECK(cell_down(6, 0), "Enter after Alt+I is not taken for a repeat");
 
+        /* The sequence the device sent, captured 2026-10-03
+         * (out/m6-soak.log): Alt let go while I was down, then the MCU's
+         * auto-repeat retranslated as presses of 'i', then 'i' released. */
+        fresh();
+        keymatrix_event(&k, KEY_EV_PRESSED, PICOCALC_KEY_ALT);
+        keymatrix_event(&k, KEY_EV_HELD, PICOCALC_KEY_ALT);
+        press(PICOCALC_KEY_INSERT);
+        keymatrix_event(&k, KEY_EV_HELD, PICOCALC_KEY_ALT);
+        release(PICOCALC_KEY_ALT);
+        for (int i = 0; i < 4; i++) press('i');
+        release('i');
+        fields(10);
+        CHECK(k.n_open == 0 && keymatrix_idle(&k) && matrix_empty(),
+              "the captured Alt+I left %u press(es) open", k.n_open);
+        CHECK(k.q_len == 0, "the repeats were not absorbed");
+
         /* With Alt still down, I's release is Insert again: same key. */
         fresh();
         press(PICOCALC_KEY_ALT);
