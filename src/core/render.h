@@ -18,7 +18,7 @@
 
 #include "config.h"
 
-#define ACE_PIXEL_W  (ACE_SCREEN_COLS * 8u)               /* 256 */
+#define ACE_PIXEL_W  (ACE_SCREEN_COLS * ACE_GLYPH_COLS)   /* 256 */
 #define ACE_PIXEL_H  (ACE_SCREEN_ROWS * ACE_GLYPH_ROWS)   /* 192 */
 
 /* One band per character row, 8 pixel rows tall (§7.3). */
@@ -32,15 +32,15 @@
 typedef struct {
     /* A glyph row's 8 bits as 8 pixels, bit 7 leftmost: 4 KiB, rebuilt
      * only when the colour pair changes (§7.2). */
-    uint16_t lut[256][8];
+    uint16_t lut[ACE_RENDER_LUT_ENTRIES][ACE_GLYPH_COLS];
     uint16_t ink, paper;
 } render_t;
 
 void render_init(render_t *r, uint16_t ink, uint16_t paper);
 
-/* Pixel row y (0-191) for cells c0..c1 inclusive: (c1 - c0 + 1) * 8
- * pixels into dst. Bit 7 of a screen byte inverts its cell, and the
- * other seven bits choose the glyph (§7.2). The glyph always comes from
+/* Pixel row y (0-191) for cells c0..c1 inclusive: (c1 - c0 + 1) *
+ * ACE_GLYPH_COLS pixels into dst. Bit 7 of a screen byte inverts its
+ * cell, and the other seven bits choose the glyph (§7.2). The glyph always comes from
  * `charset`, as the guest wrote it (§7.5). */
 void render_cells(const render_t *r, const uint8_t *screen, const uint8_t *charset,
                   unsigned y, unsigned c0, unsigned c1, uint16_t *dst);
@@ -71,7 +71,8 @@ bool render_band_span(const uint8_t *screen, const uint8_t *shadow,
                       unsigned *c0, unsigned *c1);
 
 /* What the presenter last sent to the panel. `valid` false means the
- * panel's contents are unknown, and the next diff marks everything. */
+ * panel's contents are unknown, and the next diff marks everything
+ * without reading the rest, which may be uninitialised. */
 typedef struct {
     uint8_t screen[ACE_SCREEN_BYTES];
     uint8_t charset[ACE_CHARSET_BYTES];

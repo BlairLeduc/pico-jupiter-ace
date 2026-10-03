@@ -4,11 +4,14 @@
 
 #include <string.h>
 
+/* render_cells stores a glyph row as eight pixels, unrolled. */
+_Static_assert(ACE_GLYPH_COLS == 8u, "render_cells is unrolled for 8-pixel glyphs");
+
 void render_init(render_t *r, uint16_t ink, uint16_t paper) {
     r->ink = ink;
     r->paper = paper;
-    for (unsigned b = 0; b < 256u; b++)
-        for (unsigned x = 0; x < 8u; x++)
+    for (unsigned b = 0; b < ACE_RENDER_LUT_ENTRIES; b++)
+        for (unsigned x = 0; x < ACE_GLYPH_COLS; x++)
             r->lut[b][x] = (b & (0x80u >> x)) ? ink : paper;
 }
 
@@ -26,7 +29,7 @@ void render_cells(const render_t *r, const uint8_t *screen, const uint8_t *chars
         const uint16_t *p = r->lut[bits];
         dst[0] = p[0]; dst[1] = p[1]; dst[2] = p[2]; dst[3] = p[3];
         dst[4] = p[4]; dst[5] = p[5]; dst[6] = p[6]; dst[7] = p[7];
-        dst += 8;
+        dst += ACE_GLYPH_COLS;
     }
 }
 
@@ -64,8 +67,9 @@ bool render_band_span(const uint8_t *screen, const uint8_t *shadow,
 
 unsigned render_diff(render_shadow_t *s, const uint8_t *screen, const uint8_t *charset,
                      render_band_t bands[ACE_BAND_COUNT]) {
-    glyph_mask_t mask;
-    render_glyph_mask(charset, s->charset, &mask);
+    /* An invalid shadow marks every band, so its bytes are never read. */
+    glyph_mask_t mask = { { 0 } };
+    if (s->valid) render_glyph_mask(charset, s->charset, &mask);
 
     unsigned dirty = 0;
     for (unsigned b = 0; b < ACE_BAND_COUNT; b++) {
