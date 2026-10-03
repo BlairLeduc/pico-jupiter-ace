@@ -20,3 +20,12 @@ stock and assets, to Edward Patel, author of the xAce emulator.
 The firmware embeds the ROM unmodified, and the build refuses any other file
 (`docs/design.md` §10.2). If you hold rights in the ROM and object to its
 distribution here, please open an issue and it will be removed.
+
+## font8x8
+
+`third_party/font8x8/` holds `font8x8_basic.h` and `README`, unmodified, from
+Daniel Hepper's [font8x8](https://github.com/dhepper/font8x8) at `8e279d2`,
+fetched 2026-10-03. It is **public domain**, as its header and README state:
+derived from Marcel Sondaar's `font8_8.asm`, after IBM's public-domain VGA
+fonts. `tools/mkfont.py` writes `src/core/font.c` from it with each byte's
+bits reversed, the emulator's own font for its pages (`docs/design.md` §7.5).

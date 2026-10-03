@@ -25,6 +25,9 @@ set(PICO_ACE_GUEST_TESTS
     test_boot
     test_bus
     test_field
+    test_golden
+    test_render
+    test_snappool
 )
 foreach(t ${PICO_ACE_GUEST_TESTS})
     add_executable(${t} ${t}.c guest.c)
@@ -33,6 +36,10 @@ foreach(t ${PICO_ACE_GUEST_TESTS})
     target_compile_options(${t} PRIVATE ${PICO_ACE_WARNINGS})
     add_test(NAME ${t} COMMAND ${t})
 endforeach()
+
+# The committed golden images (design.md §7.6).
+target_compile_definitions(test_golden PRIVATE
+    PICO_ACE_GOLDEN_DIR="${CMAKE_CURRENT_SOURCE_DIR}/golden")
 
 # The build's ROM check, run on a corrupted copy (§10.2).
 add_executable(test_rom_embed test_rom_embed.c)

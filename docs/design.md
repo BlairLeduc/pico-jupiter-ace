@@ -19,9 +19,9 @@ This document applies the lessons. It does not repeat them. Where a decision
 just follows a lesson, it cites the lesson and moves on, and the space goes
 to what is different about the Ace.
 
-**Status, 2026-10-03.** M0, M1 and M2 are done: the skeleton, the Z80 on
-the host, and the Z80 on the board, whose gate passed at 150 MHz (§3.2,
-§15.2). Beyond M0's banner, the only device measurement is M2's. Every number about the Ace below comes from secondary knowledge
+**Status, 2026-10-03.** M0 to M4 are done: the skeleton, the Z80 on the
+host, the Z80 on the board, whose gate passed at 150 MHz (§3.2), the Ace
+on the host, and its video on the host (§15.2). Beyond M0's banner, the only device measurement is M2's. Every number about the Ace below comes from secondary knowledge
 until §16's table says otherwise. Every performance figure is an
 **estimate** and is labelled as one (EL §14.4), except M2's measurements
 of the Z80 alone, which §3.2 labels as measured.
@@ -316,7 +316,7 @@ the two with a rename (§4.6). `PICO_ATOM_` becomes `PICO_ACE_`, and `atom_`
 becomes `ace_`.
 
 ```
-src/core/    config.h  hot.h  z80.c  ace.c  render.c  snappool.c  beeper.c
+src/core/    config.h  hot.h  z80.c  ace.c  render.c  font.c  snappool.c  beeper.c
              keymatrix.c  keymap_picocalc.c  keylayout.c  tape.c  cassette.c
              tap.c  snap_ace.c  snapshot.c  settings.c  status.c
 src/port/    main.c  core0.c  core1.c  menu_*.c  board.c  lcd.c  display.c
@@ -670,14 +670,23 @@ that (EL §5.5).
 The emulator's own pages (menu, About) need a font that does not depend on
 what a program has done to character RAM. They use a **public-domain 8×8 font** kept in the tree
 with its licence and attribution. It is rendered to an image and checked by
-eye once (EL §5.5). The menu fills its own 768-byte screen and supplies its
+eye once (EL §5.5). As built in M4: Daniel Hepper's `font8x8_basic.h`,
+after IBM's public-domain VGA fonts, kept unmodified in `third_party/font8x8/`.
+`tools/mkfont.py` writes it to `src/core/font.c` with each byte reversed so
+that bit 7 is leftmost, and CI checks the two agree. `test_render` checks
+its `A` against the upstream README's drawing. The menu fills its own 768-byte screen and supplies its
 own 1,024-byte character set, and goes through the same row generator (§12).
 
 ### 7.6 Golden images
 
 Fixed screens with the ROM's character set, inverse cells, a redefined
 character and every glyph, rendered to PPM and committed after being looked at
-(EL §5.7).
+(EL §5.7). As built in M4, `test_golden` renders five scenes and compares
+them with `test/host/golden/`: `boot` (the real ROM after `2 2 + .`),
+`inverse`, `redefined`, `glyphs` (all 256 codes in the ROM's set) and
+`font` (the same in §7.5's font). The ROM's set is the one it writes at
+boot, read back from character RAM. `test_golden --write DIR` writes them
+for inspection; on a mismatch the test writes `<name>.actual.ppm`.
 
 ---
 
@@ -1206,6 +1215,23 @@ pool survives a long randomised interleaving; a power-on test pins what
 zeroed character RAM shows.
 *Measured:* nothing on hardware yet.
 *Leaves out:* the LCD driver.
+*Done, 2026-10-03* (Apple M1 Pro, Apple clang 21). `src/core/render.c`
+is the row generator with its 4 KiB LUT and the glyph-change bands;
+`snappool.c` is pico-atom's pool with the Ace's snapshot; `font.c` is §7.5's
+font. Five golden images (§7.6) were looked at before they were committed,
+and a one-pixel change to one of them fails `test_golden` at that pixel.
+`test_render` brings a simulated panel up to date from the bands alone over
+300 random edits, a third of them to the character set only, and matches a
+full render each time; its control, the same run diffing the screen bytes
+alone, leaves stale pixels as it must. A redefined `A` dirties exactly the
+two cells showing it, one of them inverse. `test_snappool` runs 100,000
+random transitions of both cores: core 0 always gets a buffer, never the one
+core 1 holds, at most one is ready, and every publish is taken or counted
+dropped. At power-on, zeroed screen and character RAM draw all paper, and
+code `$80` over them a solid ink cell; the ROM has written the character
+set by the end of the first field. *Not verified:* anything on the panel
+(M7): byte order on the wire, the band present's timing, the pool under the
+spinlock.
 
 #### M5. The keyboard on the host
 
@@ -1392,7 +1418,7 @@ runtime configuration (EL §14.2).
 | Keyboard matrix | §2.4 | **ROM, executed** | medium. MAME's table agrees with §2.4. The cells typed through the ROM so far (letters, digits, SPACE, ENTER, SHIFT, SYMBOL SHIFT with K and M) all type what §2.4 says, 2026-10-03. The full sweep is M5's |
 | Port read bits D5–D7 | tape on D5, rest high | schematic; ROM's tape loader | low-medium. MAME's `io_r` agrees: `$FF`, D5 cleared by the tape signal |
 | `IN` vs `OUT` speaker direction | `IN` one way, `OUT` the other | schematic; ROM's `BEEP` | medium. MAME: `IN` low, `OUT` high, which `ace.c` follows. MAME also takes the tape output from **D3 of the `OUT`**, not from the access, which contradicts §2.3; settle in M13. The prompt makes no edge: its key scan is all `IN`s (`test_boot`) |
-| Display polarity | set bits white | ROM, executed, against photographs | medium-high |
+| Display polarity | set bits white | ROM, executed, against photographs | high. **Executed** 2026-10-03: with set bits as ink, the character set the ROM writes reads as text on a paper ground that its spaces clear to (`test/host/golden/boot.ppm` and `glyphs.ppm`, looked at). That paper is black and ink white is from photographs |
 | ROM uses IM 1 | yes | ROM | **settled** 2026-10-03: `IM 1` at `$008E`, `EI` at `$009F`; IM is 1 at the prompt in every machine (`test_boot`). The handler is at `$013A` |
 | ROM halts when waiting for a key | no | ROM | **settled** 2026-10-03, by execution: at the prompt it spins on FLAGS (`$3C28`) bit 5 at `$059B`, which the interrupt sets on ENTER, and never halts (`test_boot`). It does `HALT` once a word in `VLIST` (`$0679`), found by the trace diff |
 | RNG seed location | none | ROM | **settled** 2026-10-03: the ROM has no random-number word (its dictionary names were listed). The manual's `RND` keeps its own seed and seeds it from FRAMES (`$3C2B`), which the interrupt counts, so zeroed RAM leaves nothing stuck (§6.3) |
