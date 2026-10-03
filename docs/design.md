@@ -1045,8 +1045,8 @@ passed.
 day): all 1,356 FUSE tests pass on registers, `MEMPTR`, T-states, memory and
 access order; ZEXDOC and ZEXALL pass all 67 groups each; the behaviour tests
 pass, each with its control (§5.4). ZEXALL took 90.6 s in a Debug build and
-26.4 s in Release, for 46.7 G T-states. *Not verified:* CI running the
-fetched suites (from this commit on); per-access timing within an
+26.4 s in Release, for 46.7 G T-states. CI ran the same suites green
+for `633d1c0`, 2026-10-03. *Not verified:* per-access timing within an
 instruction and contention, which are out of scope (§5.1); the CPU state in
 locals (§5.2), left for M2 to measure.
 

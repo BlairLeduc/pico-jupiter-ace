@@ -20,8 +20,9 @@ MEMPTR, T-states, memory and access order; ZEXDOC and ZEXALL each pass all
 contract, Q). ZEXALL wall time, a regression marker only: 90.6 s Debug,
 26.4 s Release (46.7 G T-states). The harness was shown to fail with planted
 bugs (design.md §5.4). Where sources disagree the CPU matches FUSE, and
-§5.1 lists the four choices that follow. **Not checked:** CI with the
-fetched suites (the workflow fetches them from this commit on); the tier-2
+§5.1 lists the four choices that follow. CI green on both jobs for
+`633d1c0`, 2026-10-03, fetching the suites and running all five tests
+(ZEXDOC and ZEXALL ~139 s each in its Debug build). **Not checked:** the tier-2
 SRAM placement by symbol address, since no firmware links the Z80 until M2;
 and the CPU state is not yet in locals (§5.2), which M2 measures.
 
