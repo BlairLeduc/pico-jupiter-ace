@@ -1,0 +1,71 @@
+# design.md §4.1: the core building clean under -Wall -Wextra -Werror on
+# both toolchains is the mechanism that keeps SDK dependencies from
+# leaking down into src/core/. CI is where that is enforced.
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  host:
+    name: host core + tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure
+        run: cmake -S . -B build/host -DPICO_ACE_HOST=ON -DCMAKE_BUILD_TYPE=Debug
+
+      - name: Build
+        run: cmake --build build/host -j
+
+      - name: Test
+        run: ctest --test-dir build/host --output-on-failure --no-tests=error
+
+  firmware:
+    name: pico2 UF2
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # git describe needs the history for the banner
+
+      - name: Install the Arm toolchain
+        uses: carlosperate/arm-none-eabi-gcc-action@v1
+        with:
+          release: '13.2.Rel1'
+
+      - name: Fetch the Pico SDK
+        uses: actions/checkout@v4
+        with:
+          repository: raspberrypi/pico-sdk
+          ref: 2.3.1
+          path: pico-sdk
+          submodules: true
+
+      - name: Configure
+        env:
+          PICO_SDK_PATH: ${{ github.workspace }}/pico-sdk
+        run: cmake -S . -B build/pico -DPICO_BOARD=pico2 -DCMAKE_BUILD_TYPE=Release
+
+      # The build prints arm-none-eabi-size itself (design.md §3.3).
+      - name: Build
+        env:
+          PICO_SDK_PATH: ${{ github.workspace }}/pico-sdk
+        run: cmake --build build/pico -j
+
+      # The build that ships: no UART (CLAUDE.md).
+      - name: Build without the UART
+        env:
+          PICO_SDK_PATH: ${{ github.workspace }}/pico-sdk
+        run: |
+          cmake -S . -B build/pico-release -DPICO_BOARD=pico2 -DCMAKE_BUILD_TYPE=Release -DPICO_ACE_UART=OFF
+          cmake --build build/pico-release -j
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pico-ace-uf2
+          path: |
+            build/pico/pico-ace.uf2
+            build/pico-release/pico-ace.uf2

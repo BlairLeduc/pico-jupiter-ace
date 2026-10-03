@@ -9,11 +9,24 @@ Raspberry Pi Pico SDK. The guest is a Z80A at 3.25 MHz with an 8 KiB Forth
 ROM, a 32×24 character display from 768 bytes of screen RAM and 1 KiB of
 character RAM, a 40-key matrix, and a one-bit speaker and tape port.
 
-**Implementation status, 2026-10-03: design only.** Nothing is built and
-nothing has been measured. The next milestone is **M0, the skeleton**
-(`docs/design.md` §15). When a milestone is done, record it here: what was
-verified, on which board, on what date, and what was not checked. pico-atom's
-`CLAUDE.md` shows the form.
+**Implementation status, 2026-10-03: M0 built, not done.** The skeleton
+exists (`docs/design.md` §15): the host build with one test, the `pico2`
+firmware printing a banner and a heartbeat over UART1 and blinking GP25,
+`config.h`, `hot.h`, `board.*` cut to the 150 MHz path, `tools/build.sh`,
+`flash.sh`, `uart-log.sh` and CI. Checked on the workstation, 2026-10-03
+(SDK 2.3.1, arm-none-eabi-gcc 15.2.Rel1, Apple clang 21): both targets
+build under `-Werror`; CTest passes; an `#include "pico/stdlib.h"` put in
+`src/core/config.h` fails the host build; the test fails with `ACE_ROM_SIZE`
+set wrong. Image: 22,692 B text, 852 B bss (UART build); 20,868 B, 836 B
+(no UART). On a Plus 2 W (RP2350B, rev 2, id `7458DC82A89AAC12`),
+2026-10-03, flashed with `tools/flash.sh` and captured with `uart-log.sh`:
+the banner reports clk_sys and clk_peri at 150 MHz and the core rail at
+~1,100 mV, followed by 11 heartbeats a second apart. **Not checked:** CI on
+a push (nothing pushed yet), and the LED. A `pico2` image's GP25 is the
+radio's CS on a W board (HW §1.1), so the LED can only light on a Pico 2.
+When a milestone is done, record it here: what was verified, on which
+board, on what date, and what was not checked. pico-atom's `CLAUDE.md`
+shows the form.
 
 **Settled decisions** (`docs/design.md` §18, 2026-10-03): the power-on
 machine is the **19K** Ace; **the Ace ROM ships in the repository and is
@@ -69,8 +82,8 @@ core were verified on a Plus 2 W, and `design.md` §4.6 says which files to
 
 ## Build and test
 
-Planned for M0 (design.md §4.1), following pico-atom's commands. They do not
-work until M0 exists. Correct this section when they do.
+As of M0 these work, except `tools/uart-type.sh` (M6, which turns UART bytes
+into key events) and `tools/fetch-test-suites.sh` (M1).
 
 ```sh
 # host: src/core/ with the system compiler, no Pico SDK, under CTest
