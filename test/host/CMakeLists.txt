@@ -70,3 +70,10 @@ target_compile_definitions(test_bench PRIVATE
 add_test(NAME test_bench_forth COMMAND test_bench)
 add_test(NAME test_bench_zexdoc COMMAND test_bench zexdoc.com)
 set_tests_properties(test_bench_forth test_bench_zexdoc PROPERTIES SKIP_RETURN_CODE 77)
+
+# Our half of the trace diff (design.md §13.4): a tool, not a test.
+# tools/trace-diff.py runs it beside tools/trace/build-xace.sh's reference.
+add_executable(ace-trace ${CMAKE_SOURCE_DIR}/tools/trace/ace-trace.c)
+target_link_libraries(ace-trace PRIVATE pico_ace_core)
+target_include_directories(ace-trace PRIVATE ${CMAKE_SOURCE_DIR}/tools/trace)
+target_compile_options(ace-trace PRIVATE ${PICO_ACE_WARNINGS})

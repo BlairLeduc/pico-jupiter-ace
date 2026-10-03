@@ -29,6 +29,14 @@ jobs:
       - name: Test
         run: ctest --test-dir build/host --output-on-failure --no-tests=error -j 4
 
+      # The real ROM under xAce's Z80, line for line against ours, through
+      # boot and a typed line (design.md §13.4). xAce is cloned at a
+      # pinned commit and built headless; nothing of it is committed.
+      - name: Trace diff against xAce
+        run: |
+          tools/trace/build-xace.sh
+          tools/trace-diff.py run --keys '2 2 + .\n'
+
   firmware:
     name: pico2 UF2
     runs-on: ubuntu-latest
