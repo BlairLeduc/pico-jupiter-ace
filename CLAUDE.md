@@ -9,8 +9,22 @@ Raspberry Pi Pico SDK. The guest is a Z80A at 3.25 MHz with an 8 KiB Forth
 ROM, a 32×24 character display from 768 bytes of screen RAM and 1 KiB of
 character RAM, a 40-key matrix, and a one-bit speaker and tape port.
 
-**Implementation status, 2026-10-03: M1 done.** The next milestone is M2,
-the Z80 on the board and the performance gate (`docs/design.md` §15).
+**Implementation status, 2026-10-03: M2 done.** The next milestones are M3,
+the Ace on the host, and M6, board bring-up (`docs/design.md` §15).
+
+**M2, the Z80 on the board** (`src/bench/`, `src/port/bench_main.c`), on
+the Plus 2 W (id `7458DC82A89AAC12`) at 150 MHz, gcc 15.2 `-O3`,
+2026-10-03: the Forth-shaped loop ran at 81.8 host cycles per instruction
+from flash and 82.8 in SRAM (tier 2); ZEXDOC's first group at 103.4 and
+86.0. Mean T per instruction was 7.82 and 8.09, and the board's T-state and
+instruction counts equal `test_bench`'s on the host. Eight runs per image
+agreed to within 0.01 % (`out/m2-bench-t0.log`, `out/m2-bench-t2.log`).
+**Gate decision: 150 MHz is enough**, at a projected 23–28 % of core 0
+(design.md §3.2). Tier 2 needed `rd`/`imm16`/`push16`/`pop16` marked
+`ACE_HOT2`, because GCC kept out-of-line copies in flash (HW §9.8).
+**Not checked:** the Ace's bus, interrupts and the real ROM's mix; core 1
+sharing the XIP cache; CPU state in locals, which moved to M12 as optional.
+CI green on both jobs for PR #1, 2026-10-03.
 
 **M1, the Z80 on the host** (`src/core/z80.c`), checked on the workstation
 (Apple M1 Pro, Apple clang 21), 2026-10-03, against suites fetched that day
@@ -97,7 +111,7 @@ core were verified on a Plus 2 W, and `design.md` §4.6 says which files to
 
 ## Build and test
 
-As of M1 these work, except `tools/uart-type.sh` (M6, which turns UART bytes
+As of M2 these work, except `tools/uart-type.sh` (M6, which turns UART bytes
 into key events).
 
 ```sh
@@ -110,12 +124,14 @@ ctest --test-dir build/host --output-on-failure -LE long # without ZEX
 
 # firmware: needs PICO_SDK_PATH and arm-none-eabi-gcc on PATH
 cmake -S . -B build/pico -DPICO_BOARD=pico2 -DCMAKE_BUILD_TYPE=Release
-cmake --build build/pico -j          # -> build/pico/pico-ace.uf2
+cmake --build build/pico -j          # -> build/pico/pico-ace.uf2, pico-ace-bench.uf2
+tools/build.sh -DPICO_ACE_RAM_TIER=2 build/pico-t2      # an SRAM tier, in its own dir
 tools/build.sh -DPICO_ACE_UART=OFF build/pico-release   # the build that ships
 
 # hardware, with the Debug Probe's SWD and UART both connected
 tools/uart-log.sh 30 out/run.log &   # capture UART1 first, so the banner is in it
 tools/flash.sh                       # reset halt + resume, never reset run (HW §2.7)
+tools/flash.sh build/pico/pico-ace-bench.elf   # M2's bench; embeds ZEXDOC if fetched
 tools/uart-type.sh '2 2 + .\r'       # type at the guest over the same UART
 ```
 
