@@ -14,7 +14,10 @@ void guest_config(ace_config_t *cfg, ace_ram_t ram) {
 }
 
 void guest_fields(guest_t *g, int n) {
-    for (int i = 0; i < n; i++) ace_run_field(&g->m);
+    for (int i = 0; i < n; i++) {
+        keymatrix_field(&g->k, &g->m);
+        ace_run_field(&g->m);
+    }
 }
 
 static bool cursor_shown(const ace_t *m) {
@@ -46,6 +49,7 @@ bool guest_boot(guest_t *g, ace_ram_t ram, int max_fields) {
     ace_config_t cfg;
     guest_config(&cfg, ram);
     g->t_to_prompt = 0;
+    keymatrix_init(&g->k);
     if (!ace_init(&g->m, &cfg)) return false;
 
     /* Field by field until the prompt, then by instruction across the
@@ -69,36 +73,39 @@ bool guest_boot(guest_t *g, ace_ram_t ram, int max_fields) {
     return false;
 }
 
-void guest_key(guest_t *g, int row, int col, bool sym) {
-    if (sym) ace_key_set(&g->m, 0, 1, true);
-    ace_key_set(&g->m, row, col, true);
-    guest_fields(g, 4);
-    ace_key_set(&g->m, row, col, false);
-    if (sym) ace_key_set(&g->m, 0, 1, false);
-    guest_fields(g, 4);
+bool guest_settle(guest_t *g, int max_fields) {
+    int f = 0;
+    for (; f < max_fields && !keymatrix_idle(&g->k); f++) guest_fields(g, 1);
+    guest_fields(g, ACE_KEY_GAP_FIELDS);
+    return keymatrix_idle(&g->k);
 }
 
-/* The half-rows of design.md §2.4, A8 low first; D0 is the left column. */
-static const char *const rows[8] = {
-    "\001\002zxc", "asdfg", "qwert", "12345", "09876", "poiuy", "\nlkjh", " mnbv",
-};
+void guest_press(guest_t *g, uint8_t code, bool alt) {
+    /* A code that is not its own key's base is a Shift chord on the
+     * PicoCalc (keymap_picocalc_canonical). */
+    bool shift = keymap_picocalc_canonical(code) != code;
+    if (alt)   keymatrix_event(&g->k, KEY_EV_PRESSED, PICOCALC_KEY_ALT);
+    if (shift) keymatrix_event(&g->k, KEY_EV_PRESSED, PICOCALC_KEY_SHIFT_L);
+    keymatrix_event(&g->k, KEY_EV_PRESSED, code);
+    keymatrix_event(&g->k, KEY_EV_RELEASED, code);
+    if (shift) keymatrix_event(&g->k, KEY_EV_RELEASED, PICOCALC_KEY_SHIFT_L);
+    if (alt)   keymatrix_event(&g->k, KEY_EV_RELEASED, PICOCALC_KEY_ALT);
+    if (!guest_settle(g, 100)) {
+        fprintf(stderr, "guest_press: 0x%02X still held after 100 fields\n", code);
+        abort();
+    }
+}
 
 void guest_type(guest_t *g, const char *s) {
     for (; *s; s++) {
-        char c = *s;
-        bool sym = false;
-        if (c == '+') { c = 'k'; sym = true; }   /* SYMBOL SHIFT + K */
-        if (c == '.') { c = 'm'; sym = true; }   /* SYMBOL SHIFT + M */
-        int row = -1, col = -1;
-        for (int r = 0; r < 8 && row < 0; r++) {
-            const char *p = strchr(rows[r], c);
-            if (p && c) { row = r; col = (int)(p - rows[r]); }
-        }
-        if (row < 0) {
-            fprintf(stderr, "guest_type: no cell for '%c'\n", *s);
+        uint8_t c = (uint8_t)*s;
+        if (c == '\n') c = PICOCALC_KEY_ENTER;
+        else if (c == '\b') c = PICOCALC_KEY_BACKSPACE;
+        else if (c < 0x20u || c > 0x7Eu) {
+            fprintf(stderr, "guest_type: no PicoCalc key for 0x%02X\n", c);
             abort();
         }
-        guest_key(g, row, col, sym);
+        guest_press(g, c, false);
     }
 }
 

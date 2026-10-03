@@ -5,8 +5,9 @@
  * unless the SHA-1 matched, so these tests never skip for want of it.
  *
  * The Ace powers on to a blank screen with the cursor on the bottom line;
- * "OK" appears only after a line is entered. Keys go straight into the
- * matrix here, by cell; M5 replaces that with the firmware's path.
+ * "OK" appears only after a line is entered. Keys reach the matrix the
+ * firmware's way: PicoCalc events into keymatrix, replayed once a field
+ * (design.md §9.1).
  */
 #ifndef PICO_ACE_TEST_GUEST_H
 #define PICO_ACE_TEST_GUEST_H
@@ -16,9 +17,11 @@
 #include <stdio.h>
 
 #include "ace.h"
+#include "keymatrix.h"
 
 typedef struct {
     ace_t m;
+    keymatrix_t k;
     /* T-states from power-on to the instruction that drew the first
      * cursor, or 0 if the boot did not reach it. */
     uint64_t t_to_prompt;
@@ -35,15 +38,21 @@ void guest_config(ace_config_t *cfg, ace_ram_t ram);
  * fields more. False if it did not appear within `max_fields`. */
 bool guest_boot(guest_t *g, ace_ram_t ram, int max_fields);
 
+/* n fields, each after keymatrix_field: the held set owns the matrix. */
 void guest_fields(guest_t *g, int n);
 
-/* Hold one matrix cell for 4 fields, with SYMBOL SHIFT if `sym`, then
- * release it for 4. The ROM takes a key on its third consecutive scan
- * (ROM $0310); M5 settles the hold and replaces this with keymatrix. */
-void guest_key(guest_t *g, int row, int col, bool sym);
+/* Run fields until everything queued has been replayed and let go, then
+ * ACE_KEY_GAP_FIELDS more, so the ROM has seen the last key up. False if
+ * that took more than `max_fields`. */
+bool guest_settle(guest_t *g, int max_fields);
 
-/* Type digits, lower-case letters, space, '+', '.' and '\n' (ENTER) by
- * the cells of design.md §2.4. Anything else is a test bug, and aborts. */
+/* Press and release one PicoCalc code, inside Shift if the PicoCalc
+ * types it as a Shift chord, and inside Alt if `alt`; then settle. */
+void guest_press(guest_t *g, uint8_t code, bool alt);
+
+/* Type text as a PicoCalc would send it: printable ASCII as itself,
+ * '\n' as Enter and '\b' as Backspace. Anything else is a test bug, and
+ * aborts. */
 void guest_type(guest_t *g, const char *s);
 
 /* One screen row as ASCII, trailing spaces trimmed. Inverse cells read as

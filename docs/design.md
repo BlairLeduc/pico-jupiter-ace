@@ -144,10 +144,12 @@ The `IN`/`OUT` pairing is how the ROM's `BEEP` and tape writer make a
 waveform. The polarity does not matter to audio, because the DC blocker
 removes it (§8), but the recorder needs the edges (§10.4).
 
-### 2.4 Expected keyboard matrix
+### 2.4 Keyboard matrix
 
-Listed so that the code has a starting table. It is **settled by executing the
-ROM** (§9.3), not by this table.
+**Settled by executing the ROM** (§9.3), 2026-10-03: each of the 40 cells
+was pressed at the prompt alone, with SHIFT, with SYMBOL SHIFT and with
+both, and what the ROM typed was read back. `test_keyboard` keeps that
+sweep as a regression test.
 
 | Address high byte | D0 | D1 | D2 | D3 | D4 |
 |---|---|---|---|---|---|
@@ -160,10 +162,24 @@ ROM** (§9.3), not by this table.
 | `$BF` | ENTER | L | K | J | H |
 | `$7F` | SPACE | M | N | B | V |
 
-Editing functions are SHIFT with a digit. As we understand it: SHIFT+1 DELETE
-LINE, +2 CAPS LOCK, +3 TRUE VIDEO, +4 INVERSE VIDEO, +5 cursor left, +6 down,
-+7 up, +8 right, +9 GRAPHICS, +0 DELETE. SHIFT+SPACE is BREAK. Punctuation is
-SYMBOL SHIFT with a letter or digit.
+Letters type lower case at power-on and capitals with SHIFT. SYMBOL SHIFT
+gives `:` `£` `?` on Z X C; `~` `|` `\` `{` `}` on A–G; `<` `>` on R and T
+(Q, W and E give capitals); `!` `@` `#` `$` `%` on 1–5; `_` `)` `(` `'` `&`
+on 0–6; `"` `;` `©` `]` `[` on P–Y; `=` `+` `-` `^` on L–H; and `.` `,` `*`
+`/` on M–V. SHIFT with SYMBOL SHIFT types what SYMBOL SHIFT alone does.
+
+The editing functions are SHIFT with a digit: 1 DELETE LINE, 2 CAPS LOCK,
+4 INVERSE VIDEO (a toggle), 5 cursor left, **6 up, 7 down**, 8 right,
+9 GRAPHICS, 0 DELETE. **SHIFT+3 types `3`**: this ROM has no TRUE VIDEO
+key, and INVERSE VIDEO pressed again turns inverse off. SHIFT+SPACE is
+BREAK, which a running word tests for (it stops with `ERROR 3`); at the
+prompt it types a space. The scan's decoded key is at `$3C26` while the
+key is down: `$01` left, `$02` CAPS LOCK, `$03` right, `$04` GRAPHICS,
+`$05` DELETE, `$07` up, `$08` INVERSE VIDEO, `$09` down, `$0A` DELETE
+LINE, `$0D` ENTER.
+
+Before the sweep this section had 6 as down and 7 as up, and SHIFT+3 as
+TRUE VIDEO, from secondary sources.
 
 ### 2.5 Video
 
@@ -719,8 +735,16 @@ EL §6 applies whole. The Ace specifics:
 EL §7.1's backwards mapping: PicoCalc `[state, code]` events → normalised →
 held-key set → binding fixed at press → (row, col, guest SHIFT, guest SYMBOL
 SHIFT) → the matrix, **replayed at the guest's pace** (each key held a minimum
-number of fields with a gap after). The minimum hold is read off the ROM's
-key routine in M5.
+number of fields with a gap after). The ROM's scan (`$0310`) takes a key on
+the third consecutive field that sees it, needs one field with every key up
+before the next, and repeats a key held 33 fields. The replay holds each key
+4 fields and leaves 2 up (`ACE_KEY_MIN_FIELDS`, `ACE_KEY_GAP_FIELDS`), one
+more of each than the ROM needs, for a scan the guest delays: 6 fields a
+key, ~8 keys a second (`test_keyboard`, 2026-10-03). Shift and Ctrl reach
+the matrix, so their releases wait the same minimum: a tap that starts and
+ends inside one poll still reaches a game that reads SHIFT alone. Insert is
+both Shift+Enter and Alt+I (HW §6.3), so which key it belongs to is decided
+when its event arrives, by whether Alt is down then.
 
 ### 9.2 The standard map
 
@@ -730,12 +754,12 @@ The map is data, one row per PicoCalc code (EL §7.2):
 |---|---|---|
 | `a`–`z`, `0`–`9` | the key | |
 | `A`–`Z` | SHIFT + key | the PicoCalc's own Caps Lock works through this |
-| punctuation | SYMBOL SHIFT + the key the ROM sweep finds (§9.3) | the shifted-only characters (`\|` `{` `}` `` ` `` `~`) need entries of their own (EL §7.2) |
+| punctuation | SYMBOL SHIFT + the key §2.4's sweep found | the shifted-only characters (`\|` `{` `}` `~`) have entries of their own (EL §7.2). The Ace has `£` where ASCII has `` ` `` (`$60`, §7.5), so `` ` `` types `£`; `©` has no PicoCalc key and is Ctrl+I |
 | Enter, Space | ENTER, SPACE | |
-| Backspace | DELETE (SHIFT+0) | |
-| ← ↓ ↑ → | SHIFT+5 / 6 / 7 / 8 | guest SHIFT is ours, so the swallowed host Shift+arrow chords cost nothing (HW §6.3) |
-| Esc | BREAK (SHIFT+SPACE) | the host's Shift+Space never arrives (HW §6.3), so BREAK needs a plain key |
-| **Shift** held | asserts guest SHIFT, **except while a key it shifted on the PicoCalc is down that the Ace types without SHIFT** | games read SHIFT alone (EL §7.2). The exception is pico-atom's `unshift` flag: on the PicoCalc `:` `"` `!` and the like are Shift chords, but on the Ace they are SYMBOL SHIFT chords. If the host's Shift reached the matrix as well, the Ace would see SHIFT+SYMBOL SHIFT and type something else |
+| Backspace, Del | DELETE (SHIFT+0) | |
+| ← ↑ ↓ → | SHIFT+5 / 6 / 7 / 8 | guest SHIFT is ours, so the swallowed host Shift+arrow chords cost nothing (HW §6.3). Up is 6 and down 7 (§2.4) |
+| Esc, Break | BREAK (SHIFT+SPACE) | the host's Shift+Space never arrives (HW §6.3), so BREAK needs a plain key. Break is Shift+Esc |
+| **Shift** held | asserts guest SHIFT, **except while a key it shifted on the PicoCalc is down that the Ace types without SHIFT** | games read SHIFT alone (EL §7.2). The exception is pico-atom's `unshift` flag: on the PicoCalc `:` `"` `!` and the like are Shift chords, but on the Ace they are SYMBOL SHIFT chords. The ROM types the same with SHIFT down as well (§2.4), so the exception keeps the matrix as an Ace typist would leave it, for a program that reads it directly |
 | **Ctrl** held | asserts guest SYMBOL SHIFT | Ctrl+key reaches every symbol-shifted cell raw, which the MCU delivers unchanged (HW §6.3) |
 
 **Alt layer** (the Ace has no Alt, so nothing is stolen from it; a key with
@@ -745,8 +769,7 @@ Alt down comes from this layer only):
 |---|---|
 | Alt+L | CAPS LOCK (SHIFT+2) |
 | Alt+G | GRAPHICS (SHIFT+9) |
-| Alt+V | INVERSE VIDEO (SHIFT+4) |
-| Alt+T | TRUE VIDEO (SHIFT+3) |
+| Alt+V | INVERSE VIDEO (SHIFT+4), a toggle; the ROM has no TRUE VIDEO (§2.4) |
 | Alt+X | DELETE LINE (SHIFT+1) |
 | Alt+M | menu |
 | Alt+P | pause |
@@ -757,13 +780,20 @@ Avoid Alt+`,` `.` Space `B` (MCU's own) and Alt+I (the MCU's Insert) (HW
 
 ### 9.3 Settling the matrix by execution
 
-In M5, on the host: boot the ROM, then press each of the 40 cells at the `OK`
+In M5, on the host: boot the ROM, then press each of the 40 cells at the
 prompt alone, with SHIFT and with SYMBOL SHIFT, and read what the ROM puts in
 screen RAM. That gives the whole map, including the editing keys and every
 punctuation character's cell. Keep the sweep as a regression test that types
 every entry of the PicoCalc table through the real ROM (EL §7.2). A host test
 also checks that every code maps to exactly one binding and that no binding
 needs a chord the MCU swallows.
+
+Done 2026-10-03 (`test_keyboard`, `test_keymap`). The sweep, with both
+shifts as a fourth case, gave §2.4. Every printable entry types its own
+character through `keymatrix` and the ROM; the editing keys, the Alt layer
+and BREAK are checked by what they do to the input line or a running word.
+Two of §2.4's earlier beliefs were wrong: up and down were swapped, and
+SHIFT+3 is not TRUE VIDEO.
 
 ### 9.4 Game layouts
 
@@ -1416,14 +1446,14 @@ runtime configuration (EL §14.2).
 | Unpopulated read value | `$FF` (`open_bus`) | schematic; ROM's RAM sizing | low for the value; **what the ROM needs is settled**, 2026-10-03: its sizing at `$0028` writes `$FC` a page at a time from `$3D00` and stops at the first page that does not read it back, so any value but `$FC` works. RAMTOP (`$3C18`) is `$4000`, `$8000` and `$0000` in the three machines (`test_boot`) |
 | User RAM mirrors with a pack fitted | still mirrored at `$3000–$3BFF` | pack schematic | low |
 | Port decode | A0 only | schematic; ROM | medium |
-| Keyboard matrix | §2.4 | **ROM, executed** | medium. MAME's table agrees with §2.4. The cells typed through the ROM so far (letters, digits, SPACE, ENTER, SHIFT, SYMBOL SHIFT with K and M) all type what §2.4 says, 2026-10-03. The full sweep is M5's |
+| Keyboard matrix | §2.4 | **ROM, executed** | **settled** 2026-10-03: every cell pressed at the prompt alone, with SHIFT, with SYMBOL SHIFT and with both (`test_keyboard`). The cells agree with MAME's table; the editing set did not agree with this design's earlier belief (up is SHIFT+6, down SHIFT+7, and SHIFT+3 types `3`) |
 | Port read bits D5–D7 | tape on D5, rest high | schematic; ROM's tape loader | low-medium. MAME's `io_r` agrees: `$FF`, D5 cleared by the tape signal |
 | `IN` vs `OUT` speaker direction | `IN` one way, `OUT` the other | schematic; ROM's `BEEP` | medium. MAME: `IN` low, `OUT` high, which `ace.c` follows. MAME also takes the tape output from **D3 of the `OUT`**, not from the access, which contradicts §2.3; settle in M13. The prompt makes no edge: its key scan is all `IN`s (`test_boot`) |
 | Display polarity | set bits white | ROM, executed, against photographs | high. **Executed** 2026-10-03: with set bits as ink, the character set the ROM writes reads as text on a paper ground that its spaces clear to (`test/host/golden/boot.ppm` and `glyphs.ppm`, looked at). That paper is black and ink white is from photographs |
 | ROM uses IM 1 | yes | ROM | **settled** 2026-10-03: `IM 1` at `$008E`, `EI` at `$009F`; IM is 1 at the prompt in every machine (`test_boot`). The handler is at `$013A` |
 | ROM halts when waiting for a key | no | ROM | **settled** 2026-10-03, by execution: at the prompt it spins on FLAGS (`$3C28`) bit 5 at `$059B`, which the interrupt sets on ENTER, and never halts (`test_boot`). It does `HALT` once a word in `VLIST` (`$0679`), found by the trace diff |
 | RNG seed location | none | ROM | **settled** 2026-10-03: the ROM has no random-number word (its dictionary names were listed). The manual's `RND` keeps its own seed and seeds it from FRAMES (`$3C2B`), which the interrupt counts, so zeroed RAM leaves nothing stuck (§6.3) |
-| Key minimum hold, in fields | 3 scans | **ROM, executed** | partly read 2026-10-03: the interrupt's scan (`$0310`) counts a held key down from `$20` in `$3C27`, takes it on the third consecutive field that sees it, repeats it 30 fields later and then every 4. A key held 4 fields with 4 between types once each (`test_boot`). M5 settles the hold and gap the replay uses |
+| Key minimum hold, in fields | 3 scans | **ROM, executed** | **settled** 2026-10-03: the interrupt's scan (`$0310`) counts a held key down from `$20` in `$3C27` and takes it on the third consecutive field; the next key needs one field with every key up; a key held 33 fields repeats, and then every 4. Typing a line at 2 fields held or with no gap loses keys (`test_keyboard`'s controls). The replay uses 4 and 2 (§9.1) |
 | `.tap` block layout | §10.3 | ROM tape routines; archive files | medium-low |
 | `.ace` snapshot encoding | §10.5 | xAce/EightyOne docs; sample files | low |
 | Tape signal timings | — | ROM tape routines | unknown |
