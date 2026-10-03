@@ -1017,7 +1017,7 @@ from the Ace archive) through this ROM: `LOAD TUTTUT` gave
 
 **xAce has no `.ace` loader**, so it cannot be the reference for snapshots.
 MAME's `jupace` has one (`snapshot_cb`), but MAME is read here, not run.
-Which reference M11 uses for `.ace` is open (§15.2 M3).
+Which reference checks `.ace` is M11's to choose (§18 item 6).
 
 ### 13.5 Soak
 
@@ -1167,14 +1167,15 @@ by SHA-1 (pico-atom's `guest.c` adapted); a text dump of screen RAM; **xAce
 built from its own checkout** with the trace tool started (§13.4).
 *Done when:* the harness boots the real ROM to the `OK` prompt in every RAM
 configuration and the dumped screen shows it; xAce runs the same ROM and
-loads one archive `.tap` and one `.ace`, and the first trace diff of boot
+loads one archive `.tap`, and the first trace diff of boot
 to `OK` is clean or its divergences are explained; the bus tests of §13.2 pass;
 the build-time SHA-1 check refuses a corrupted copy of `roms/ace.rom`; **§16 is updated** with everything the
 ROM settles (IM mode, RAM sizing and the unpopulated read, `HALT` use, RNG
 seed, tape routine addresses), each with how it was settled.
 *Measured:* T-states from reset to the first `OK`.
 *Leaves out:* pixels, keys, sound.
-*Built, 2026-10-03, not yet done* (Apple M1 Pro, Apple clang 21). The Ace
+*Done, 2026-10-03* (Apple M1 Pro, Apple clang 21). The `.ace` part of the
+done-when was moved to M11 the same day (§18 item 6). The Ace
 powers on to a blank screen with the cursor (`$97`) on the bottom line, not
 to `OK`, which it prints only after a line runs. So the harness boots to
 the cursor and then types `2 2 + .` into the matrix, and reads back
@@ -1186,10 +1187,8 @@ field tests pass with their controls (`test_field`), and the build refuses
 a ROM with one byte changed or one byte short (`test_rom_embed`, shown to
 fail with the SHA-1 check removed). §16 is updated with what the ROM
 settled. xAce runs the same ROM, loads an archive `.tap`, and the trace
-diffs of boot and of a typed line are clean (§13.4). *Outstanding:* xAce
-cannot load a `.ace` (it has no loader), so that part of the done-when needs
-the owner's decision on another reference. CI ran green on both jobs for
-PR #2, 2026-10-03, the trace diff included. *Not verified:*
+diffs of boot and of a typed line are clean (§13.4). CI ran green on both
+jobs for PR #2, 2026-10-03, the trace diff included. *Not verified:*
 anything on the device (the firmware does not link `ace.c` until M7, so
 tier 1's placement is unchecked); the field's line numbers and INT timing
 against the schematic; character RAM and open-bus read values.
@@ -1305,12 +1304,15 @@ leaves the same RAM as the ROM's routine; no underruns during any load.
 *Depends on:* M10.
 *Build:* `.ace` import (§10.5) with RAM-size refusal; `.sav` save and load
 with two-pass load; the Snapshot page (F2).
-*Done when:* `.ace` files from the archive load and run in the matching RAM
+*Done when:* a reference emulator chosen here loads the same archive
+`.ace` (moved from M3, §18 item 6); `.ace` files from the archive load and run in the matching RAM
 configuration and are refused in the wrong one, naming the size needed; the
 host `.sav` round trip (150 fields identical) passes; a torn or foreign
 `.sav` leaves the running machine unchanged.
 *Measured:* snapshot load time.
 *Leaves out:* `.ace` export (§18).
+*Open:* the reference emulator that checks `.ace` import. xAce has no
+loader (§13.4); MAME's `jupace` has one but is not run here (§18 item 6).
 
 #### M12. Performance pass and soak
 
@@ -1457,6 +1459,11 @@ The owner's decisions, each with its date. None is open as of 2026-10-03.
    The same as pico-atom, so §4.6's files move across as they are. Each one
    brings its `THIRD-PARTY.md` entry with it (ClockworkPi's LCD init values
    in `lcd.c`, FatFs's `ffconf.h`).
+6. **Snapshots wait for their milestone; M3 needs no `.ace` reference.**
+   *Decided 2026-10-03.* M3 found that xAce has no `.ace` loader (§13.4).
+   Snapshots are not a critical feature, so the check that a reference
+   emulator loads an archive `.ace` leaves M3's done-when, and choosing a
+   reference for `.ace` is left to M11 (§15.2), which builds the import.
 
 ---
 
