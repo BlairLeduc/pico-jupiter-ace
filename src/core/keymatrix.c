@@ -8,9 +8,9 @@ void keymatrix_init(keymatrix_t *k) {
     memset(k, 0, sizeof(*k));
 }
 
-static void enqueue(keymatrix_t *k, uint8_t state, uint8_t code) {
+static void enqueue(keymatrix_t *k, uint8_t state, uint8_t code, uint8_t canon) {
     unsigned tail = (k->q_head + k->q_len) % ACE_KEY_EVENT_QUEUE;
-    k->queue[tail] = (keymatrix_event_t){ state, code };
+    k->queue[tail] = (keymatrix_event_t){ state, code, canon };
     k->q_len++;
 }
 
@@ -23,7 +23,9 @@ static int find_open(const keymatrix_t *k, uint8_t canon) {
 }
 
 void keymatrix_event(keymatrix_t *k, uint8_t state, uint8_t code) {
-    uint8_t canon = keymap_picocalc_canonical(code);
+    if (code == PICOCALC_KEY_ALT) k->ev_alt = state != KEY_EV_RELEASED;
+    uint8_t canon = (code == PICOCALC_KEY_INSERT && k->ev_alt)
+                        ? (uint8_t)'i' : keymap_picocalc_canonical(code);
     int o = find_open(k, canon);
 
     if (state == KEY_EV_RELEASED) {
@@ -31,7 +33,7 @@ void keymatrix_event(keymatrix_t *k, uint8_t state, uint8_t code) {
          * keymatrix_init, has nothing to undo. */
         if (o < 0) return;
         k->open[o] = k->open[--k->n_open];
-        enqueue(k, state, code);   /* its slot was kept (below) */
+        enqueue(k, state, code, canon);   /* its slot was kept (below) */
         return;
     }
     if (state != KEY_EV_PRESSED && state != KEY_EV_HELD) return;
@@ -44,7 +46,7 @@ void keymatrix_event(keymatrix_t *k, uint8_t state, uint8_t code) {
         return;
     }
     k->open[k->n_open++] = canon;
-    enqueue(k, state, code);
+    enqueue(k, state, code, canon);
 }
 
 static int find_held(const keymatrix_t *k, uint8_t canon) {
@@ -79,6 +81,20 @@ static bool is_modifier(uint8_t code) {
            code == PICOCALC_KEY_SHIFT_L || code == PICOCALC_KEY_SHIFT_R;
 }
 
+/* The modifiers that reach the matrix, as indices into mod_fields. */
+static int mod_index(uint8_t code) {
+    switch (code) {
+    case PICOCALC_KEY_SHIFT_L: return 0;
+    case PICOCALC_KEY_SHIFT_R: return 1;
+    case PICOCALC_KEY_CTRL:    return 2;
+    default:                   return -1;
+    }
+}
+
+static bool mod_down(const keymatrix_t *k, int i) {
+    return i < 2 ? (k->shift >> i) & 1u : k->ctrl;
+}
+
 /* Apply the event at the head of the queue, or say why it must wait. */
 static bool apply_head(keymatrix_t *k) {
     keymatrix_event_t ev = k->queue[k->q_head];
@@ -88,7 +104,13 @@ static bool apply_head(keymatrix_t *k) {
         /* Modifiers report held events while down (hardware-notes.md
          * §6.2). The host's Shift is the Ace's SHIFT, which games read on
          * its own, and Ctrl is SYMBOL SHIFT (§9.2); a character decides
-         * for itself. */
+         * for itself. Those two are held as long as a key. */
+        int i = mod_index(ev.code);
+        if (i >= 0) {
+            bool was = mod_down(k, i);
+            if (down && !was) k->mod_fields[i] = 0;
+            if (!down && was && k->mod_fields[i] < ACE_KEY_MIN_FIELDS) return false;
+        }
         if (ev.code == PICOCALC_KEY_ALT)  k->alt  = down;
         if (ev.code == PICOCALC_KEY_CTRL) k->ctrl = down;
         if (ev.code == PICOCALC_KEY_SHIFT_L || ev.code == PICOCALC_KEY_SHIFT_R) {
@@ -98,7 +120,7 @@ static bool apply_head(keymatrix_t *k) {
         return true;
     }
 
-    uint8_t canon = keymap_picocalc_canonical(ev.code);
+    uint8_t canon = ev.canon;
     int h = find_held(k, canon);
 
     if (ev.state == KEY_EV_RELEASED) {
@@ -151,6 +173,8 @@ void keymatrix_field(keymatrix_t *k, ace_t *m) {
         if (e->flags & KM_NOCELL) continue;
         m->keys[e->row] |= (uint8_t)(1u << e->col);
     }
+    for (int i = 0; i < 3; i++)
+        if (mod_down(k, i) && k->mod_fields[i] < UINT8_MAX) k->mod_fields[i]++;
     if (k->shift && !unshift) shift = true;
     if (shift) m->keys[AK_ROW_MODS] |= 1u << AK_COL_SHIFT;
     if (sym)   m->keys[AK_ROW_MODS] |= 1u << AK_COL_SYM;

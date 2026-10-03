@@ -78,6 +78,7 @@ uint8_t keymap_picocalc_canonical(uint8_t code);
 #define PICOCALC_KEY_DOWN      0xB6u
 #define PICOCALC_KEY_RIGHT     0xB7u
 #define PICOCALC_KEY_BREAK     0xD0u   /* Shift+Esc */
+#define PICOCALC_KEY_INSERT    0xD1u   /* Shift+Enter, or Alt+I */
 #define PICOCALC_KEY_DEL       0xD4u
 
 #define KEY_EV_PRESSED   1u
@@ -98,7 +99,10 @@ typedef struct {
     bool unshift;
 } keymatrix_held_t;
 
-typedef struct { uint8_t state, code; } keymatrix_event_t;
+typedef struct {
+    uint8_t state, code;
+    uint8_t canon;        /* the physical key, decided as the event arrived */
+} keymatrix_event_t;
 
 typedef struct {
     /* Events wait here and are replayed at field rate, in order. */
@@ -118,6 +122,13 @@ typedef struct {
     uint8_t n;
     bool alt, ctrl;
     uint8_t shift;        /* the host's Shifts that are down: bit 0 left, 1 right */
+    /* Fields each of left Shift, right Shift and Ctrl has been down: they
+     * reach the matrix, so a tap is held as long as a key (§9.1). */
+    uint8_t mod_fields[3];
+
+    /* Alt as the events arrive, ahead of the replay: it decides which
+     * key an Insert is (keymatrix_event). */
+    bool ev_alt;
 
     /* M15: the game layout over the standard map (§9.4). */
 
@@ -134,11 +145,18 @@ void keymatrix_init(keymatrix_t *k);
 /* One [state, code] event off the southbridge FIFO. Queued, not applied:
  * see keymatrix_field. A press that finds no room for itself and for
  * every outstanding release is refused, and its release with it; a
- * press of a key already down (the MCU's auto-repeat) is absorbed. */
+ * press of a key already down (the MCU's auto-repeat) is absorbed.
+ *
+ * The key an event belongs to is keymap_picocalc_canonical's, except
+ * Insert, which the MCU sends for Shift+Enter and for Alt+I
+ * (hardware-notes.md §6.3): with Alt down it is the I key, so a release
+ * that arrives as 'i' after Alt has gone up still finds its press. */
 void keymatrix_event(keymatrix_t *k, uint8_t state, uint8_t code);
 
 /* Once per field, before the guest runs: replay queued events, drive the
- * matrix from the held set, and age it.
+ * matrix from the held set, and age it. Shift and Ctrl are paced like
+ * keys: their release waits ACE_KEY_MIN_FIELDS, so a tap within one poll
+ * still reaches the guest, which may read SHIFT alone.
  *
  * Replay is paced for the ROM, not for the poll. A press and its release
  * can arrive in the same 30 Hz poll (EL §7.1), and the ROM's scan takes a

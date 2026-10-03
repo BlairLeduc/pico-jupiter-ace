@@ -155,8 +155,36 @@ int main(void) {
         fields(1);
         CHECK(shift_down() && !sym_down(), "Shift alone is SHIFT");
         release(PICOCALC_KEY_SHIFT_L);
-        fields(1);
+        fields(ACE_KEY_MIN_FIELDS);
         CHECK(matrix_empty(), "and lets it go");
+
+        /* A tap of Shift or Ctrl inside one poll is held as long as a
+         * key, not applied and undone before the matrix is driven. */
+        static const uint8_t taps[] = { PICOCALC_KEY_SHIFT_L, PICOCALC_KEY_SHIFT_R,
+                                        PICOCALC_KEY_CTRL };
+        for (unsigned i = 0; i < 3; i++) {
+            fresh();
+            press(taps[i]);
+            release(taps[i]);
+            unsigned down = 0;
+            for (int f = 0; f < 20; f++) {
+                fields(1);
+                if (taps[i] == PICOCALC_KEY_CTRL ? sym_down() : shift_down()) down++;
+            }
+            CHECK(down == ACE_KEY_MIN_FIELDS, "a tap of 0x%02X held %u fields, want %u",
+                  taps[i], down, (unsigned)ACE_KEY_MIN_FIELDS);
+            CHECK(keymatrix_idle(&k) && matrix_empty() && !k.shift && !k.ctrl,
+                  "0x%02X left down after its tap", taps[i]);
+        }
+
+        /* A modifier's held events while down do not restart its count. */
+        fresh();
+        press(PICOCALC_KEY_SHIFT_L);
+        fields(ACE_KEY_MIN_FIELDS);
+        keymatrix_event(&k, KEY_EV_HELD, PICOCALC_KEY_SHIFT_L);
+        release(PICOCALC_KEY_SHIFT_L);
+        fields(1);
+        CHECK(!shift_down(), "Shift held its minimum already, and goes up at once");
 
         /* 'A' is SHIFT+A. */
         fresh();
@@ -217,7 +245,7 @@ int main(void) {
         fields(1);
         CHECK(sym_down() && cell_down(5, 2), "Ctrl+i reaches SYMBOL SHIFT+I");
         release(PICOCALC_KEY_CTRL);
-        fields(1);
+        fields(ACE_KEY_MIN_FIELDS);
         CHECK(!sym_down() && cell_down(5, 2), "Ctrl let go, i still held");
     }
 
@@ -252,6 +280,40 @@ int main(void) {
         release('l');
         fields(10);
         CHECK(k.n == 0 && matrix_empty(), "and its release lets go of SHIFT+2");
+
+        /* Insert is Alt+I as well as Shift+Enter (hardware-notes.md
+         * §6.3). Let Alt go first and I's release arrives as 'i': it must
+         * still close the press, or the next Enter is taken for a repeat. */
+        fresh();
+        press(PICOCALC_KEY_ALT);
+        press(PICOCALC_KEY_INSERT);
+        release(PICOCALC_KEY_ALT);
+        release('i');
+        fields(10);
+        CHECK(k.n_open == 0 && keymatrix_idle(&k), "Alt+I left %u press(es) open", k.n_open);
+        press(PICOCALC_KEY_ENTER);
+        fields(1);
+        CHECK(cell_down(6, 0), "Enter after Alt+I is not taken for a repeat");
+
+        /* With Alt still down, I's release is Insert again: same key. */
+        fresh();
+        press(PICOCALC_KEY_ALT);
+        press(PICOCALC_KEY_INSERT);
+        release(PICOCALC_KEY_INSERT);
+        release(PICOCALC_KEY_ALT);
+        fields(10);
+        CHECK(k.n_open == 0, "Alt+I released under Alt left a press open");
+
+        /* Shift+Enter is Insert too, and its release under the other
+         * translation, Enter, closes it. */
+        fresh();
+        press(PICOCALC_KEY_SHIFT_L);
+        press(PICOCALC_KEY_INSERT);
+        release(PICOCALC_KEY_SHIFT_L);
+        release(PICOCALC_KEY_ENTER);
+        fields(10);
+        CHECK(k.n_open == 0 && keymatrix_idle(&k), "Shift+Enter left %u press(es) open",
+              k.n_open);
 
         /* An Alt chord with no binding reaches nothing. */
         fresh();

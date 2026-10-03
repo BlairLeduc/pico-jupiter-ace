@@ -740,7 +740,11 @@ the third consecutive field that sees it, needs one field with every key up
 before the next, and repeats a key held 33 fields. The replay holds each key
 4 fields and leaves 2 up (`ACE_KEY_MIN_FIELDS`, `ACE_KEY_GAP_FIELDS`), one
 more of each than the ROM needs, for a scan the guest delays: 6 fields a
-key, ~8 keys a second (`test_keyboard`, 2026-10-03).
+key, ~8 keys a second (`test_keyboard`, 2026-10-03). Shift and Ctrl reach
+the matrix, so their releases wait the same minimum: a tap that starts and
+ends inside one poll still reaches a game that reads SHIFT alone. Insert is
+both Shift+Enter and Alt+I (HW §6.3), so which key it belongs to is decided
+when its event arrives, by whether Alt is down then.
 
 ### 9.2 The standard map
 

@@ -168,7 +168,6 @@ const size_t keymap_picocalc_len = sizeof keymap_picocalc / sizeof keymap_picoca
 
 /* PicoCalc keys that exist only as another's shifted alternate
  * (hardware-notes.md §6.3), by the key they are on. */
-#define PC_INSERT    0xD1u
 #define PC_HOME      0xD2u
 #define PC_END       0xD5u
 #define PC_PAGE_UP   0xD6u
@@ -190,7 +189,7 @@ uint8_t keymap_picocalc_canonical(uint8_t code) {
     case PC_END:             return PICOCALC_KEY_DEL;
     case PC_HOME:            return PC_TAB;
     case PICOCALC_KEY_BREAK: return PICOCALC_KEY_ESC;
-    case PC_INSERT:          return PICOCALC_KEY_ENTER;
+    case PICOCALC_KEY_INSERT: return PICOCALC_KEY_ENTER;
     case PC_PAGE_UP:         return PICOCALC_KEY_UP;
     case PC_PAGE_DOWN:       return PICOCALC_KEY_DOWN;
     default:                 return code;
