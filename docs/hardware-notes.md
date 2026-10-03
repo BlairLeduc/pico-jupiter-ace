@@ -1300,6 +1300,17 @@ first build's. Whatever an SRAM function calls in flash goes through a
 long-branch veneer (`__name_veneer` in `nm`), so the veneer list is the
 quick check that a tier is whole.
 
+A third trap: **`static inline` is not a promise.** At `-O3`, GCC kept
+out-of-line copies of a Z80 interpreter's small memory helpers (read,
+16-bit immediate, push, pop) in ordinary `.text`, and the SRAM tier called
+them in flash through veneers. Give such helpers the same section
+attribute as their callers. It costs nothing where they are inlined.
+
+The same method on a Z80 interpreter (2026-10-03, Plus 2 W at 150 MHz, 30 KB
+in SRAM) gave the same shape: **1.20×** on ZEXDOC's wide instruction mix,
+and nothing (−1.2 %) on a small Forth inner-interpreter loop whose opcodes
+already fit the cache.
+
 ---
 
 ## 10. Bring-up order and trap checklist

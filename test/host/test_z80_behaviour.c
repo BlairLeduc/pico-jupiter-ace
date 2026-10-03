@@ -216,6 +216,7 @@ static int test_run_contract(void) {
     CHECK(z80_run(c, 0) == 0 && c->pc == 0, "run(0) ran something");
     CHECK(z80_run(c, 1) == 10 && c->pc == 3, "run(1) is one whole LD BC,nn");
     CHECK(z80_run(c, 5) == 8, "run(5) over NOPs is two");
+    CHECK(c->insns == 3, "counted %u instructions, not 3", (unsigned)c->insns);
 
     /* ED holes are counted NOPs of 8 T. */
     static const uint8_t holes[] = { 0xED, 0x00, 0xED, 0x77, 0xED, 0xFF };
@@ -232,6 +233,8 @@ static int test_run_contract(void) {
     CHECK(z80_step(c) == 4, "lone DD");
     CHECK(z80_step(c) == 8 && c->pc == 0x0006, "DD NOP");
     CHECK(z80_step(c) == 13 && stack_top(c) == 0x0006, "INT after the chain");
+    /* Each step counts once: IM 1, EI, the lone DD, DD NOP, the INT. */
+    CHECK(c->insns == 5, "counted %u steps, not 5", (unsigned)c->insns);
 
     /* Memory full of prefixes still returns from a run. */
     c = boot(prog, 0);

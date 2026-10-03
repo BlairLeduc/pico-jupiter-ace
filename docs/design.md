@@ -19,9 +19,9 @@ This document applies the lessons. It does not repeat them. Where a decision
 just follows a lesson, it cites the lesson and moves on, and the space goes
 to what is different about the Ace.
 
-**Status, 2026-10-03.** M0 and M1 are done: the skeleton, and the Z80 on
-the host (§15.2). Nothing has been measured on the device beyond M0's
-banner. Every number about the Ace below comes from secondary knowledge
+**Status, 2026-10-03.** M0, M1 and M2 are done: the skeleton, the Z80 on
+the host, and the Z80 on the board, whose gate passed at 150 MHz (§3.2,
+§15.2). Beyond M0's banner, the only device measurement is M2's. Every number about the Ace below comes from secondary knowledge
 until §16's table says otherwise. Every performance figure is an
 **estimate** and is labelled as one (EL §14.4).
 
@@ -223,6 +223,42 @@ Two things work in the Ace's favour. The Atom's ~100 Thumb instructions per
 guest instruction included a VIA tick and an IRQ line on every instruction,
 and the Ace has no devices to tick (§2.6). A `HALT` fast-forward would also
 help if the ROM waits for keys by halting (§5.3).
+
+**Measured, M2, 2026-10-03** (Plus 2 W, RP2350B rev 2, id
+`7458DC82A89AAC12`; 150 MHz; gcc 15.2 `-O3`; `pico-ace-bench` at
+`7ba7b7d` plus M2's changes). The Z80 alone on a flat bus, ten guest
+seconds per run, eight runs per image, which agreed to within 0.01 %. Logs:
+`out/m2-bench-t0.log`, `out/m2-bench-t2.log`.
+
+| Workload | T per insn | Host cycles per insn, flash (tier 0) | SRAM (tier 2) | Core 0 at 3.25 MHz, tier 2 |
+|---|---:|---:|---:|---:|
+| Forth-shaped loop (§15.2 M2) | 7.82 | 81.8 | 82.8 | 22.9 % |
+| ZEXDOC, first group | 8.09 | 103.4 | 86.0 | 23.1 % |
+| *Estimate above* | *7–9* | *180–280* | | *43–86 %* |
+
+The mean T per instruction landed inside the estimate. The cost per
+instruction came in at **a third to a half of it**, below even the 6502's
+measured 158–218: EL §1's warning that estimates come in low did not apply
+here, and this estimate was scaled from a different interpreter. Tier 2
+(the interpreter in SRAM, 30.5 KiB) was worth 1.20× on ZEXDOC's wide
+instruction mix and nothing on the Forth loop, whose opcodes already fit
+the XIP cache (−1.2 %, a relayout). That is the shape HW §9.8 describes.
+Tier 1 is empty until the Ace's bus exists (`hot.h`), so it was not a
+separate image.
+
+**What the bench leaves out**, so the real share will be higher: the Ace's
+bus (character RAM's slow-path writes, port I/O on every keyboard read),
+the field interrupt and its split slices (§11.1), the real ROM's
+instruction mix (M3), and **core 1 sharing the 16 KiB XIP cache** with the
+LCD and menu code. The last argues for shipping tier 2, which takes the
+interpreter out of that cache; M12 decides.
+
+**The gate decision, 2026-10-03: 150 MHz is enough.** The projection is
+23–28 % of core 0 against the ~85 % threshold, a margin of three times
+before any lever. None of the levers below is needed for M7. CPU state in
+locals (§5.2) moves to M12 as an optional experiment, and 300 MHz stays
+deferred (§18 item 3). M7's measurement of the whole machine is the next
+check on this.
 
 **The gate.** Milestone M2 (§15) puts the Z80 core alone on the board and
 measures host cycles per instruction on ZEXDOC and on a Forth-shaped loop,
@@ -448,8 +484,10 @@ measured experiment in the perf pass, against a control build (EL §12). It is
 not the starting point.
 
 **As built in M1** (`src/core/z80.c`), the CPU state stays in `z80_t` and is
-reached through its pointer, not copied into locals. Locals are the first
-experiment in M2, with M1's code as the control. The memory fast path is the
+reached through its pointer, not copied into locals. Locals were to be
+M2's first experiment, with M1's code as the control. M2's gate passed with
+a margin of three times without them (§3.2), so the experiment moves to
+M12, where it is optional. The memory fast path is the
 page table of §6.1 (`page_t`, defined in `z80.h`), with the bus's functions
 behind a NULL page, so the host tests use the same path. A test that logs
 every access leaves every page NULL.
@@ -1064,6 +1102,16 @@ figure), or which lever comes next. The deferred 300 MHz option is the last
 of them (§18 item 3).
 *Measured:* host cycles per guest instruction, flash vs. a first SRAM tier.
 *Leaves out:* LCD, keyboard, audio.
+*Done, 2026-10-03* (Plus 2 W, RP2350B rev 2, id `7458DC82A89AAC12`, at
+150 MHz): `pico-ace-bench` runs the Forth-shaped loop and the start of
+ZEXDOC (`src/bench/`), each checked first on the host by `test_bench`,
+whose T-state and instruction counts the board reproduced exactly. 81.8 and
+103.4 host cycles per instruction from flash, 82.8 and 86.0 with the
+interpreter in SRAM (tier 2), at 7.82 and 8.09 T per instruction. The
+projected core 0 share is 23–28 %, and the gate decision in §3.2 is that
+150 MHz is enough. *Not verified:* the Ace's bus, interrupts and the real
+ROM's mix (M3, M7); core 1 contending for the XIP cache (M7); CPU state in
+locals, moved to M12 (§5.2).
 
 #### M3. The Ace on the host
 
@@ -1207,7 +1255,8 @@ host `.sav` round trip (150 fields identical) passes; a torn or foreign
 *Depends on:* M11.
 *Build:* the scripted workloads (§14); `HALT` fast-forward if M3 found the
 ROM halts; SRAM placement tiers, each in its own build directory with
-symbols checked (HW §9.8); the computed-goto experiment (§5.2).
+symbols checked (HW §9.8); the computed-goto experiment and CPU state in
+locals, both optional after M2's margin (§3.2, §5.2).
 *Done when:* every change is measured against a control build in the same
 sitting and kept only if it pays; §3.2 records the final numbers; a
 30-minute battery soak passes (§13.5) with every counter zero.

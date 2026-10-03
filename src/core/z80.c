@@ -64,7 +64,11 @@ static inline uint8_t sz53p(uint8_t v) { return (uint8_t)(sz53(v) | parity[v]); 
 
 /* ---- Bus ------------------------------------------------------------- */
 
-static inline uint8_t rd(z80_t *c, uint16_t a) {
+/* GCC keeps out-of-line copies of rd, imm16, push16 and pop16 at -O3, so
+ * they are marked to follow the interpreter into SRAM; without that, a
+ * tier-2 image calls them in flash through veneers (hot.h). */
+
+static inline uint8_t ACE_HOT2(rd)(z80_t *c, uint16_t a) {
     const uint8_t *p = c->bus.page[a >> 8].read;
     if (__builtin_expect(p != NULL, 1))
         return p[a & 0xFFu];
@@ -95,7 +99,7 @@ static inline uint8_t m1(z80_t *c) {
 
 static inline uint8_t imm8(z80_t *c) { return rd(c, PC++); }
 
-static inline uint16_t imm16(z80_t *c) {
+static inline uint16_t ACE_HOT2(imm16)(z80_t *c) {
     uint8_t lo = imm8(c);
     return (uint16_t)(lo | (imm8(c) << 8));
 }
@@ -110,12 +114,12 @@ static inline void wr16(z80_t *c, uint16_t a, uint16_t v) {
     wr(c, (uint16_t)(a + 1), (uint8_t)(v >> 8));
 }
 
-static inline void push16(z80_t *c, uint16_t v) {
+static inline void ACE_HOT2(push16)(z80_t *c, uint16_t v) {
     wr(c, --SP, (uint8_t)(v >> 8));
     wr(c, --SP, (uint8_t)v);
 }
 
-static inline uint16_t pop16(z80_t *c) {
+static inline uint16_t ACE_HOT2(pop16)(z80_t *c) {
     uint8_t lo = rd(c, SP++);
     return (uint16_t)(lo | (rd(c, SP++) << 8));
 }
@@ -897,6 +901,7 @@ void z80_nmi(z80_t *c) { c->nmi_pending = true; }
 
 uint32_t ACE_HOT2(z80_step)(z80_t *c) {
     uint32_t t0 = c->t;
+    c->insns++;
 
     if (__builtin_expect(c->nmi_pending, 0) && !c->prefix) {
         accept_nmi(c);

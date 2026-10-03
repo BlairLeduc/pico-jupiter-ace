@@ -76,6 +76,7 @@ typedef struct {
     uint8_t    int_data;         /* bus byte during INT acknowledge (§16) */
 
     uint32_t   t;                /* T-states, wrapping                    */
+    uint32_t   insns;            /* instructions run, wrapping (§14)      */
     uint32_t   ed_holes;         /* ED opcodes that act as NOPs (§5.1)    */
 
     z80_bus_t  bus;
@@ -90,7 +91,8 @@ void     z80_reset(z80_t *c);
  * overshoot). An interrupt acceptance counts as an instruction. */
 uint32_t z80_run(z80_t *c, uint32_t t_states);
 
-/* One instruction, or one interrupt acceptance. Returns its T-states. */
+/* One instruction, or one interrupt acceptance, which also counts in
+ * insns. Returns its T-states. */
 uint32_t z80_step(z80_t *c);
 
 /* The INT line is a level; NMI latches on a rising edge. */

@@ -32,3 +32,15 @@ foreach(zex zexdoc zexall)
     set_tests_properties(test_z80_${zex} PROPERTIES
         SKIP_RETURN_CODE 77 TIMEOUT 3600 LABELS long)
 endforeach()
+
+# M2's workloads (design.md §15.2 M2): the forth program always; the start
+# of ZEXDOC when the suites have been fetched.
+add_executable(test_bench test_bench.c)
+target_link_libraries(test_bench PRIVATE pico_ace_bench)
+target_include_directories(test_bench PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+target_compile_options(test_bench PRIVATE ${PICO_ACE_WARNINGS})
+target_compile_definitions(test_bench PRIVATE
+    PICO_ACE_DEFAULT_TEST_SUITES="${CMAKE_SOURCE_DIR}/test/suites")
+add_test(NAME test_bench_forth COMMAND test_bench)
+add_test(NAME test_bench_zexdoc COMMAND test_bench zexdoc.com)
+set_tests_properties(test_bench_forth test_bench_zexdoc PROPERTIES SKIP_RETURN_CODE 77)
