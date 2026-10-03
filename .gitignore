@@ -1,0 +1,4 @@
+# No permission covers the Ace DOS ROM; it is not distributed (design.md §17).
+roms/JA-DOSROM/
+
+.DS_Store
