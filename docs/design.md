@@ -1229,7 +1229,8 @@ random transitions of both cores: core 0 always gets a buffer, never the one
 core 1 holds, at most one is ready, and every publish is taken or counted
 dropped. At power-on, zeroed screen and character RAM draw all paper, and
 code `$80` over them a solid ink cell; the ROM has written the character
-set by the end of the first field. *Not verified:* anything on the panel
+set by the end of the first field. CI ran green on both jobs for PR #3,
+2026-10-03. *Not verified:* anything on the panel
 (M7): byte order on the wire, the band present's timing, the pool under the
 spinlock.
 

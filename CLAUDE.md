@@ -22,7 +22,8 @@ simulated panel exact over 300 random edits; the screen-only control goes
 stale. The pool survives 100,000 random transitions. Zeroed character RAM
 draws all paper at power-on, and the ROM writes the set within the first
 field. The font is font8x8 (public domain) in `third_party/`, converted by
-`tools/mkfont.py`. **Not checked:** anything on the panel (M7).
+`tools/mkfont.py`. CI green on both jobs for PR #3, 2026-10-03.
+**Not checked:** anything on the panel (M7).
 
 **M3, the Ace on the host** (`src/core/ace.c`, `test/host/guest.c`,
 `tools/trace/`), done 2026-10-03 on the workstation (Apple M1 Pro, Apple
