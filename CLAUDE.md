@@ -9,7 +9,8 @@ Raspberry Pi Pico SDK. The guest is a Z80A at 3.25 MHz with an 8 KiB Forth
 ROM, a 32×24 character display from 768 bytes of screen RAM and 1 KiB of
 character RAM, a 40-key matrix, and a one-bit speaker and tape port.
 
-**Implementation status, 2026-10-03: M0 built, not done.** The skeleton
+**Implementation status, 2026-10-03: M0 done.** The next milestone is M1,
+the Z80 on the host. The skeleton
 exists (`docs/design.md` §15): the host build with one test, the `pico2`
 firmware printing a banner and a heartbeat over UART1 and blinking GP25,
 `config.h`, `hot.h`, `board.*` cut to the 150 MHz path, `tools/build.sh`,
@@ -18,11 +19,11 @@ firmware printing a banner and a heartbeat over UART1 and blinking GP25,
 build under `-Werror`; CTest passes; an `#include "pico/stdlib.h"` put in
 `src/core/config.h` fails the host build; the test fails with `ACE_ROM_SIZE`
 set wrong. Image: 22,692 B text, 852 B bss (UART build); 20,868 B, 836 B
-(no UART). On a Plus 2 W (RP2350B, rev 2, id `7458DC82A89AAC12`),
+(no UART), with gcc 15.2; CI's gcc 13.2 gives 22,292 B and 20,452 B of text. On a Plus 2 W (RP2350B, rev 2, id `7458DC82A89AAC12`),
 2026-10-03, flashed with `tools/flash.sh` and captured with `uart-log.sh`:
 the banner reports clk_sys and clk_peri at 150 MHz and the core rail at
-~1,100 mV, followed by 11 heartbeats a second apart. **Not checked:** CI on
-a push (nothing pushed yet), and the LED. A `pico2` image's GP25 is the
+~1,100 mV, followed by 11 heartbeats a second apart. CI green on both jobs for `471e8f1`, 2026-10-03.
+**Not checked:** the LED. A `pico2` image's GP25 is the
 radio's CS on a W board (HW §1.1), so the LED can only light on a Pico 2.
 When a milestone is done, record it here: what was verified, on which
 board, on what date, and what was not checked. pico-atom's `CLAUDE.md`
