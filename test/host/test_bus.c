@@ -174,6 +174,15 @@ int main(void) {
     bad.int_line = 248;
     bad.int_t = bad.field_lines * bad.line_t;
     CHECK(!ace_init(&m, &bad), "accepted INT longer than the field");
+    /* A shape whose arithmetic wraps in 32 bits (review of PR #2). */
+    bad.field_lines = 2;
+    bad.line_t = UINT32_MAX;
+    bad.active_line = 0;
+    bad.int_line = 1;
+    bad.int_t = 1;
+    CHECK(!ace_init(&m, &bad), "accepted a field that wraps");
+    bad.line_t = (uint32_t)(INT32_MAX / 2 + 1);
+    CHECK(!ace_init(&m, &bad), "accepted a field longer than the signed budget");
     CHECK(ace_peek(&m, 0x4000) == 0x22, "a refused ace_init changed the machine");
 
     TEST_DONE();

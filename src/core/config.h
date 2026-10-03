@@ -30,7 +30,13 @@
 #define ACE_CRAM_BASE      0x2800u  /* $2800-$2FFF: 1 KiB twice, write-only */
 #define ACE_URAM_BASE      0x3000u  /* $3000-$3FFF: 1 KiB four times       */
 #define ACE_XRAM_BASE      0x4000u  /* expansion, $4000 up (§6.2)          */
+#define ACE_XRAM_19K        16384u  /* the 19K machine's pack, $4000-$7FFF */
 #define ACE_XRAM_MAX        49152u  /* the 51K machine fills $4000-$FFFF   */
+
+/* ---- Keyboard (design.md §2.4) --------------------------------------- */
+
+#define ACE_KEY_ROWS            8u  /* half-rows, selected by A8-A15       */
+#define ACE_KEY_COLS            5u  /* keys on D0-D4 of each               */
 
 /* ---- Video (design.md §2.5, §4.4) ------------------------------------ */
 

@@ -33,7 +33,7 @@ uint32_t ace_ram_bytes(ace_ram_t ram) {
     case ACE_RAM_3K:  return ACE_BLOCK_BYTES;
     case ACE_RAM_51K: return ACE_BLOCK_BYTES + ACE_XRAM_MAX;
     case ACE_RAM_19K:
-    default:          return ACE_BLOCK_BYTES + 16384u;
+    default:          return ACE_BLOCK_BYTES + ACE_XRAM_19K;
     }
 }
 
@@ -127,10 +127,12 @@ bool ace_init(ace_t *m, const ace_config_t *cfg) {
     uint32_t lines = cfg->field_lines;
     if (cfg->int_line >= lines || cfg->active_line >= lines) return false;
 
-    /* The field runs from the first active line round to the next. */
-    uint32_t field = lines * cfg->line_t;
-    uint32_t to_int = ((cfg->int_line + lines - cfg->active_line) % lines) * cfg->line_t;
-    if (to_int == 0 || to_int + cfg->int_t > field) return false;
+    /* The field runs from the first active line round to the next. In 64
+     * bits, so that nothing wraps before it is checked; the parts become a
+     * signed budget (run_budget), so the whole must fit in an int32_t. */
+    uint64_t field = (uint64_t)lines * cfg->line_t;
+    uint64_t to_int = (uint64_t)((cfg->int_line + lines - cfg->active_line) % lines) * cfg->line_t;
+    if (field > INT32_MAX || to_int == 0 || to_int + cfg->int_t > field) return false;
 
     /* Zero-filled RAM (§6.3). Ace Forth has no random-number word, so
      * there is no seed for zeroed RAM to leave stuck: the manual's RND
@@ -138,9 +140,9 @@ bool ace_init(ace_t *m, const ace_config_t *cfg) {
      * interrupt counts up (§16). */
     memset(m, 0, sizeof *m);
     m->cfg = *cfg;
-    m->field_t[0] = to_int;
+    m->field_t[0] = (uint32_t)to_int;
     m->field_t[1] = cfg->int_t;
-    m->field_t[2] = field - to_int - cfg->int_t;
+    m->field_t[2] = (uint32_t)(field - to_int - cfg->int_t);
 
     m->tape_in = true;
     build_pages(m);
@@ -153,20 +155,12 @@ void ace_reset(ace_t *m) {
     z80_reset(&m->cpu);
 }
 
+/* The page table is a function of cfg, so the copy's is rebuilt over its
+ * own buffers rather than relocated from the original's pointers. */
 void ace_copy(ace_t *dst, const ace_t *src) {
     if (dst == src) return;
     memcpy(dst, src, sizeof *dst);
-
-    /* Pointers into src move to the same place in dst; the ROM is
-     * outside both and stays. */
-    const uint8_t *lo = (const uint8_t *)src, *hi = lo + sizeof *src;
-    uint8_t *base = (uint8_t *)dst;
-    for (unsigned p = 0; p < ACE_PAGE_COUNT; p++) {
-        const uint8_t *r = src->page[p].read;
-        const uint8_t *w = src->page[p].write;
-        if (r >= lo && r < hi) dst->page[p].read  = base + (r - lo);
-        if (w >= lo && w < hi) dst->page[p].write = base + (w - lo);
-    }
+    build_pages(dst);
     connect_bus(dst);
 }
 
@@ -199,7 +193,7 @@ uint32_t ace_run_field(ace_t *m) {
 /* ---- Inputs and inspection -------------------------------------------- */
 
 void ace_key_set(ace_t *m, int row, int col, bool down) {
-    if (row < 0 || row > 7 || col < 0 || col > 4) return;
+    if (row < 0 || row >= (int)ACE_KEY_ROWS || col < 0 || col >= (int)ACE_KEY_COLS) return;
     uint8_t bit = (uint8_t)(1u << col);
     if (down) m->keys[row] |= bit;
     else      m->keys[row] = (uint8_t)(m->keys[row] & ~bit);

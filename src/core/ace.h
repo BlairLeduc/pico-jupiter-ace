@@ -66,7 +66,7 @@ typedef struct ace_s {
 
     /* The keyboard: one byte per half-row, bit n set while the key on
      * Dn is down. Row r is the one A(8+r) low selects (§2.4). */
-    uint8_t keys[8];
+    uint8_t keys[ACE_KEY_ROWS];
 
     /* The tape input as D5 reads it: true is the idle level, a 1. */
     bool tape_in;
@@ -106,8 +106,9 @@ static inline uint32_t ace_field_t(const ace_t *m) {
 
 /* Power on: zero RAM (§6.3), build the page table from cfg, and reset the
  * CPU. The field starts at its first active line. False, with the
- * machine untouched, if cfg has no ROM or a field shape that does not
- * fit in field_lines. */
+ * machine untouched, if cfg has no ROM, or a field shape that does not
+ * fit in field_lines or whose field is longer than INT32_MAX T-states
+ * (the budget is signed). */
 bool ace_init(ace_t *m, const ace_config_t *cfg);
 
 /* The CPU's reset line: RAM and the page table are kept. */
@@ -127,7 +128,8 @@ uint32_t ace_run_field(ace_t *m);
 /* Copy a machine. Never '=': the page table points into the struct. */
 void ace_copy(ace_t *dst, const ace_t *src);
 
-/* A key in the matrix, by half-row (0-7, A8-A15) and bit (0-4). */
+/* A key in the matrix, by half-row (0-7, A8-A15) and bit (0-4). Anything
+ * outside ACE_KEY_ROWS x ACE_KEY_COLS is ignored. */
 void ace_key_set(ace_t *m, int row, int col, bool down);
 
 /* The two video inputs (§2.5, §4.4). */
