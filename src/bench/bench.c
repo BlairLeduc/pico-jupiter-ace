@@ -53,11 +53,11 @@ static void machine_clear(bench_t *b) {
     b->out_len = 0;
     b->out[0] = 0;
     b->slow_writes = 0;
+    /* z80_reset keeps the INT level and the counters, which belong to the
+     * machine around the CPU; this machine starts from nothing, INT low. */
+    memset(&b->cpu, 0, sizeof b->cpu);
     b->cpu.bus = (z80_bus_t){ b->pages, b, mem_read, mem_write, io_read, io_write };
     z80_reset(&b->cpu);
-    b->cpu.t = 0;
-    b->cpu.insns = 0;
-    b->cpu.ed_holes = 0;
 }
 
 /* ---- forth: a minimal assembler ---------------------------------------- */

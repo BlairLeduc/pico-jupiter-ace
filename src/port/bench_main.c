@@ -78,8 +78,8 @@ int main(void) {
         }
 #else
         if (pass == 1)
-            printf("bench zexdoc: not in this image; run tools/fetch-test-suites.sh "
-                   "and rebuild\n");
+            printf("bench zexdoc: not in this image; run tools/fetch-test-suites.sh, "
+                   "then reconfigure CMake and rebuild\n");
 #endif
         printf("bench die %d C\n", board_temp_c());
     }

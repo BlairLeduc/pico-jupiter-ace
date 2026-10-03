@@ -81,8 +81,8 @@ else()
     endif()
 
     # How much of the core's hot path runs from SRAM (src/core/hot.h).
-    # M2 measures tier 1 and 2 against 0 (design.md §3.2); M12 chooses the
-    # one that ships. The core library needs it too: that is where the
+    # M2 measured tier 2 against 0; tier 1 stays empty until the Ace's bus
+    # exists (design.md §3.2). M12 chooses the one that ships. The core library needs it too: that is where the
     # marked functions are.
     set(PICO_ACE_RAM_TIER 0 CACHE STRING "Hot-code SRAM tier, 0-2 (src/core/hot.h)")
     target_compile_definitions(pico_ace_core PRIVATE PICO_ACE_RAM_TIER=${PICO_ACE_RAM_TIER})

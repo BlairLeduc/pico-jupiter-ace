@@ -24,6 +24,7 @@ agreed to within 0.01 % (`out/m2-bench-t0.log`, `out/m2-bench-t2.log`).
 `ACE_HOT2`, because GCC kept out-of-line copies in flash (HW §9.8).
 **Not checked:** the Ace's bus, interrupts and the real ROM's mix; core 1
 sharing the XIP cache; CPU state in locals, which moved to M12 as optional.
+CI green on both jobs for PR #1, 2026-10-03.
 
 **M1, the Z80 on the host** (`src/core/z80.c`), checked on the workstation
 (Apple M1 Pro, Apple clang 21), 2026-10-03, against suites fetched that day

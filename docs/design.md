@@ -23,7 +23,8 @@ to what is different about the Ace.
 the host, and the Z80 on the board, whose gate passed at 150 MHz (§3.2,
 §15.2). Beyond M0's banner, the only device measurement is M2's. Every number about the Ace below comes from secondary knowledge
 until §16's table says otherwise. Every performance figure is an
-**estimate** and is labelled as one (EL §14.4).
+**estimate** and is labelled as one (EL §14.4), except M2's measurements
+of the Z80 alone, which §3.2 labels as measured.
 
 **Notation.** Guest addresses and values use the Z80 world's `$XXXX`, and host
 values use `0x` (EL §14.1). `T` is a Z80 T-state, one guest clock cycle at
