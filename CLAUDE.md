@@ -9,8 +9,7 @@ Raspberry Pi Pico SDK. The guest is a Z80A at 3.25 MHz with an 8 KiB Forth
 ROM, a 32×24 character display from 768 bytes of screen RAM and 1 KiB of
 character RAM, a 40-key matrix, and a one-bit speaker and tape port.
 
-**Implementation status, 2026-10-04: M8 built and measured on the board;
-the pitch by ear and CI are outstanding.** Next is M9, the card
+**Implementation status, 2026-10-04: M8 done.** Next is M9, the card
 (`docs/design.md` §15).
 
 **M8, audio** (`src/core/beeper.c`, `src/port/audio.c`, `core0.c`), on
@@ -25,8 +24,10 @@ independent box filter to 1 LSB, and the output's pitch is the count's to
 underrun samples, 0 late refills, no drops or I²C errors
 (`out/m8-soak.log`); the board's `BEEP` edge counts equal the host's.
 Audio costs core 0 0.4–2.0 points against a control build in the same
-sitting (design.md §3.2). **Not checked:** the pitch by ear; the shipping
-build on the device.
+sitting (design.md §3.2). The owner heard `BEEP` on the PicoCalc's
+speaker, 2026-10-04, and it sounds correct. CI green on both jobs for PR
+#7, 2026-10-04. **Not checked:** the shipping build (`PICO_ACE_UART=OFF`)
+on the device, which was only built.
 
 **M7, the Ace on the device** (`src/port/core0.c`, `core1.c`,
 `handoff.c`, `display.c`), on the Plus 2 W (id `7458DC82A89AAC12`) at

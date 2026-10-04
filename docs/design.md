@@ -1410,7 +1410,7 @@ scan clicks at the prompt is recorded (§8).
 *Measured:* pitch against computed; samples/s control; core 0 share with
 audio on.
 *Leaves out:* volume and mute settings.
-*Built, 2026-10-04* (Plus 2 W, RP2350B rev 2, id `7458DC82A89AAC12`, at
+*Done, 2026-10-04* (Plus 2 W, RP2350B rev 2, id `7458DC82A89AAC12`, at
 150 MHz, gcc 15.2). `beeper.*` and `audio.*` are pico-atom's, renamed; the
 beeper takes the Z80's wrapping 32-bit T counter by difference, and
 pico-atom's `test_audio` came with it, rebuilt on the real ROM's `BEEP`
@@ -1433,8 +1433,10 @@ counts exactly. The prompt does not click (§8). The late path, which the
 soak never took, was forced with a scratch build that masked core 0's
 interrupts for 9 ms every 250 fields (`out/m8-late.log`): each stall counted
 3 late refills and cost 3 halves of consumed samples, with no IRQ storm and
-no underrun, and playback carried on. Core 0 with audio: §3.2's M8 table. *Not verified:* the pitch by ear on the PicoCalc's speaker; the
-shipping build (`PICO_ACE_UART=OFF`), which was only built.
+no underrun, and playback carried on. Core 0 with audio: §3.2's M8 table. The owner listened to `BEEP` on the PicoCalc's speaker,
+2026-10-04, and it sounds correct. CI green on both jobs for PR #7.
+*Not verified:* the shipping build (`PICO_ACE_UART=OFF`) on the device,
+which was only built.
 
 #### M9. The card
 
