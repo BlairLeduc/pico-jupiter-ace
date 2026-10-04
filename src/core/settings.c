@@ -292,8 +292,9 @@ settings_status_t settings_rewrite(const char *text, size_t len, const settings_
 
     /* The keys some line gives a good value. A line whose value the
      * parser refused is that key's line only if no other line is: then
-     * the save writes the value in force over the refused one, and the
-     * problem the status row names goes with it. */
+     * the save writes the value in force over the refused one. If another
+     * line is, the refused one is made a comment, keeping its text. Either
+     * way the problem the status row names goes with the save. */
     unsigned good = 0;
     {
         unsigned seen0 = 0;
@@ -322,10 +323,13 @@ settings_status_t settings_rewrite(const char *text, size_t len, const settings_
         settings_status_t st = classify(&line_says, text + at, n, &seen, &key);
         if (st == SET_DUPLICATE) return SET_DUPLICATE;
         bool applies = st == SET_OK && key < K_COUNT;
-        bool refused = st == SET_BAD_VALUE && key < K_COUNT &&
-                       !(good & (1u << key)) && !(present & (1u << key));
+        bool bad = st == SET_BAD_VALUE && key < K_COUNT;
+        bool refused = bad && !(good & (1u << key)) && !(present & (1u << key));
 
-        if (refused || (applies && !key_equal(key, &line_says, s))) {
+        if (bad && !refused) {
+            emit_str(&o, "# ");
+            emit(&o, text + at, n);
+        } else if (refused || (applies && !key_equal(key, &line_says, s))) {
             char num[4];
             emit_changed(&o, text + at, n, value_of(key, s, num));
         } else {

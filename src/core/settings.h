@@ -66,7 +66,8 @@ const char *settings_status_str(settings_status_t st);
  *     following the firmware's;
  *   - a line naming a key with a value the parser refuses is that key's
  *     line if no other line gives the key a good value, and the value in
- *     force is written over the refused one;
+ *     force is written over the refused one; if another line does, the
+ *     refused line becomes a comment, "# " before its text;
  *   - everything else — comments, blank lines, other keys, lines that do
  *     not parse — is copied as it stands;
  *   - the file's own line ending is kept, and appended lines use it.

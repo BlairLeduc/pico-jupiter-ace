@@ -1017,8 +1017,8 @@ Build-time `BOOT_*` overrides win (EL §13.1); M9 has `PICO_ACE_BOOT_RAM`.
 The parser and the in-place rewriter are pico-atom's `settings.*`, with
 these keys (§4.6), and `test_settings` came with them. M10 changed one rule:
 a refused value is replaced by the value in force when no other line gives
-that key a good value, so that saving clears the problem the status row
-names. Core 1 reads the
+that key a good value, and made a comment when one does, so that saving
+clears the problem the status row names. Core 1 reads the
 file at boot, before core 0 powers the machine on, because `ram` is the
 machine. As of M9 only `ram` is applied; the other keys are read and
 checked, so a mistake in them is named, and M10 applies them.
@@ -1621,13 +1621,16 @@ The owner saved settings from the menu on the Plus 2 W, and the tape in
 the deck, the volume and the perf line came back after a reboot; the M9
 test file's refused `volume = 9` on line 4 survived the save, because the
 rewriter copied refused lines as they stood. It now writes the value in
-force over a refused one, unless another line gives that key a good value
-(§10.6, EL §8.7), with `test_settings` cases and a control that fails
-under the old rule; that fix was not yet run on the board. The owner ran
+force over a refused one, or comments it out if another line gives that
+key a good value (§10.6, EL §8.7), with `test_settings` cases and a control that fails
+under the old rule. On the board the owner's file, which by then also had
+a good `volume` line appended by the old rule, was saved from the menu:
+282 bytes became 284, line 4 a comment, and the next boot read it with no
+problem (`out/m10-settings.log`). The owner ran
 the shipping build (`PICO_ACE_UART=OFF`) on a Pico 2 W, 2026-10-04, and it
 works (no UART, so no timings or board id).
 *Not verified:* VERIFY and BVERIFY on the board (host only); a card pulled
-during a tape job; the rewriter's fix on the board. Once during the
+during a tape job. Once during the
 session the UART went silent with both cores later found in their normal
 loops, and the Debug Probe stopped enumerating until replugged; it did not
 recur after a reflash, and its cause is not known.
