@@ -969,7 +969,9 @@ option is ever taken up, it follows EL §9.4's sequence through pico-atom's
 
 EL §10, with the Ace's specifics:
 
-- **Boot straight to `OK`.**
+- **Boot straight to the prompt**: the Ace's blank screen and cursor,
+  with no menu or splash first (the ROM prints `OK` only after a line
+  runs, §15.2 M3).
 - **Alt+M** opens the menu, which pauses the guest. Pages: Tape (select,
   play/stop, new recording), Snapshot (load `.ace`, save/load `.sav`), Machine
   (RAM size, staged, applied by power-on restart, with a warning
@@ -1325,7 +1327,9 @@ absolute field deadline (no audio yet, EL §6.3); core 1 presenting
 snapshots with dirty bands at (32, 64); the PicoCalc keyboard driving the
 matrix; the ROM embedded in the image, with the build's SHA-1 check
 (§10.2); a heartbeat.
-*Done when:* the board powers up to `OK` on the panel; `2 2 + .` typed **on
+*Done when:* the board powers up to the Ace's prompt on the panel, a
+blank screen with the cursor on the bottom line (the ROM prints `OK` only
+after a line runs, as M3 found); `2 2 + .` typed **on
 the PicoCalc keyboard** prints the answer; arrows, DELETE and BREAK work; a
 `VLIST` scrolls cleanly with zero dropped snapshots over 3,000 fields.
 *Measured:* core 0 share and host cycles per instruction at the prompt, in
