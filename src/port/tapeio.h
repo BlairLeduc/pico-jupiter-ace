@@ -8,8 +8,9 @@
  *
  * The deck holds one tape, read a block at a time from where it stands,
  * as a recorder would. With the deck empty, LOAD and SAVE use the file
- * the guest names: LOAD SQ plays /ace/tapes/SQ.tap from its start, and
- * SAVE SQ appends to it, creating it if need be. A LOAD whose name is a
+ * the guest names: LOAD SQ plays /ace/tapes/SQ.tap from its start, or
+ * failing that the first tape whose first header is SQ's, and SAVE SQ
+ * appends to SQ.tap, creating it if need be. A LOAD whose name is a
  * file on the card plays that file whatever is in the deck; any other
  * LOAD reads the deck. When a LOAD reaches the end of the tape it is
  * rewound once, so a program already passed is found; at the end a

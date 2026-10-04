@@ -109,6 +109,35 @@ static bool name_path(const ace_t *m, uint16_t addr, char out[ACE_PATH_MAX]) {
 
 /* ---- load ------------------------------------------------------------------- */
 
+/* With the deck empty and no file of that name: the first tape in
+ * TAPEIO_DIR whose first header carries the name, compared as the ROM
+ * compares ($1AA9), byte for byte with its padding. Archive files are
+ * seldom named after the program they hold. */
+static bool find_by_header(const ace_t *m, char out[ACE_PATH_MAX]) {
+    uint8_t want[TAPE_NAME_LEN];
+    for (unsigned i = 0; i < TAPE_NAME_LEN; i++)
+        want[i] = ace_peek(m, (uint16_t)(TAPE_HEADER_ASKED + 1u + i));
+    DIR d;
+    FILINFO fi;
+    bool found = false;
+    if (f_opendir(&d, TAPEIO_DIR) != FR_OK) return false;
+    while (!found && f_readdir(&d, &fi) == FR_OK && fi.fname[0]) {
+        size_t len = strlen(fi.fname);
+        if ((fi.fattrib & (AM_DIR | AM_HID)) || strncmp(fi.fname, "._", 2) == 0 ||
+            len < 5 || strcasecmp(fi.fname + len - 4, ".tap") != 0) continue;
+        snprintf(out, ACE_PATH_MAX, "%s/%s", TAPEIO_DIR, fi.fname);
+        uint8_t h[2 + 1 + TAPE_NAME_LEN];
+        UINT got = 0;
+        if (f_open(&s_f, out, FA_READ) != FR_OK) continue;
+        found = f_read(&s_f, h, sizeof h, &got) == FR_OK && got == sizeof h &&
+                h[0] == TAPE_HEADER_LEN + 1u && h[1] == 0 &&
+                memcmp(h + 3, want, TAPE_NAME_LEN) == 0;
+        f_close(&s_f);
+    }
+    f_closedir(&d);
+    return found;
+}
+
 static void decline(ace_t *m, const char *why) {
     ace_tape_decline(m);
     g_tape_stats.declined++;
@@ -125,6 +154,9 @@ static void serve_load(ace_t *m, const tape_t *t) {
             f_close(&s_f);
             set_deck(named, false);
             log_core1("  tape         : %s found by name\n", named);
+        } else if (!s_path[0] && find_by_header(m, named)) {
+            set_deck(named, false);
+            log_core1("  tape         : %s found by its header\n", named);
         } else {
             log_core1("  tape         : no %s (FatFs %d)\n", named, (int)fr);
         }
@@ -296,7 +328,9 @@ unsigned tapeio_list(tapeio_entry_t *out, unsigned max) {
     unsigned n = 0;
     if (f_opendir(&d, TAPEIO_DIR) != FR_OK) return 0;
     while (n < max && f_readdir(&d, &fi) == FR_OK && fi.fname[0]) {
-        if (fi.fattrib & AM_DIR) continue;
+        /* Directories, and the "._" files macOS writes beside each file
+         * it copies (its AppleDouble metadata, not a tape). */
+        if ((fi.fattrib & (AM_DIR | AM_HID)) || strncmp(fi.fname, "._", 2) == 0) continue;
         size_t len = strlen(fi.fname);
         if (len < 5 || strcasecmp(fi.fname + len - 4, ".tap") != 0) continue;
         tapeio_entry_t *e = &out[n];
