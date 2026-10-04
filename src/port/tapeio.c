@@ -233,6 +233,15 @@ static FRESULT append(const ace_t *m, const tape_t *t, const char *path) {
     (void)f_mkdir("/ace");
     (void)f_mkdir(TAPEIO_DIR);
 
+    /* A save cut off between the unlink and the rename left only the
+     * .new, which open_read plays; make it the tape before it is
+     * overwritten. Beside the tape, a .new may be partial: the tape wins. */
+    FILINFO fi;
+    if (f_stat(path, &fi) == FR_NO_FILE && f_stat(tmp, &fi) == FR_OK) {
+        FRESULT fr = f_rename(tmp, path);
+        if (fr != FR_OK) return fr;
+    }
+
     FRESULT fr = f_open(&s_g, tmp, FA_WRITE | FA_CREATE_ALWAYS);
     if (fr != FR_OK) return fr;
     bool had = open_read(path) == FR_OK;

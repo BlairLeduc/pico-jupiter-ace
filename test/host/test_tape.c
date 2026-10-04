@@ -434,6 +434,7 @@ static int test_archive(void) {
     if (!f) return 1;
     static uint8_t img[65536];
     size_t n = fread(img, 1, sizeof img, f);
+    if (n == sizeof img && fgetc(f) != EOF) n++;   /* one byte more than fits */
     fclose(f);
     if (n > sizeof s_tap) { printf("archive: %zu bytes, more than the test holds\n", n); return 0; }
     memcpy(s_tap, img, n);
