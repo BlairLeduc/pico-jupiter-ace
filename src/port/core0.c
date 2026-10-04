@@ -8,9 +8,12 @@
 #include "pico/stdlib.h"
 
 #include "audio.h"
+#include "card.h"
 #include "handoff.h"
 #include "kbd.h"
 #include "log.h"
+#include "park.h"
+#include "settingsio.h"
 #include "southbridge.h"
 
 /* The heartbeat's period (design.md §14). */
@@ -51,15 +54,17 @@ static void dump_screen(const ace_t *m) {
 }
 #endif
 
-static void uart_keys(keymatrix_t *k, const ace_t *m) {
+/* True when the byte was GS, a request to park (park.h). */
+static bool uart_keys(keymatrix_t *k, const ace_t *m) {
 #if PICO_ACE_UART
-    if (k->q_len + k->n_open + 2u * ACE_KEY_TEXT_EVENTS > ACE_KEY_EVENT_QUEUE) return;
+    if (k->q_len + k->n_open + 2u * ACE_KEY_TEXT_EVENTS > ACE_KEY_EVENT_QUEUE) return false;
     int ch = getchar_timeout_us(0);
-    if (ch == PICO_ERROR_TIMEOUT) return;
+    if (ch == PICO_ERROR_TIMEOUT) return false;
     if (ch == UART_SCREEN_DUMP) {
         dump_screen(m);
-        return;
+        return false;
     }
+    if (ch == UART_HOLD) return true;
     picocalc_event_t ev[ACE_KEY_TEXT_EVENTS];
     unsigned n = keymap_picocalc_text((uint8_t)ch, ev);
     for (unsigned i = 0; i < n; i++) keymatrix_event(k, ev[i].state, ev[i].code);
@@ -67,6 +72,30 @@ static void uart_keys(keymatrix_t *k, const ace_t *m) {
     (void)k;
     (void)m;
 #endif
+    return false;
+}
+
+/* The cursor the ROM draws at the input position (ROM $0282): its
+ * first appearance on the bottom line is the boot reaching the prompt,
+ * as test_boot has it (§15.2 M3). */
+#define ACE_CURSOR 0x97u
+
+static bool cursor_shown(const ace_t *m) {
+    const uint8_t *last = ace_screen(m) + (ACE_SCREEN_ROWS - 1u) * ACE_SCREEN_COLS;
+    for (unsigned c = 0; c < ACE_SCREEN_COLS; c++)
+        if (last[c] == ACE_CURSOR) return true;
+    return false;
+}
+
+/* What the card gave the boot, for the heartbeat: the slot now, and the
+ * settings file's state and first problem then (§15.2 M9). */
+static const char *card_text(void) {
+    static char text[96];
+    snprintf(text, sizeof text, "card %s (%lu changes), cfg %s%s%s",
+             card_present() ? "in" : "out", (unsigned long)card_changes(),
+             settingsio_state_str(g_boot.cfg), g_boot.cfg_error[0] ? ": " : "",
+             g_boot.cfg_error);
+    return text;
 }
 
 /* The keys that ask the emulator rather than the guest for something.
@@ -106,6 +135,8 @@ void core0_run(ace_t *m, keymatrix_t *k) {
     uint32_t hb_t = m->cpu.t, hb_insns = m->cpu.insns, hb_late = 0;
     uint32_t sec_insns = m->cpu.insns;
     uint64_t hb_run_us = 0, hb_busy_us = 0, sec_run_us = 0, sec_busy_us = 0;
+    bool prompt = false;
+    bool hold = false;
 
     for (;;) {
         uint64_t now;
@@ -125,11 +156,34 @@ void core0_run(ace_t *m, keymatrix_t *k) {
         }
         sched_fields++;
 #endif
+        /* Between two fields: the one place the guest parks (§4.5). Guest
+         * time does not pass, so the schedule and the measuring windows
+         * start again from now, as if the guest had just started: a
+         * window across the park would count its silence as consumed
+         * samples. The keys start again from none held. */
+        if (hold) {
+            hold = false;
+            uint32_t parked = park(PARK_HOLD);
+            keymatrix_init(k);
+            hb_us = sec_us = time_us_64();
+            hb_t = m->cpu.t;
+            hb_insns = sec_insns = m->cpu.insns;
+            hb_late = late;
+            hb_run_us = hb_busy_us = sec_run_us = sec_busy_us = 0;
+#if PICO_ACE_AUDIO
+            audio_stats(&au_last, true);
+#else
+            sched_us = hb_us + 1000u;
+            sched_fields = 0;
+#endif
+            log_printf("  park         : %lu us parked\n", (unsigned long)parked);
+        }
+
         uint32_t t_busy = time_us_32();
 
         /* Keys first, so the matrix the guest scans this field is the
          * one the events describe (§9.1). */
-        uart_keys(k, m);
+        hold = uart_keys(k, m);
         uint8_t state, code;
         while (kbd_pop(&state, &code)) keymatrix_event(k, state, code);
         keymatrix_field(k, m);
@@ -138,6 +192,20 @@ void core0_run(ace_t *m, keymatrix_t *k) {
         uint32_t t_run = time_us_32();
         ace_run_field(m);
         uint32_t ran = time_us_32() - t_run;
+
+        /* Boot time to the prompt, from reset (§15.2 M9). */
+        if (!prompt && cursor_shown(m)) {
+            prompt = true;
+            uint32_t at = time_us_32();
+            log_printf("  boot         : prompt at field %lu, %lu.%03lu ms after reset; "
+                       "core 1 ready at %lu.%03lu ms (card %s: mount %lu us, settings %lu us)\n",
+                       (unsigned long)m->fields,
+                       (unsigned long)(at / 1000u), (unsigned long)(at % 1000u),
+                       (unsigned long)(g_boot.ready_us / 1000u),
+                       (unsigned long)(g_boot.ready_us % 1000u),
+                       card_state_str(g_boot.job.state), (unsigned long)g_boot.job.mount_us,
+                       (unsigned long)g_boot.job.read_us);
+        }
 
         /* The field ends at the first active line, so a program that
          * redraws after the interrupt has finished (§11.1). */
@@ -196,7 +264,8 @@ void core0_run(ace_t *m, keymatrix_t *k) {
             log_printf("  heartbeat    : %lu fields, rt %lu.%03lu, late %lu (+%lu), slips %lu | "
                        "%lu presents (%lu full, %lu dropped), last %lu us, max %lu us | "
                        "keys %lu (%lu lost), polls %lu, i2c errors %lu | "
-                       "ed holes %lu, log dropped %u, battery %ld, die %ld C\n",
+                       "ed holes %lu, log dropped %u, battery %ld, die %ld C | "
+                       "%s, parks %lu (max %lu us)\n",
                        (unsigned long)m->fields,
                        (unsigned long)(rt1000 / 1000u), (unsigned long)(rt1000 % 1000u),
                        (unsigned long)late, (unsigned long)(late - hb_late),
@@ -208,7 +277,8 @@ void core0_run(ace_t *m, keymatrix_t *k) {
                        (unsigned long)(kbd_overflows() + k->dropped),
                        (unsigned long)g_c1.polls, (unsigned long)sb_error_count(),
                        (unsigned long)m->cpu.ed_holes, log_dropped(),
-                       (long)g_c1.battery, (long)g_c1.temp_c);
+                       (long)g_c1.battery, (long)g_c1.temp_c, card_text(),
+                       (unsigned long)g_park_stats.parks, (unsigned long)g_park_stats.max_us);
             log_printf("  perf         : tier %u, %lu MHz, core 0 busy %s%%, guest %s%% of wall, "
                        "headroom %lu.%02lux, %s host cycles/insn, %lu.%02lu T/insn, "
                        "%lu insns\n",

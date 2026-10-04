@@ -11,6 +11,9 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "card.h"
+#include "settings.h"
+#include "settingsio.h"
 #include "snappool.h"
 
 extern snappool_t g_pool;
@@ -39,6 +42,21 @@ typedef struct {
 } core1_stats_t;
 
 extern volatile core1_stats_t g_c1;
+
+/* What core 1 found on the card at boot (design.md §10.6), written
+ * before g_c1.ready and only read after it, so it needs no lock. The
+ * heartbeat names the file's first problem from here: what a later
+ * parked check finds is logged, not applied (M10). */
+typedef struct {
+    settings_t         settings;     /* what the machine powers on with */
+    card_job_t         job;
+    settingsio_state_t cfg;
+    uint32_t           cfg_bytes;
+    char               cfg_error[48];  /* "" when every line was good   */
+    uint32_t           ready_us;     /* core 1's bring-up done, since boot */
+} boot_report_t;
+
+extern boot_report_t g_boot;
 
 /* Core 0's per-second window for the perf line (design.md §7.4, §14),
  * in tenths and hundredths so that core 1 formats without floats. */

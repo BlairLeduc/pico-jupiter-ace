@@ -92,6 +92,12 @@
 #define ACE_LOG_RING         2048u
 #define ACE_LOG_LINE          512u
 
+/* ---- The card (design.md §10) ----------------------------------------- */
+
+#define ACE_PATH_MAX          128u  /* a path on the card, with its NUL    */
+#define ACE_SETTINGS_FILE_MAX 2048u /* /ace/pico-ace.cfg, read whole       */
+#define ACE_KEYMAP_NAME_LEN    16u  /* a layout's name (§9.4)              */
+
 /* ---- Timing (design.md §2.1, §11) ------------------------------------ */
 
 #define ACE_CPU_HZ        3250000u  /* 6.5 MHz crystal / 2                 */

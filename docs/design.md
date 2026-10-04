@@ -19,9 +19,10 @@ This document applies the lessons. It does not repeat them. Where a decision
 just follows a lesson, it cites the lesson and moves on, and the space goes
 to what is different about the Ace.
 
-**Status, 2026-10-03.** M0 to M4 are done: the skeleton, the Z80 on the
-host, the Z80 on the board, whose gate passed at 150 MHz (§3.2), the Ace
-on the host, and its video on the host (§15.2). Beyond M0's banner, the only device measurement is M2's. Every number about the Ace below comes from secondary knowledge
+**Status, 2026-10-04.** M0 to M9 are done (§15.2): the Z80 and the Ace
+on the host and on the board, video, the keyboard, audio and the card's
+settings file, each with what was checked on the device recorded under its
+milestone. Every number about the Ace below comes from secondary knowledge
 until §16's table says otherwise. Every performance figure is an
 **estimate** and is labelled as one (EL §14.4), except M2's measurements
 of the Z80 alone, which §3.2 labels as measured.
@@ -963,8 +964,18 @@ bytes, RAM size and guest clock recorded and checked, and a two-pass load.
 
 `/ace/pico-ace.cfg`, `key = value`, edited in place, parsed back before writing,
 saved only by a menu action, no flash writes (EL §8.7). Keys: `ram`
-(`3k`/`19k`/`51k`, default `19k`), `volume`, `layout`,
-`boot_tape`, `perf_line`. Build-time `BOOT_*` overrides win (EL §13.1).
+(`3k`/`19k`/`51k`, default `19k`), `volume` (0–8, default 8), `layout` (a
+layout's name, at most 16 characters, or `standard`, the default),
+`boot_tape` (a path, or a bare name in `/ace/tapes/`; empty is none) and
+`perf_line` (`on`/`off`, default `off`). Names and values are read in either
+case, and a `#` at the start of a line or after a space begins a comment.
+Build-time `BOOT_*` overrides win (EL §13.1); M9 has `PICO_ACE_BOOT_RAM`.
+
+The parser and the in-place rewriter are pico-atom's `settings.*`, with
+these keys (§4.6), and `test_settings` came with them. Core 1 reads the
+file at boot, before core 0 powers the machine on, because `ram` is the
+machine. As of M9 only `ram` is applied; the other keys are read and
+checked, so a mistake in them is named, and M10 applies them.
 
 ---
 
@@ -1454,6 +1465,46 @@ is handled without a hang.
 *Measured:* boot time to `OK` with and without a card; card read time for
 the settings file.
 *Leaves out:* writing anything to the card.
+*Done, 2026-10-04* (Plus 2 W, RP2350B rev 2, id `7458DC82A89AAC12`, at
+150 MHz, gcc 15.2). `sd.*`, `diskio.c`, `storage.*` and `fatfs/ffconf.h` are
+pico-atom's, renamed; `sd.c`'s one `sleep_us` became `busy_wait_us_32`,
+since it now runs on core 1 (HW §9.7), and card detect can be polled before
+a card is first initialised. `settings.*` is pico-atom's parser and
+rewriter with §10.6's keys, and `test_settings` passes with them; a planted
+bug (a refused value counted as given) fails five of its checks.
+`settingsio.*` is the read half of pico-atom's; the save is M10's. `card.*`
+holds the jobs (mount, read, unmount, each timed) and the debounced slot.
+`park.*` is pico-atom's park in its own file: core 0 parks between two
+fields and feeds the queue silence, core 1 serves the job a step a loop, so
+it still presents, polls the keyboard and drains the log, and on resume
+core 0 starts the held keys and its measuring windows again. M9's one
+reason to park is the UART's hold (`tools/uart-hold.sh`), which runs the
+card job on entry and again on each card change. Core 1's own log lines
+wait for a line of core 0's that is half sent (`log_core1`).
+**On the board:** with no card, the prompt appeared 478.5 ms after reset
+(`out/m9-nocard.log`); with a card that has no `/ace/` (the owner's
+pico-atom card), 681.5 ms, of which the mount was 191.8 ms and the search
+for the file 7.6 ms (`out/m9-boot1.log`). With `/ace/pico-ace.cfg` holding
+`ram = 3k` and `volume = 9` on line 4, freshly inserted: mount 211.3 ms,
+the 231-byte file read and parsed in 9.7 ms, prompt at 702.5 ms; the log
+and every heartbeat name `line 4: no such value`, and the machine is 3K:
+`1 16384 C! 16384 C@ .` prints `255`, where the same card with the build
+set to 19K prints `1` (`out/m9-cfg3k.log`, `out/m9-cfg3k-control2.log`).
+After a reset that left the card powered, the mount took 14.6 ms and the
+prompt came at 505.5 ms. Parked by the hold with the card in, the owner
+pulled and reinserted it: card detect read out, in, out, in, the mount at
+the first `in` failed with `FR_NOT_READY` and the one at the second took
+191.8 ms; after 45.5 s parked the guest resumed and `2 2 + .` printed
+`4  OK`, with 0 underrun samples and 0 late refills (`out/m9-hold.log`, HW
+§7.1). That run was on a build before two fixes it prompted: core 1's log
+line written into the middle of a heartbeat, and a heartbeat window across
+the park counting its silence as consumed samples (369,224 Hz). With both
+fixed, a 2.0 s park with no card read 36,621 Hz in the next window.
+*Not verified:* an empty card (no spare card was to hand; the card without
+`/ace/` takes the same path, `FR_NO_PATH`, to the defaults); a card that
+does not mount for other reasons (exFAT, unformatted); a card pulled during
+a job; the card swap while parked on the build with both fixes; the
+shipping build (`PICO_ACE_UART=OFF`), which has no hold to park with.
 
 #### M10. Menu and fast tape
 

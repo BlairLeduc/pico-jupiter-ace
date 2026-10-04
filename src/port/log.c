@@ -19,6 +19,7 @@ static char              s_ring[LOG_RING];
 static volatile uint32_t s_head;       /* written by core 0 only */
 static volatile uint32_t s_tail;       /* written by core 1 only */
 static volatile unsigned s_dropped;
+static bool              s_mid_line;   /* core 1's: a line half sent */
 
 void log_printf(const char *fmt, ...) {
 #if !PICO_ACE_UART
@@ -61,10 +62,26 @@ void log_pump(void) {
     if (tail == head) return;
     __dmb();                    /* read the bytes after seeing the index */
     while (tail != head && uart_is_writable(uart_default)) {
-        uart_putc_raw(uart_default, s_ring[tail++ & (LOG_RING - 1u)]);
+        char c = s_ring[tail++ & (LOG_RING - 1u)];
+        uart_putc_raw(uart_default, c);
+        s_mid_line = c != '\n';
     }
     __dmb();
     s_tail = tail;
+}
+
+void log_core1(const char *fmt, ...) {
+#if !PICO_ACE_UART
+    (void)fmt;
+#else
+    /* Core 0 queues whole lines, so the rest of this one is in the ring:
+     * at most ACE_LOG_LINE bytes, ~45 ms of UART. */
+    while (s_mid_line && s_tail != s_head) log_pump();
+    va_list ap;
+    va_start(ap, fmt);
+    vprintf(fmt, ap);
+    va_end(ap);
+#endif
 }
 
 unsigned log_dropped(void) {

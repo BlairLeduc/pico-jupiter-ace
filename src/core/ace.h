@@ -101,6 +101,9 @@ void ace_config_default(ace_config_t *cfg);
 /* Bytes of user RAM: 1,024, 17,408 or 50,176 (§6.2). */
 uint32_t ace_ram_bytes(ace_ram_t ram);
 
+/* "3K", "19K" or "51K", as the machines are known (§6.2). */
+const char *ace_ram_name(ace_ram_t ram);
+
 /* T-states in one field: 64,896 at the defaults. */
 static inline uint32_t ace_field_t(const ace_t *m) {
     return m->field_t[0] + m->field_t[1] + m->field_t[2];

@@ -1,5 +1,5 @@
-/* core1.c — core 1's loop: the panel, the southbridge and the log
- * (design.md §4.3, §7, §9.1). */
+/* core1.c — core 1's loop: the panel, the southbridge, the card and the
+ * log (design.md §4.3, §4.5, §7, §9.1, §10). */
 
 #include "core1.h"
 
@@ -9,11 +9,13 @@
 #include "pico/stdlib.h"
 
 #include "board.h"
+#include "card.h"
 #include "display.h"
 #include "handoff.h"
 #include "kbd.h"
 #include "lcd.h"
 #include "log.h"
+#include "park.h"
 #include "southbridge.h"
 
 /* Keyboard polls, as hardware-notes.md §6.1 and design.md §9.1 have them;
@@ -58,6 +60,16 @@ void core1_main(void) {
     display_init();
     board_temp_init();
 
+    /* 3. The card's settings, before the machine, because `ram` is the
+     *    machine (design.md §10.6). Core 0 is waiting, so this is a job
+     *    at a boundary like any parked one (§4.5); the card is optional,
+     *    and without one the defaults stand. */
+    card_boot(&g_boot.settings, &g_boot.job);
+    g_boot.cfg = settingsio_state();
+    g_boot.cfg_bytes = settingsio_bytes();
+    snprintf(g_boot.cfg_error, sizeof g_boot.cfg_error, "%s", settingsio_error());
+    g_boot.ready_us = time_us_32();
+
     __dmb();
     g_c1.ready = true;
 
@@ -78,6 +90,11 @@ void core1_main(void) {
         }
 
         log_pump();
+
+        /* The guest parked: its job, a step a loop. Otherwise the slot,
+         * which only says what changed (card.h). */
+        if (!park_serve() && card_poll())
+            log_core1("  card         : %s\n", card_present() ? "in" : "out");
 
         now = time_us_32();
         if (now - sec_start >= 1000000u) {

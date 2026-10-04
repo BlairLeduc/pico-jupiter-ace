@@ -37,6 +37,15 @@ uint32_t ace_ram_bytes(ace_ram_t ram) {
     }
 }
 
+const char *ace_ram_name(ace_ram_t ram) {
+    switch (ram) {
+    case ACE_RAM_3K:  return "3K";
+    case ACE_RAM_51K: return "51K";
+    case ACE_RAM_19K:
+    default:          return "19K";
+    }
+}
+
 /* ---- The bus's slow path (§6.1) --------------------------------------- */
 
 /* Only character RAM and unpopulated pages have no read pointer. */

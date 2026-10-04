@@ -1052,6 +1052,19 @@ requested: reading a 2.5 KiB disc-image track (ten 256-byte sectors) took
 than a 16.7 ms video frame, which is why card work belongs at a boundary
 where the application can stop and feed audio silence.
 
+**Measured** on a Plus 2 W, 2026-10-04, the same driver: the first
+initialisation and FAT mount after a card is powered or inserted took
+192–211 ms, most of it the card answering `ACMD41` busy; a mount of a card
+already initialised, after a reset that left it powered, took 15 ms.
+Opening and reading a 231-byte file took 9.7 ms, and finding that a file
+is not there 7.4–7.6 ms. **Card detect is not a clean edge.** The slot is
+push-to-eject, and pulling and reinserting a card read as out, in, out, in:
+the contact closed for longer than a 250 ms debounce during the card's
+travel, and the mount attempted then failed with FatFs's `FR_NOT_READY`
+before the card was really in. Debounce card detect, and treat a failed
+mount after an insertion as a state to retry on the next change rather than
+an error, since nothing about it hangs.
+
 **Prefer the card to internal flash for anything the application writes**,
 such as settings. A text file on the card is one source of truth the user can
 read and edit on any computer, it survives reflashing, and writing it opens no

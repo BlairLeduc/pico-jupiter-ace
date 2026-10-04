@@ -9,8 +9,26 @@ Raspberry Pi Pico SDK. The guest is a Z80A at 3.25 MHz with an 8 KiB Forth
 ROM, a 32×24 character display from 768 bytes of screen RAM and 1 KiB of
 character RAM, a 40-key matrix, and a one-bit speaker and tape port.
 
-**Implementation status, 2026-10-04: M8 done.** Next is M9, the card
-(`docs/design.md` §15).
+**Implementation status, 2026-10-04: M9 done.** Next is M10, the menu
+and fast tape (`docs/design.md` §15).
+
+**M9, the card** (`src/port/sd.c`, `diskio.c`, `storage.c`, `card.c`,
+`park.c`, `settingsio.c`; `src/core/settings.c`), on the Plus 2 W (id
+`7458DC82A89AAC12`) at 150 MHz, gcc 15.2, 2026-10-04. pico-atom's SD and
+FatFs layers and its settings parser, renamed; `test_settings` passes with
+the Ace's keys. Core 1 reads `/ace/pico-ace.cfg` before core 0 powers the
+machine on; only `ram` is applied yet. Boot to the prompt: 478.5 ms with
+no card, 681.5 ms with a card lacking `/ace/` (mount 191.8 ms), 702.5 ms
+with the file (mount 211.3 ms, read 9.7 ms); 505.5 ms once the card is
+warm (mount 14.6 ms). `ram = 3k` boots a 3K machine (`$4000` reads 255;
+the 19K control reads 1), and a bad line is skipped and named on every
+heartbeat. `tools/uart-hold.sh` parks the guest (silence fed, card checked
+on entry and on each change); the owner pulled and reinserted the card
+while parked, the slot bounced out-in-out-in, one mount failed
+`FR_NOT_READY`, nothing hung, and the guest resumed to `4  OK` with 0
+underruns. **Not checked:** an empty card (none to hand); unmountable
+cards; a card pulled mid-job; the card swap on the final build (the park
+itself was rechecked without a card); the shipping build.
 
 **M8, audio** (`src/core/beeper.c`, `src/port/audio.c`, `core0.c`), on
 the Plus 2 W (id `7458DC82A89AAC12`) at 150 MHz, gcc 15.2, 2026-10-04.
@@ -212,7 +230,7 @@ core were verified on a Plus 2 W, and `design.md` §4.6 says which files to
 
 ## Build and test
 
-As of M8 these all work, and `tools/uart-type.sh` types at the guest.
+As of M9 these all work, and `tools/uart-type.sh` types at the guest.
 
 ```sh
 # host: src/core/ with the system compiler, no Pico SDK, under CTest
@@ -228,6 +246,7 @@ cmake --build build/pico -j          # -> build/pico/pico-ace.uf2, pico-ace-benc
 tools/build.sh -DPICO_ACE_RAM_TIER=2 build/pico-t2      # an SRAM tier, in its own dir
 tools/build.sh -DPICO_ACE_UART=OFF build/pico-release   # the build that ships
 tools/build.sh -DPICO_ACE_AUDIO=OFF build/pico-noaudio  # paced on the timer, a control
+tools/build.sh -DPICO_ACE_BOOT_RAM=3k build/pico-3k     # this machine over the card's
 
 # hardware, with the Debug Probe's SWD and UART both connected
 tools/uart-log.sh 30 out/run.log &   # capture UART1 first, so the banner is in it
@@ -235,6 +254,7 @@ tools/flash.sh                       # reset halt + resume, never reset run (HW 
 tools/flash.sh build/pico/pico-ace-bench.elf   # M2's bench; embeds ZEXDOC if fetched
 tools/uart-type.sh '2 2 + .\r'       # type at the guest over the same UART
 tools/uart-screen.sh                 # the guest's screen, as text, into the log
+tools/uart-hold.sh                   # park the guest and check the card; again to resume
 
 # trace diff against xAce (design.md §13.4); CI runs the second line too
 tools/trace/build-xace.sh            # clones xAce at a pinned commit into out/trace

@@ -18,6 +18,7 @@ set(PICO_ACE_CORE_SOURCES
     src/core/keymap_picocalc.c
     src/core/keymatrix.c
     src/core/render.c
+    src/core/settings.c
     src/core/snappool.c
     src/core/z80.c
 )
@@ -173,22 +174,61 @@ else()
             VERBATIM)
     endfunction()
 
+    # FatFs is not in the tree (THIRD-PARTY.md). The SDK carries a copy for
+    # TinyUSB, and ff.h includes "ffconf.h" from its own directory, so the
+    # files are copied into the build tree beside our src/port/fatfs/ffconf.h
+    # rather than compiled in place (which would find TinyUSB's config).
+    set(PICO_ACE_FATFS_SRC ${PICO_SDK_PATH}/lib/tinyusb/lib/fatfs/source)
+    set(PICO_ACE_FATFS_DIR ${CMAKE_BINARY_DIR}/fatfs)
+    foreach(f ff.c ff.h ffunicode.c diskio.h)
+        if (NOT EXISTS ${PICO_ACE_FATFS_SRC}/${f})
+            message(FATAL_ERROR "pico-ace: FatFs ${f} not found in ${PICO_ACE_FATFS_SRC}")
+        endif()
+        configure_file(${PICO_ACE_FATFS_SRC}/${f} ${PICO_ACE_FATFS_DIR}/${f} COPYONLY)
+    endforeach()
+    configure_file(src/port/fatfs/ffconf.h ${PICO_ACE_FATFS_DIR}/ffconf.h COPYONLY)
+
+    add_library(pico_ace_fatfs STATIC
+        ${PICO_ACE_FATFS_DIR}/ff.c
+        ${PICO_ACE_FATFS_DIR}/ffunicode.c
+    )
+    target_include_directories(pico_ace_fatfs PUBLIC ${PICO_ACE_FATFS_DIR})
+    # Third-party code: built as it comes, without our -Werror.
+
+    # The machine a run over the UART boots, over the settings file's
+    # (EL §8.7): 3k, 19k or 51k, or empty for the file's.
+    set(PICO_ACE_BOOT_RAM "" CACHE STRING "Boot this RAM size over the card's (3k, 19k, 51k)")
+
     add_executable(pico-ace
         src/port/audio.c
         src/port/board.c
+        src/port/card.c
         src/port/core0.c
         src/port/core1.c
+        src/port/diskio.c
         src/port/display.c
         src/port/handoff.c
         src/port/kbd.c
         src/port/lcd.c
         src/port/log.c
         src/port/main.c
+        src/port/park.c
+        src/port/sd.c
+        src/port/settingsio.c
         src/port/southbridge.c
+        src/port/storage.c
     )
     pico_ace_firmware(pico-ace)
+    if (PICO_ACE_BOOT_RAM)
+        string(TOUPPER ${PICO_ACE_BOOT_RAM} boot_ram)
+        if (NOT boot_ram MATCHES "^(3K|19K|51K)$")
+            message(FATAL_ERROR "pico-ace: PICO_ACE_BOOT_RAM is 3k, 19k or 51k, not ${PICO_ACE_BOOT_RAM}")
+        endif()
+        target_compile_definitions(pico-ace PRIVATE PICO_ACE_BOOT_RAM=ACE_RAM_${boot_ram})
+    endif()
     target_compile_definitions(pico-ace PRIVATE PICO_ACE_AUDIO=${PICO_ACE_AUDIO_ON})
     target_link_libraries(pico-ace
+        pico_ace_fatfs
         hardware_dma
         hardware_i2c
         hardware_irq
