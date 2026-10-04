@@ -7,6 +7,7 @@
 #include "hardware/clocks.h"
 #include "pico/stdlib.h"
 
+#include "audio.h"
 #include "handoff.h"
 #include "kbd.h"
 #include "log.h"
@@ -84,15 +85,21 @@ static void tenths(char *out, size_t n, uint32_t v10) {
 }
 
 void core0_run(ace_t *m, keymatrix_t *k) {
-    const uint32_t field_t = ace_field_t(m);
     const uint32_t clk_mhz = clock_get_hz(clk_sys) / 1000000u;
-
+    uint32_t late = 0, slips = 0;   /* the timer's pacing; 0 on audio */
+#if PICO_ACE_AUDIO
+    /* A field's samples, drained after it and pushed to the queue. */
+    static int16_t pcm[ACE_AUDIO_BUF_LEN];
+    audio_stats_t au_last;
+    audio_stats(&au_last, true);
+#else
+    const uint32_t field_t = ace_field_t(m);
     /* The schedule: field n is due at start + n fields of guest time,
      * worked out from the T-state count each time, so the rounding of a
      * field's 19,968 us never accumulates (EL §6.3). */
     uint64_t sched_us = time_us_64() + 1000u;   /* the first field on time */
     uint64_t sched_fields = 0;
-    uint32_t late = 0, slips = 0;
+#endif
 
     /* The heartbeat's window and the perf line's (§14). */
     uint64_t hb_us = time_us_64(), sec_us = hb_us;
@@ -101,8 +108,10 @@ void core0_run(ace_t *m, keymatrix_t *k) {
     uint64_t hb_run_us = 0, hb_busy_us = 0, sec_run_us = 0, sec_busy_us = 0;
 
     for (;;) {
+        uint64_t now;
+#if !PICO_ACE_AUDIO
         uint64_t due = sched_us + sched_fields * field_t * 1000000u / ACE_CPU_HZ;
-        uint64_t now = time_us_64();
+        now = time_us_64();
         if (now < due) {
             /* Core 0's own alarm: sleeping here interrupts nothing. */
             sleep_until(from_us_since_boot(due));
@@ -115,6 +124,7 @@ void core0_run(ace_t *m, keymatrix_t *k) {
             }
         }
         sched_fields++;
+#endif
         uint32_t t_busy = time_us_32();
 
         /* Keys first, so the matrix the guest scans this field is the
@@ -137,7 +147,17 @@ void core0_run(ace_t *m, keymatrix_t *k) {
             pool_publish(i);
         }
 
+#if PICO_ACE_AUDIO
+        size_t n = ace_audio_drain(m, pcm, ACE_AUDIO_BUF_LEN);
+#endif
         uint32_t busy = time_us_32() - t_busy;
+#if PICO_ACE_AUDIO
+        /* Blocks while the queue is full: this is the throttle, on the
+         * PWM wrap, which shares clk_sys with nothing that drifts
+         * (EL §6.3). The conversion to compare words inside is not
+         * counted as busy; it is ~732 short loops a field. */
+        audio_push(pcm, n);
+#endif
         hb_run_us += ran;
         sec_run_us += ran;
         hb_busy_us += busy;
@@ -201,6 +221,27 @@ void core0_run(ace_t *m, keymatrix_t *k) {
             hb_insns = m->cpu.insns;
             hb_late = late;
             hb_run_us = hb_busy_us = 0;
+#if PICO_ACE_AUDIO
+            /* The consumed-sample rate against the microsecond timer is
+             * the control quantity: it is the PWM wrap, measured, and it
+             * must not move whatever the guest does (§14). */
+            audio_stats_t au;
+            audio_stats(&au, true);
+            uint32_t rate = (uint32_t)((uint64_t)(au.consumed - au_last.consumed) *
+                                       1000000u / (wall + 1u));
+            log_printf("  audio        : %lu Hz consumed, queue %lu (low %lu), "
+                       "underrun samples %lu (+%lu), late refills %lu (+%lu), "
+                       "core overflow %lu, speaker edges %lu%s\n",
+                       (unsigned long)rate, (unsigned long)au.level,
+                       (unsigned long)au.low_water,
+                       (unsigned long)au.underrun_samples,
+                       (unsigned long)(au.underrun_samples - au_last.underrun_samples),
+                       (unsigned long)au.late_refills,
+                       (unsigned long)(au.late_refills - au_last.late_refills),
+                       (unsigned long)m->beeper.overflow, (unsigned long)m->beeper.edges,
+                       au.started ? "" : " (not started)");
+            au_last = au;
+#endif
         }
     }
 }

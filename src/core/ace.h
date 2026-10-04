@@ -13,6 +13,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include "beeper.h"
 #include "config.h"
 #include "z80.h"
 
@@ -72,10 +73,11 @@ typedef struct ace_s {
     bool tape_in;
 
     /* The speaker and tape output: an IN from an even port drives it
-     * low, an OUT high (§2.3, §8). Edges are counted for the tests until
-     * M8 puts them into the beeper. */
+     * low, an OUT high (§2.3, §8). The beeper turns its edges into PCM,
+     * which the port drains once per field with ace_audio_drain, and
+     * counts them in beeper.edges. */
     bool     speaker;
-    uint32_t speaker_edges;
+    beeper_t beeper;
 
     ace_config_t cfg;
 
@@ -131,6 +133,18 @@ void ace_copy(ace_t *dst, const ace_t *src);
 /* A key in the matrix, by half-row (0-7, A8-A15) and bit (0-4). Anything
  * outside ACE_KEY_ROWS x ACE_KEY_COLS is ignored. */
 void ace_key_set(ace_t *m, int row, int col, bool down);
+
+/* The sample rate is rate_num / rate_den Hz, as a fraction so that the
+ * cadence is exact (§8). ace_init starts at the nominal
+ * ACE_AUDIO_RATE_NUM / ACE_AUDIO_RATE_DEN; the port passes the rate its
+ * clocks actually give. The DC blocker's setting is kept. */
+void ace_audio_set_rate(ace_t *m, uint32_t rate_num, uint32_t rate_den);
+
+/* Move up to `max` samples of signed 16-bit mono out of the machine,
+ * oldest first. Samples are made as the guest runs, one per 6,656/75 T
+ * at the nominal rate; ace_run leaves every sample that ended before its
+ * last instruction ready to drain. */
+size_t ace_audio_drain(ace_t *m, int16_t *dst, size_t max);
 
 /* The two video inputs (§2.5, §4.4). */
 static inline const uint8_t *ace_screen(const ace_t *m)  { return m->vram; }

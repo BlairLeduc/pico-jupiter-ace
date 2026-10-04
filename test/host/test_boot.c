@@ -62,10 +62,10 @@ int main(void) {
         /* At the prompt the ROM spins on FLAGS bit 5 ($059B) rather than
          * halting, and its key scan's INs never move the speaker (§5.3,
          * §8, §16). */
-        uint32_t edges = m->speaker_edges;
+        uint32_t edges = m->beeper.edges;
         CHECK(!halts_within(m, 50), "%s: the CPU halted at the prompt", name);
-        CHECK(m->speaker_edges == edges, "%s: %u speaker edges at the prompt", name,
-              m->speaker_edges - edges);
+        CHECK(m->beeper.edges == edges, "%s: %u speaker edges at the prompt", name,
+              m->beeper.edges - edges);
 
         /* The interpreter runs: a line typed into the matrix comes back
          * with its answer, on the top line, where the ROM moves it. */

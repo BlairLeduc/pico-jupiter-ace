@@ -1,6 +1,6 @@
 /* main.c — bring-up, then the two cores' loops (design.md §4.1, §15.2 M7).
  *
- * Core 0 owns the Z80 and the machine; core 1 owns the LCD, the
+ * Core 0 owns the Z80, the machine and audio; core 1 owns the LCD, the
  * southbridge and the log's way out (§4.3). main() sets the clock, logs
  * the banner, powers the 19K machine on with the embedded ROM (§10.2,
  * §18 item 1), starts core 1 and waits for its bring-up, then becomes
@@ -17,6 +17,7 @@
 
 #include "ace.h"
 #include "ace_rom.h"
+#include "audio.h"
 #include "board.h"
 #include "core0.h"
 #include "core1.h"
@@ -70,6 +71,25 @@ int main(void) {
                "ROM %s, hot code in SRAM to tier %u (hot.h)\n",
                (unsigned long)ace_ram_bytes(cfg.ram), (unsigned long)ace_field_t(&g_ace),
                (unsigned long)ACE_CPU_HZ, ACE_ROM_SHA1, (unsigned)PICO_ACE_RAM_TIER);
+
+    /* Audio last in bring-up order (hardware-notes.md §10), on core 0,
+     * whose IRQ the refill is, and after core 1's LCD has claimed its
+     * fixed DMA channel. The beeper takes the rate the PWM really has. */
+#if PICO_ACE_AUDIO
+    audio_init();
+    uint32_t rate_num, rate_den;
+    audio_rate(&rate_num, &rate_den);
+    ace_audio_set_rate(&g_ace, rate_num, rate_den);
+    log_printf("  audio        : PWM GP26/GP27, %lu/%lu Hz (%lu.%02lu kHz), "
+               "%u T per %u samples, ring %u slots, queue %u\n",
+               (unsigned long)rate_num, (unsigned long)rate_den,
+               (unsigned long)(rate_num / rate_den / 1000u),
+               (unsigned long)(rate_num / rate_den % 1000u / 10u),
+               (unsigned)g_ace.beeper.num, (unsigned)g_ace.beeper.den,
+               (unsigned)ACE_DMA_RING_SLOTS, (unsigned)ACE_PCM_QUEUE_LEN);
+#else
+    log_printf("  audio        : off; pacing on the microsecond timer\n");
+#endif
 
     core0_run(&g_ace, &g_keys);
 }

@@ -142,16 +142,16 @@ int main(void) {
 
     /* The speaker: IN from an even port drives it low, OUT high, and an
      * odd port moves nothing (§2.3, §8). */
-    uint32_t e = m.speaker_edges;
+    uint32_t e = m.beeper.edges;
     out_port(0x00FE, 0x00);
-    CHECK(m.speaker && m.speaker_edges == e + 1, "OUT $FE did not raise the speaker");
+    CHECK(m.speaker && m.beeper.edges == e + 1, "OUT $FE did not raise the speaker");
     out_port(0x01FC, 0xFF);
-    CHECK(m.speaker && m.speaker_edges == e + 1, "a second OUT made an edge");
+    CHECK(m.speaker && m.beeper.edges == e + 1, "a second OUT made an edge");
     in_port(0xFFFF);
     out_port(0x00FF, 0);
-    CHECK(m.speaker && m.speaker_edges == e + 1, "an odd port moved the speaker");
+    CHECK(m.speaker && m.beeper.edges == e + 1, "an odd port moved the speaker");
     in_port(0xFEFE);
-    CHECK(!m.speaker && m.speaker_edges == e + 2, "IN $FE did not lower the speaker");
+    CHECK(!m.speaker && m.beeper.edges == e + 2, "IN $FE did not lower the speaker");
 
     /* ---- ace_copy: the copy has its own memory, and runs. */
     static ace_t c;

@@ -23,6 +23,7 @@ endforeach()
 # The tests that run the real ROM (§13.3). It is embedded in the core,
 # so they never skip.
 set(PICO_ACE_GUEST_TESTS
+    test_audio
     test_boot
     test_bus
     test_field
@@ -38,6 +39,11 @@ foreach(t ${PICO_ACE_GUEST_TESTS})
     target_compile_options(${t} PRIVATE ${PICO_ACE_WARNINGS})
     add_test(NAME ${t} COMMAND ${t})
 endforeach()
+
+# The pitch is measured in double precision; libm is separate on Linux.
+if (UNIX AND NOT APPLE)
+    target_link_libraries(test_audio PRIVATE m)
+endif()
 
 # The committed golden images (design.md §7.6).
 target_compile_definitions(test_golden PRIVATE
