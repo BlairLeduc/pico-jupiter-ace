@@ -25,8 +25,10 @@ fields, drops or I²C errors. Core 0: idle 20.1 %; compute 36.4 % at
 159.6 host cycles/insn (tier 0), 20.4 % at 89.4 (tier 2); scrolling
 38.6 % / 36.2 %, its counts inflated by `VLIST`'s `HALT` (design.md
 §3.2). Tier 1 gained nothing. Longest present 11.86 ms (the boot's full
-redraw). `tools/uart-screen.sh` dumps screen RAM to the log. **Not
-checked:** the shipping build on the device; audio pacing (M8).
+redraw). `tools/uart-screen.sh` dumps screen RAM to the log. The
+shipping build (`PICO_ACE_UART=OFF`) passed the same keyboard checks on a
+Pico 2 W, run by the owner 2026-10-04 (no UART, so no board id).
+**Not checked:** audio pacing (M8).
 
 **M6, board bring-up** (`src/port/southbridge.c`, `lcd.c`, `kbd.c`,
 `log.c`, `display.c`, `main.c`), on the Plus 2 W (id `7458DC82A89AAC12`,

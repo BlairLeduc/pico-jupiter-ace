@@ -1345,8 +1345,10 @@ dropped snapshots, at tier 0 and again at tier 2; an idle run of ~30,000
 fields (10 minutes) had rt 1.000, no late fields, no drops, no I²C errors
 and no lost log lines. **Measured:** core 0 at 20–39 % (§3.2's M7 table);
 the longest present 11.86 ms, the boot's full redraw, and a scrolling
-present ~11.4 ms. *Not verified:* the shipping build (`PICO_ACE_UART=OFF`)
-on the device, which was only built; the field's line numbers against the
+present ~11.4 ms. The shipping build (`PICO_ACE_UART=OFF`) was run by the
+owner on a Pico 2 W, 2026-10-04, through the same keyboard checks, with
+the same result and drops at 0; that build logs nothing, so its board id
+was not recorded. *Not verified:* the field's line numbers against the
 schematic; anything paced on audio (M8).
 
 #### M8. Audio
