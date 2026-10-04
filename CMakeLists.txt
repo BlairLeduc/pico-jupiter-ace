@@ -165,7 +165,10 @@ else()
 
     add_executable(pico-ace
         src/port/board.c
+        src/port/core0.c
+        src/port/core1.c
         src/port/display.c
+        src/port/handoff.c
         src/port/kbd.c
         src/port/lcd.c
         src/port/log.c
