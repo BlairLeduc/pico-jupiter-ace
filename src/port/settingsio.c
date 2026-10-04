@@ -114,7 +114,7 @@ const char *settingsio_save(const settings_t *s) {
         memcpy(s_text, head, sizeof head - 1u);
         got = sizeof head - 1u;
     } else if (fr != FR_OK) {
-        return fr == FR_DENIED ? "FILE TOO BIG" : "CANNOT READ";
+        return fr == FR_DENIED ? "file too big" : "cannot read";
     }
 
     const char *text;
@@ -138,7 +138,7 @@ const char *settingsio_save(const settings_t *s) {
     }
     if (fr != FR_OK) {
         log_core1("  settings     : not saved: FatFs error %d\n", (int)fr);
-        return "WRITE FAILED";
+        return "write failed";
     }
     log_core1("  settings     : %s saved, %u bytes\n", SETTINGSIO_PATH, (unsigned)len);
     return NULL;

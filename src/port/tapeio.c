@@ -72,7 +72,7 @@ const char *tapeio_insert(const char *path) {
     }
     if (open_read(path) != FR_OK) {
         set_deck(NULL, false);
-        return "CANNOT OPEN";
+        return "cannot open";
     }
     f_close(&s_f);
     set_deck(path, true);
@@ -167,7 +167,7 @@ static void serve_load(ace_t *m, const tape_t *t) {
     }
     if (open_read(s_path) != FR_OK) {
         g_tape_stats.errors++;
-        say(" CANNOT OPEN %.24s", base(s_path));
+        say(" Cannot open %.24s", base(s_path));
         decline(m, "cannot open the tape");
         return;
     }
@@ -182,7 +182,7 @@ static void serve_load(ace_t *m, const tape_t *t) {
             log_core1("  tape         : end of %s; rewound\n", s_path);
         } else {
             f_close(&s_f);
-            say(" END OF TAPE %.24s", base(s_path));
+            say(" End of tape %.24s", base(s_path));
             decline(m, "end of the tape");
             return;
         }
@@ -190,7 +190,7 @@ static void serve_load(ace_t *m, const tape_t *t) {
     if (f_lseek(&s_f, s_pos) != FR_OK || f_read(&s_f, hdr, 2, &got) != FR_OK || got != 2) {
         f_close(&s_f);
         g_tape_stats.errors++;
-        say(" CANNOT READ %.24s", base(s_path));
+        say(" Cannot read %.24s", base(s_path));
         decline(m, "cannot read the tape");
         return;
     }
@@ -278,14 +278,14 @@ static void serve_save(ace_t *m, const tape_t *t) {
         path = s_save_path;
     }
     if (!path[0]) {
-        say(" NO TAPE IN THE DECK TO SAVE ON", "");
+        say(" No tape in the deck to save on", "");
         decline(m, "nowhere to save");
         return;
     }
     FRESULT fr = append(m, t, path);
     if (fr != FR_OK) {
         g_tape_stats.errors++;
-        say(" NOT SAVED: FATFS %s", fr == FR_DENIED ? "FULL" : "ERROR");
+        say(" Not saved: card %s", fr == FR_DENIED ? "full" : "error");
         log_core1("  tape         : not saved to %s: FatFs %d\n", path, (int)fr);
         decline(m, "the card refused the save");
         return;
@@ -295,7 +295,7 @@ static void serve_save(ace_t *m, const tape_t *t) {
     log_core1("  tape         : %u-byte %s appended to %s\n", (unsigned)t->len,
               t->flag == TAPE_FLAG_HEADER ? "header" : "data block", path);
     if (t->flag != TAPE_FLAG_HEADER) {
-        say(" SAVED TO %.22s", base(path));
+        say(" Saved to %.22s", base(path));
         /* One header, one data block: a stray block is not added. */
         if (!s_user) s_save_path[0] = 0;
     }
@@ -308,7 +308,7 @@ void tapeio_serve(ace_t *m, uint32_t *us) {
     if (!t) { *us = 0; return; }
     int err = storage_mount();
     if (err != 0) {
-        say(" NO CARD: TAPE NOT SERVED", "");
+        say(" No card: tape not served", "");
         decline(m, "no card");
     } else {
         if (t->op == TAPE_SAVE) serve_save(m, t);

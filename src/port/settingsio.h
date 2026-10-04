@@ -49,7 +49,7 @@ const char *settingsio_error(void);
 
 /* *s into the file, edited in place (settings_rewrite) and written
  * through SETTINGSIO_TEMP and a rename. The card must be mounted. NULL,
- * or why not, in capitals for the menu's status row. */
+ * or why not, for the menu's status row. */
 const char *settingsio_save(const settings_t *s);
 
 #endif /* PICO_ACE_SETTINGSIO_H */

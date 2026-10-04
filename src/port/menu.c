@@ -78,17 +78,17 @@ static const char *base(const char *path) {
 
 static void draw_main(void) {
     static const char *const items[I_COUNT] = {
-        " TAPE...                  F1", " SETTINGS...", " SAVE SETTINGS",
-        " RESET                 ALT+R",
+        " Tape...                  F1", " Settings...", " Save settings",
+        " Reset                 Alt+R",
     };
     for (int i = 0; i < I_COUNT; i++)
         textpage_line(s_scr, ROW_TOP + i, items[i], i == s.item);
 
     char line[TEXT_COLS + 1];
     const char *in = tapeio_inserted();
-    snprintf(line, sizeof line, " DECK: %.24s", in[0] ? base(in) : "EMPTY");
+    snprintf(line, sizeof line, " Deck: %.24s", in[0] ? base(in) : "empty");
     textpage_line(s_scr, ROW_TOP + I_COUNT + 1, line, false);
-    snprintf(line, sizeof line, " MACHINE: %s", ace_ram_name(s.m->cfg.ram));
+    snprintf(line, sizeof line, " Machine: %s", ace_ram_name(s.m->cfg.ram));
     textpage_line(s_scr, ROW_TOP + I_COUNT + 2, line, false);
 }
 
@@ -96,22 +96,22 @@ static void draw_tape(void) {
     char line[TEXT_COLS + 1];
     const char *in = tapeio_inserted();
     if (in[0]) {
-        snprintf(line, sizeof line, " DECK: %.16s BLOCK %lu", base(in),
+        snprintf(line, sizeof line, " Deck: %.16s block %lu", base(in),
                  (unsigned long)tapeio_position());
     } else {
-        snprintf(line, sizeof line, " DECK EMPTY: LOAD/SAVE BY NAME");
+        snprintf(line, sizeof line, " Deck empty: LOAD/SAVE by name");
     }
     textpage_line(s_scr, ROW_TOP, line, false);
-    if (!s.card) textpage_line(s_scr, ROW_TOP + 1, " NO CARD", false);
-    else if (!s.n_tapes) textpage_line(s_scr, ROW_TOP + 1, " NO TAPES IN /ACE/TAPES/", false);
+    if (!s.card) textpage_line(s_scr, ROW_TOP + 1, " No card", false);
+    else if (!s.n_tapes) textpage_line(s_scr, ROW_TOP + 1, " No tapes in /ace/tapes/", false);
 
     for (int r = 0; r < TAPE_ROWS; r++) {
         int i = s.tape_top + r;
         line[0] = 0;
         if (i == T_EJECT) {
-            snprintf(line, sizeof line, " (EMPTY THE DECK)");
+            snprintf(line, sizeof line, " (Empty the deck)");
         } else if (i == T_REWIND) {
-            snprintf(line, sizeof line, " (REWIND)");
+            snprintf(line, sizeof line, " (Rewind)");
         } else if (i < T_FIRST + (int)s.n_tapes) {
             const tapeio_entry_t *e = &s_list[i - T_FIRST];
             bool here = strcmp(e->path, in) == 0;
@@ -124,26 +124,26 @@ static void draw_tape(void) {
 
 static void draw_settings(void) {
     char line[TEXT_COLS + 1];
-    snprintf(line, sizeof line, " VOLUME     %u", (unsigned)g_ui.volume);
+    snprintf(line, sizeof line, " Volume     %u", (unsigned)g_ui.volume);
     textpage_line(s_scr, ROW_TOP + S_VOLUME, line, s.set_sel == S_VOLUME);
-    snprintf(line, sizeof line, " PERF LINE  %s", g_ui.perf_line ? "ON" : "OFF");
+    snprintf(line, sizeof line, " Perf line  %s", g_ui.perf_line ? "on" : "off");
     textpage_line(s_scr, ROW_TOP + S_PERF, line, s.set_sel == S_PERF);
-    textpage_line(s_scr, ROW_TOP + S_COUNT + 1, " SAVE SETTINGS KEEPS THEM", false);
+    textpage_line(s_scr, ROW_TOP + S_COUNT + 1, " Save settings keeps them", false);
 }
 
 static void draw(void) {
     textpage_clear(s_scr);
-    textpage_line(s_scr, 0, s.page == P_TAPE ? " PICO-ACE: TAPE"
-                          : s.page == P_SETTINGS ? " PICO-ACE: SETTINGS" : " PICO-ACE", true);
+    textpage_line(s_scr, 0, s.page == P_TAPE ? " Pico-Ace: Tape"
+                          : s.page == P_SETTINGS ? " Pico-Ace: Settings" : " Pico-Ace", true);
     switch (s.page) {
     case P_TAPE:     draw_tape(); break;
     case P_SETTINGS: draw_settings(); break;
     default:         draw_main(); break;
     }
     textpage_line(s_scr, ROW_STATUS, s.status, false);
-    textpage_line(s_scr, ROW_KEYS, s.page == P_TAPE ? " ENTER INSERTS  ESC BACK"
-                                 : s.page == P_SETTINGS ? " < > CHANGES  ESC BACK"
-                                 : " ARROWS  ENTER  ESC RESUMES", true);
+    textpage_line(s_scr, ROW_KEYS, s.page == P_TAPE ? " Enter inserts  Esc back"
+                                 : s.page == P_SETTINGS ? " < > changes  Esc back"
+                                 : " Arrows  Enter  Esc resumes", true);
     display_present(s_scr, display_font(), NULL);
 }
 
@@ -159,7 +159,7 @@ static void open_tape(void) {
 }
 
 static void save_settings(void) {
-    if (!s.card) { say(" NO CARD: NOT SAVED", ""); return; }
+    if (!s.card) { say(" No card: not saved", ""); return; }
     settings_t out = s_file;
     /* The machine as it runs (EL §10). */
     out.ram = s.m->cfg.ram;
@@ -169,7 +169,7 @@ static void save_settings(void) {
                        out.boot_tape);
     const char *err = settingsio_save(&out);
     if (!err) s_file = out;
-    say(err ? " NOT SAVED: %.20s" : " SETTINGS SAVED", err);
+    say(err ? " Not saved: %.20s" : " Settings saved", err);
 }
 
 static void key_main(uint8_t c) {
@@ -199,21 +199,21 @@ static void key_tape(uint8_t c) {
     case PICOCALC_KEY_ENTER:
         if (s.tape_sel == T_EJECT) {
             (void)tapeio_insert(NULL);
-            say(" DECK EMPTY: LOAD/SAVE BY NAME", "");
+            say(" Deck empty: LOAD/SAVE by name", "");
         } else if (s.tape_sel == T_REWIND) {
-            if (!tapeio_inserted()[0]) { say(" THE DECK IS EMPTY", ""); return; }
+            if (!tapeio_inserted()[0]) { say(" The deck is empty", ""); return; }
             tapeio_rewind();
-            say(" REWOUND", "");
+            say(" Rewound", "");
             return;
         } else {
             const tapeio_entry_t *e = &s_list[s.tape_sel - T_FIRST];
             const char *err = tapeio_insert(e->path);
-            if (err) { say(" NOT INSERTED: %.16s", err); return; }
+            if (err) { say(" Not inserted: %.16s", err); return; }
             if (e->name[0])
-                snprintf(s.status, sizeof s.status, " IN: %s %.10s", e->bytes ? "BLOAD" : "LOAD",
+                snprintf(s.status, sizeof s.status, " In: %s %.10s", e->bytes ? "BLOAD" : "LOAD",
                          e->name);
             else
-                say(" IN THE DECK: %.18s", base(e->path));
+                say(" In the deck: %.18s", base(e->path));
         }
         s.page = P_MAIN;
         return;
@@ -270,7 +270,7 @@ void menu_run(ace_t *m, unsigned page, bool alt) {
     s.alt = alt;
 
     s.card = storage_mount() == 0;
-    if (!s.card) say(" NO CARD: NO TAPES OR SAVES", "");
+    if (!s.card) say(" No card: no tapes or saves", "");
     const char *t = tapeio_said();
     if (!s.status[0] && t[0]) say("%s", t);
     if (!s.status[0] && settingsio_error()[0]) say(" %.30s", settingsio_error());
@@ -280,7 +280,7 @@ void menu_run(ace_t *m, unsigned page, bool alt) {
         open_tape();
     } else if (page != KM_PAGE_MAIN) {
         /* Snapshot, Machine, Layout and About come with later work. */
-        say(" NOT IN THIS FIRMWARE YET", "");
+        say(" Not in this firmware yet", "");
     }
 
     display_perf("");
@@ -318,7 +318,7 @@ static int menu_key(bool alt, uint8_t c) {
 }
 
 int pause_run(bool *alt_out) {
-    display_perf("                PAUSED");
+    display_perf("                Paused");
 
     /* The level may be the southbridge's own, so it is read, and written
      * back on resume. */
