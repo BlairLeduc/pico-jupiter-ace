@@ -281,6 +281,28 @@ locals (§5.2) moves to M12 as an optional experiment, and 300 MHz stays
 deferred (§18 item 3). M7's measurement of the whole machine is the next
 check on this.
 
+**Measured, M7, 2026-10-03** (the same board, 150 MHz, gcc 15.2, the whole
+machine: the real ROM in the 19K Ace, paced on `time_us_64()`, core 1
+presenting and polling the keyboard). Each workload typed over the UART
+after a fresh boot; figures are core 0's heartbeat over 5 s windows, which
+agreed to within 0.5 %. Logs: `out/m7-*.log`.
+
+| Workload | T per insn | Host cycles per insn, tier 0 | tier 1 | tier 2 | Core 0, tier 0 | tier 2 |
+|---|---:|---:|---:|---:|---:|---:|
+| idle at the prompt | 11.9 | 110.3 | 108.8 | | 20.1 % | |
+| compute: `: c 0 30000 0 do i + loop drop ;` repeated | 9.52 | 159.6 | 161.3 | 89.4 | 36.4 % | 20.4 % |
+| scrolling: `vlist` repeated | 4.26 | 75.6 | | 71.2 | 38.6 % | 36.2 % |
+
+The real machine costs more than the bench: compute at tier 0 is about
+twice the Forth-shaped loop, so the bench's projection of 23–28 % was low,
+but the worst case, 38.6 %, is under half the ~85 % gate. **Tier 1 gained
+nothing**; tier 2 took compute to 89 cycles, near the bench, which is
+the XIP cache shared with core 1 that the bench left out. Scrolling's
+figures are distorted by `HALT`: `VLIST` halts once a word (§5.3), and each
+repeat of `HALT`'s NOP counts as an instruction, hence 4.26 T. Most of its
+core 0 time is probably those NOPs, which is the case for `HALT`
+fast-forward. M12 chooses the tier that ships and measures fast-forward.
+
 **The gate.** Milestone M2 (§15) puts the Z80 core alone on the board and
 measures host cycles per instruction on ZEXDOC and on a Forth-shaped loop,
 before any other port work. M7 then measures the real share. The Atom's 2 MHz
@@ -1309,6 +1331,23 @@ the PicoCalc keyboard** prints the answer; arrows, DELETE and BREAK work; a
 *Measured:* core 0 share and host cycles per instruction at the prompt, in
 compute and in scrolling (§14); longest present.
 *Leaves out:* sound, the card, the menu.
+*Done, 2026-10-04* (Plus 2 W, RP2350B rev 2, id `7458DC82A89AAC12`, at
+150 MHz, gcc 15.2; measured 2026-10-03). The firmware is split as §4.1
+says: `core0.c` runs the guest a field at a time against an absolute
+deadline, `core1.c` presents and polls, and `handoff.c` holds the pool
+under its spinlock. The board boots to the Ace's blank screen and cursor
+on the panel. Typed **on the PicoCalc keyboard** by the owner, 2026-10-04:
+`2 2 + .` prints `4  OK`; the arrows, DELETE and BREAK work; `VLIST`
+scrolls cleanly, and the perf line's dropped count stayed 0. Over the UART:
+`2 2 + .` read back `2 2 + . 4  OK` from screen RAM through
+`tools/uart-screen.sh`; `VLIST` repeated ran over 4,000 fields with zero
+dropped snapshots, at tier 0 and again at tier 2; an idle run of ~30,000
+fields (10 minutes) had rt 1.000, no late fields, no drops, no I²C errors
+and no lost log lines. **Measured:** core 0 at 20–39 % (§3.2's M7 table);
+the longest present 11.86 ms, the boot's full redraw, and a scrolling
+present ~11.4 ms. *Not verified:* the shipping build (`PICO_ACE_UART=OFF`)
+on the device, which was only built; the field's line numbers against the
+schematic; anything paced on audio (M8).
 
 #### M8. Audio
 
