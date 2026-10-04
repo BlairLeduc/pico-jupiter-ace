@@ -1434,9 +1434,11 @@ soak never took, was forced with a scratch build that masked core 0's
 interrupts for 9 ms every 250 fields (`out/m8-late.log`): each stall counted
 3 late refills and cost 3 halves of consumed samples, with no IRQ storm and
 no underrun, and playback carried on. Core 0 with audio: §3.2's M8 table. The owner listened to `BEEP` on the PicoCalc's speaker,
-2026-10-04, and it sounds correct. CI green on both jobs for PR #7.
-*Not verified:* the shipping build (`PICO_ACE_UART=OFF`) on the device,
-which was only built.
+2026-10-04, and it sounds correct. CI green on both jobs for PR #7. The
+shipping build (`PICO_ACE_UART=OFF`) was run by the owner on a Pico 2 W,
+2026-10-04, and its `BEEP` sounds correct; that build logs nothing, so its
+board id and audio counters were not recorded. *Not verified:* the
+shipping build's underrun and late-refill counts.
 
 #### M9. The card
 

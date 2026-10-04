@@ -26,8 +26,10 @@ underrun samples, 0 late refills, no drops or I²C errors
 Audio costs core 0 0.4–2.0 points against a control build in the same
 sitting (design.md §3.2). The owner heard `BEEP` on the PicoCalc's
 speaker, 2026-10-04, and it sounds correct. CI green on both jobs for PR
-#7, 2026-10-04. **Not checked:** the shipping build (`PICO_ACE_UART=OFF`)
-on the device, which was only built.
+#7, 2026-10-04. The shipping build (`PICO_ACE_UART=OFF`) was run by the
+owner on a Pico 2 W, 2026-10-04, and its `BEEP` sounds correct (no UART,
+so no board id or counters). **Not checked:** the shipping build's
+counters, which it does not log.
 
 **M7, the Ace on the device** (`src/port/core0.c`, `core1.c`,
 `handoff.c`, `display.c`), on the Plus 2 W (id `7458DC82A89AAC12`) at
