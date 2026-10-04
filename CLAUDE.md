@@ -9,8 +9,27 @@ Raspberry Pi Pico SDK. The guest is a Z80A at 3.25 MHz with an 8 KiB Forth
 ROM, a 32×24 character display from 768 bytes of screen RAM and 1 KiB of
 character RAM, a 40-key matrix, and a one-bit speaker and tape port.
 
-**Implementation status, 2026-10-04: M7 done.**
-Next is M8, audio (`docs/design.md` §15).
+**Implementation status, 2026-10-04: M8 done.** Next is M9, the card
+(`docs/design.md` §15).
+
+**M8, audio** (`src/core/beeper.c`, `src/port/audio.c`, `core0.c`), on
+the Plus 2 W (id `7458DC82A89AAC12`) at 150 MHz, gcc 15.2, 2026-10-04.
+pico-atom's beeper and audio, renamed; core 0 now paces on the audio
+queue (`PICO_ACE_AUDIO=OFF` keeps the timer). `test_audio` runs the ROM's
+`BEEP` (loop at `$0BAF`, half period 13m + 2 T, design.md §8): every half
+period is the hand count at m = 50, 100 and 300, every sample matches an
+independent box filter to 1 LSB, and the output's pitch is the count's to
+1 in 10⁴. The prompt and typing make no edge: the ROM does not click. A
+10-minute run read 36,621 Hz consumed (36,620 in 8 of 126 windows), 0
+underrun samples, 0 late refills, no drops or I²C errors
+(`out/m8-soak.log`); the board's `BEEP` edge counts equal the host's.
+Audio costs core 0 0.4–2.0 points against a control build in the same
+sitting (design.md §3.2). The owner heard `BEEP` on the PicoCalc's
+speaker, 2026-10-04, and it sounds correct. CI green on both jobs for PR
+#7, 2026-10-04. The shipping build (`PICO_ACE_UART=OFF`) was run by the
+owner on a Pico 2 W, 2026-10-04, and its `BEEP` sounds correct (no UART,
+so no board id or counters). **Not checked:** the shipping build's
+counters, which it does not log.
 
 **M7, the Ace on the device** (`src/port/core0.c`, `core1.c`,
 `handoff.c`, `display.c`), on the Plus 2 W (id `7458DC82A89AAC12`) at
@@ -193,7 +212,7 @@ core were verified on a Plus 2 W, and `design.md` §4.6 says which files to
 
 ## Build and test
 
-As of M7 these all work, and `tools/uart-type.sh` types at the guest.
+As of M8 these all work, and `tools/uart-type.sh` types at the guest.
 
 ```sh
 # host: src/core/ with the system compiler, no Pico SDK, under CTest
@@ -208,6 +227,7 @@ cmake -S . -B build/pico -DPICO_BOARD=pico2 -DCMAKE_BUILD_TYPE=Release
 cmake --build build/pico -j          # -> build/pico/pico-ace.uf2, pico-ace-bench.uf2
 tools/build.sh -DPICO_ACE_RAM_TIER=2 build/pico-t2      # an SRAM tier, in its own dir
 tools/build.sh -DPICO_ACE_UART=OFF build/pico-release   # the build that ships
+tools/build.sh -DPICO_ACE_AUDIO=OFF build/pico-noaudio  # paced on the timer, a control
 
 # hardware, with the Debug Probe's SWD and UART both connected
 tools/uart-log.sh 30 out/run.log &   # capture UART1 first, so the banner is in it

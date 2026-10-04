@@ -54,12 +54,16 @@ static void ACE_HOT1(mem_write)(void *ctx, uint16_t addr, uint8_t v) {
 }
 
 /* Any access to an even port moves the speaker: IN one way, OUT the
- * other (§2.3, §8). Every one, including the INs that only read keys. */
+ * other (§2.3, §8). Every one, including the INs that only read keys.
+ * The edge is stamped at the start of the accessing instruction, not at
+ * its I/O cycle: the offset is the same for every edge a loop makes, so
+ * pitch is exact and only the phase is early (EL §6.1). The Z80 adds an
+ * instruction's T-states after its bus accesses, so cpu.t during an IN
+ * or OUT is that start; test_audio's box filter holds it to that. */
 static inline void speaker_to(ace_t *m, bool level) {
     if (m->speaker != level) {
         m->speaker = level;
-        m->speaker_edges++;
-        /* M8: the beeper takes the edge, stamped at the instruction's start. */
+        beeper_set_level(&m->beeper, m->cpu.t, level);
     }
 }
 
@@ -148,6 +152,8 @@ bool ace_init(ace_t *m, const ace_config_t *cfg) {
     build_pages(m);
     connect_bus(m);
     z80_reset(&m->cpu);
+    beeper_init(&m->beeper, m->cpu.t, m->speaker, ACE_CPU_HZ,
+                ACE_AUDIO_RATE_NUM, ACE_AUDIO_RATE_DEN);
     return true;
 }
 
@@ -167,7 +173,11 @@ void ace_copy(ace_t *dst, const ace_t *src) {
 /* ---- Running ---------------------------------------------------------- */
 
 uint32_t ACE_HOT2(ace_run)(ace_t *m, uint32_t t_states) {
-    return z80_run(&m->cpu, t_states);
+    uint32_t done = z80_run(&m->cpu, t_states);
+    /* Close off every sample that ended inside this run, so a drain
+     * after it sees them all (§8). Once per call, not per instruction. */
+    beeper_advance(&m->beeper, m->cpu.t);
+    return done;
 }
 
 /* Spend the budget. Negative is debt from the last instruction's
@@ -188,6 +198,20 @@ uint32_t ace_run_field(ace_t *m) {
     done += run_budget(m, m->field_t[2]);
     m->fields++;
     return done;
+}
+
+/* ---- Audio (§8) -------------------------------------------------------- */
+
+void ace_audio_set_rate(ace_t *m, uint32_t rate_num, uint32_t rate_den) {
+    beeper_t *b = &m->beeper;
+    beeper_advance(b, m->cpu.t);
+    bool dc_block = b->dc_block;
+    beeper_init(b, m->cpu.t, m->speaker, ACE_CPU_HZ, rate_num, rate_den);
+    b->dc_block = dc_block;
+}
+
+size_t ace_audio_drain(ace_t *m, int16_t *dst, size_t max) {
+    return beeper_drain(&m->beeper, dst, max);
 }
 
 /* ---- Inputs and inspection -------------------------------------------- */

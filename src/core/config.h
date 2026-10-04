@@ -99,4 +99,29 @@
 /* The rest of the field's shape (§11.1) is runtime configuration in
  * ace_config_t until §16 settles it. */
 
+/* ---- Audio (design.md §8; EL §6; hardware-notes.md §5) ---------------- */
+
+#define ACE_PWM_TOP          2047u  /* 11 bits, 73.2 kHz carrier          */
+#define ACE_PWM_OVERSAMPLE      2u  /* each frame written twice           */
+
+/* The nominal sample rate as a fraction, 150,000,000 / 4,096 Hz, which
+ * makes a sample 6,656/75 T (§8). The port recomputes it from
+ * clock_get_hz(clk_sys) and hands the real one to ace_audio_set_rate;
+ * this is what a host build runs at. */
+#define ACE_AUDIO_RATE_NUM  150000000u
+#define ACE_AUDIO_RATE_DEN  ((ACE_PWM_TOP + 1u) * ACE_PWM_OVERSAMPLE)
+
+/* Samples the core holds between drains. One field is 731.25; the port
+ * drains after every field (§8). */
+#define ACE_AUDIO_BUF_LEN    1024u
+
+#define ACE_PCM_QUEUE_LEN    1024u  /* SPSC, ~28 ms (EL §6.2)             */
+#define ACE_PCM_QUEUE_START   768u  /* start streaming at this depth      */
+
+/* Power-of-two AND aligned, with the hardware read wrap (HW §5.3). At
+ * oversample 2 a frame is two slots; a half is 3.5 ms of sound. */
+#define ACE_DMA_FRAMES_PER_HALF 128u
+#define ACE_DMA_SLOTS_PER_HALF  (ACE_DMA_FRAMES_PER_HALF * ACE_PWM_OVERSAMPLE)
+#define ACE_DMA_RING_SLOTS      (ACE_DMA_SLOTS_PER_HALF * 2u)
+
 #endif /* PICO_ACE_CONFIG_H */

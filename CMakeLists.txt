@@ -13,6 +13,7 @@ option(PICO_ACE_HOST "Build the portable core and its host tests, with no Pico S
 # Every fixed capacity lives in src/core/config.h; nothing here duplicates one.
 set(PICO_ACE_CORE_SOURCES
     src/core/ace.c
+    src/core/beeper.c
     src/core/font.c
     src/core/keymap_picocalc.c
     src/core/keymatrix.c
@@ -102,6 +103,15 @@ else()
         set(PICO_ACE_UART_ON 0)
     endif()
 
+    # PICO_ACE_AUDIO=OFF paces on the microsecond timer and leaves the PWM
+    # pins alone; ON, the default, paces on the audio queue (design.md §8).
+    option(PICO_ACE_AUDIO "Sound on GP26/GP27, and pacing on its queue" ON)
+    if (PICO_ACE_AUDIO)
+        set(PICO_ACE_AUDIO_ON 1)
+    else()
+        set(PICO_ACE_AUDIO_ON 0)
+    endif()
+
     # How much of the core's hot path runs from SRAM (src/core/hot.h).
     # M2 measured tier 2 against 0; tier 1 holds the Ace's bus slow path
     # and even port since M3 (design.md §3.2). M12 chooses the one that ships. The core library needs it too: that is where the
@@ -164,6 +174,7 @@ else()
     endfunction()
 
     add_executable(pico-ace
+        src/port/audio.c
         src/port/board.c
         src/port/core0.c
         src/port/core1.c
@@ -176,9 +187,12 @@ else()
         src/port/southbridge.c
     )
     pico_ace_firmware(pico-ace)
+    target_compile_definitions(pico-ace PRIVATE PICO_ACE_AUDIO=${PICO_ACE_AUDIO_ON})
     target_link_libraries(pico-ace
         hardware_dma
         hardware_i2c
+        hardware_irq
+        hardware_pwm
         hardware_spi
         hardware_sync
         pico_multicore

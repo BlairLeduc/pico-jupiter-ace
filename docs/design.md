@@ -303,6 +303,23 @@ repeat of `HALT`'s NOP counts as an instruction, hence 4.26 T. Most of its
 core 0 time is probably those NOPs, which is the case for `HALT`
 fast-forward. M12 chooses the tier that ships and measures fast-forward.
 
+**Measured, M8, 2026-10-04** (the same board, tier 0, paced on the audio
+queue, against a `PICO_ACE_AUDIO=OFF` control flashed in the same sitting).
+The workloads ran as loops, `: r begin c 0 until ;` and `: v begin vlist 0
+until ;`, rather than retyped, so they differ from M7's figures; compare
+within a row. Logs: `out/m8-*.log`.
+
+| Workload | Core 0, audio | control | Host cycles per insn, audio | control |
+|---|---:|---:|---:|---:|
+| idle at the prompt | 21.2 % | 20.8 % | 116.2 | 114.2 |
+| compute, `c` in a loop | 42.2 % | 40.2 % | 185.1 | 176.2 |
+| scrolling, `vlist` in a loop | 40.8 % | 39.5 % | 79.9 | 77.2 |
+
+Audio costs 0.4–2.0 points of core 0. Most of it is in the guest's own
+cycles per instruction, not in the beeper's few calls a field, which
+suggests the refill IRQ and `audio_push` (in flash at tier 0) taking XIP
+cache lines from the interpreter. M12 measures that with the tiers.
+
 **The gate.** Milestone M2 (§15) puts the Z80 core alone on the board and
 measures host cycles per instruction on ZEXDOC and on a Forth-shaped loop,
 before any other port work. M7 then measures the real share. The Atom's 2 MHz
@@ -747,6 +764,28 @@ EL §6 applies whole. The Ace specifics:
 - **Pace on the audio queue** (EL §6.3). Audio and the guest share `clk_sys`.
 - Test: the ROM's `BEEP` at a few pitches, measured against the cycle count of
   its loop, and every sample against an independent edge model to 1 LSB.
+
+**Found by executing the ROM, 2026-10-04** (`test_audio`, M8):
+
+- **The prompt is silent.** The key scan is all `IN`s, so after the first
+  the speaker stays low; typing a key makes no edge either. The ROM does not
+  click.
+- **`BEEP ( m n -- )`** runs its loop at `$0BAF` with interrupts off: `IN`
+  (speaker low), a delay, `OUT` (speaker high), the same delay. Each half is
+  49 T plus the delay routine at `$0BC9`, which is 13m − 47 T, so a half
+  period is **13m + 2 T** and a period **26m + 4 T**: 8m µs and 4 T, the
+  manual's figure. The count holds for m ≥ 6 with (m + 249) & `$FF` ≠ `$FF`,
+  because the delay increments only the low byte. Executed at m = 50, 100 and
+  300, every half period is the count to the T-state, and the pitch measured
+  off the output is the count's to 1 part in 10⁴: 2,492.33, 1,248.08 and
+  416.45 Hz. The loop reads SPACE alone to stop a note (ERROR 3).
+- A note ends on its `OUT`, so the speaker is left high until the next key
+  scan's `IN`; the DC blocker makes that inaudible.
+- The edge is stamped with `cpu.t` at the access. The Z80 adds an
+  instruction's T-states after its bus accesses, so that is the
+  instruction's start, as EL §6.1 asks, with no extra store per
+  instruction. A stamp at the instruction's end fails the 1 LSB check by
+  2,031.
 
 ---
 
@@ -1371,6 +1410,35 @@ scan clicks at the prompt is recorded (§8).
 *Measured:* pitch against computed; samples/s control; core 0 share with
 audio on.
 *Leaves out:* volume and mute settings.
+*Done, 2026-10-04* (Plus 2 W, RP2350B rev 2, id `7458DC82A89AAC12`, at
+150 MHz, gcc 15.2). `beeper.*` and `audio.*` are pico-atom's, renamed; the
+beeper takes the Z80's wrapping 32-bit T counter by difference, and
+pico-atom's `test_audio` came with it, rebuilt on the real ROM's `BEEP`
+(§8). `core0.c` drains each field's samples and pushes them, and the push
+blocking on a full queue is the pacing; `PICO_ACE_AUDIO=OFF` keeps M7's
+timer pacing. On the host: every half period of `BEEP` at m = 50, 100 and
+300 is the hand count, 13m + 2 T; every sample matches an independent box
+filter of the executed edges to 1 LSB; the pitch measured off the output is
+the count's to 1 part in 10⁴; 3,004 fields make exactly ⌊T × 75 / 6,656⌋
+samples, and so do 20 across the T counter's wrap. A stamp 11 T late and a
+rate that drops the remainder each fail a check. **On the board:** a
+10-minute run (`out/m8-soak.log`, 31,627 fields, with three `BEEP`s and a
+`VLIST` typed over the UART) read 36,621 Hz consumed in 117 of its 5 s
+windows and 36,620 in 8, after the first, which spans the start; **0
+underrun samples, 0 late refills**, no core overflow, no late fields, no
+dropped snapshots, no I²C errors and no lost log lines. The queue's low
+water was 641 of 1,024. The board's speaker edges for `100 2000 BEEP`,
+`300 2000 BEEP` and `50 1000 BEEP` were 5,000, 1,666 and 5,000, the host's
+counts exactly. The prompt does not click (§8). The late path, which the
+soak never took, was forced with a scratch build that masked core 0's
+interrupts for 9 ms every 250 fields (`out/m8-late.log`): each stall counted
+3 late refills and cost 3 halves of consumed samples, with no IRQ storm and
+no underrun, and playback carried on. Core 0 with audio: §3.2's M8 table. The owner listened to `BEEP` on the PicoCalc's speaker,
+2026-10-04, and it sounds correct. CI green on both jobs for PR #7. The
+shipping build (`PICO_ACE_UART=OFF`) was run by the owner on a Pico 2 W,
+2026-10-04, and its `BEEP` sounds correct; that build logs nothing, so its
+board id and audio counters were not recorded. *Not verified:* the
+shipping build's underrun and late-refill counts.
 
 #### M9. The card
 
@@ -1493,7 +1561,7 @@ runtime configuration (EL §14.2).
 | Port decode | A0 only | schematic; ROM | medium |
 | Keyboard matrix | §2.4 | **ROM, executed** | **settled** 2026-10-03: every cell pressed at the prompt alone, with SHIFT, with SYMBOL SHIFT and with both (`test_keyboard`). The cells agree with MAME's table; the editing set did not agree with this design's earlier belief (up is SHIFT+6, down SHIFT+7, and SHIFT+3 types `3`) |
 | Port read bits D5–D7 | tape on D5, rest high | schematic; ROM's tape loader | low-medium. MAME's `io_r` agrees: `$FF`, D5 cleared by the tape signal |
-| `IN` vs `OUT` speaker direction | `IN` one way, `OUT` the other | schematic; ROM's `BEEP` | medium. MAME: `IN` low, `OUT` high, which `ace.c` follows. MAME also takes the tape output from **D3 of the `OUT`**, not from the access, which contradicts §2.3; settle in M13. The prompt makes no edge: its key scan is all `IN`s (`test_boot`) |
+| `IN` vs `OUT` speaker direction | `IN` one way, `OUT` the other | schematic; ROM's `BEEP` | medium. MAME: `IN` low, `OUT` high, which `ace.c` follows. MAME also takes the tape output from **D3 of the `OUT`**, not from the access, which contradicts §2.3; settle in M13. The prompt makes no edge: its key scan is all `IN`s (`test_boot`). Executing `BEEP` (2026-10-04, §8) gives the manual's 8m µs only because each access moves the level: its `OUT` writes the counter's high byte, whose bits do not alternate. So the speaker follows the access; the polarity is still MAME's, and inaudible through the DC blocker |
 | Display polarity | set bits white | ROM, executed, against photographs | high. **Executed** 2026-10-03: with set bits as ink, the character set the ROM writes reads as text on a paper ground that its spaces clear to (`test/host/golden/boot.ppm` and `glyphs.ppm`, looked at). That paper is black and ink white is from photographs |
 | ROM uses IM 1 | yes | ROM | **settled** 2026-10-03: `IM 1` at `$008E`, `EI` at `$009F`; IM is 1 at the prompt in every machine (`test_boot`). The handler is at `$013A` |
 | ROM halts when waiting for a key | no | ROM | **settled** 2026-10-03, by execution: at the prompt it spins on FLAGS (`$3C28`) bit 5 at `$059B`, which the interrupt sets on ENTER, and never halts (`test_boot`). It does `HALT` once a word in `VLIST` (`$0679`), found by the trace diff |
