@@ -101,7 +101,7 @@ int main(void) {
 
     /* ---- text as PicoCalc events: the UART's path (§9.1) ------------- */
     {
-        picocalc_event_t ev[KEYMAP_TEXT_EVENTS];
+        picocalc_event_t ev[ACE_KEY_TEXT_EVENTS];
         CHECK(keymap_picocalc_text('a', ev) == 2 && ev[0].state == KEY_EV_PRESSED &&
                   ev[0].code == 'a' && ev[1].state == KEY_EV_RELEASED && ev[1].code == 'a',
               "a is a press and a release");

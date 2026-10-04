@@ -41,6 +41,8 @@
 /* The PicoCalc's events, replayed into the matrix (design.md §9.1). */
 #define ACE_KEY_EVENT_QUEUE    64u  /* southbridge FIFO holds 31 (HW §6.2) */
 #define ACE_KEY_HELD_MAX        8u  /* keys down at once                   */
+#define ACE_KEY_TEXT_EVENTS     4u  /* one ASCII byte: a modifier around a key */
+#define ACE_KEY_RING           ACE_KEY_EVENT_QUEUE  /* core 1 to core 0 */
 
 /* The ROM's scan takes a key on the third consecutive field that sees it
  * and needs one field with no key down before the next; it repeats a key
@@ -76,6 +78,13 @@
 #define ACE_SCREEN_Y           64u  /* with a 64-row band above and below    */
 #define ACE_LINEBUF_COUNT       2u  /* DMA ping-pong (HW §4.6)              */
 #define ACE_LINEBUF_PIXELS  ACE_PANEL_W
+
+/* ---- Port buffers (design.md §3.3) ------------------------------------ */
+
+/* Core 0's log, drained by core 1 (EL §2.3): the ring, a power of two,
+ * and the longest line formatted onto core 0's stack. */
+#define ACE_LOG_RING         2048u
+#define ACE_LOG_LINE          512u
 
 /* ---- Timing (design.md §2.1, §11) ------------------------------------ */
 

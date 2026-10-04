@@ -98,7 +98,7 @@ void guest_press(guest_t *g, uint8_t code, bool alt) {
 
 void guest_type(guest_t *g, const char *s) {
     for (; *s; s++) {
-        picocalc_event_t ev[KEYMAP_TEXT_EVENTS];
+        picocalc_event_t ev[ACE_KEY_TEXT_EVENTS];
         unsigned n = keymap_picocalc_text((uint8_t)*s, ev);
         if (n == 0) {
             fprintf(stderr, "guest_type: no PicoCalc key for 0x%02X\n", (uint8_t)*s);

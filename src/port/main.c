@@ -152,7 +152,7 @@ static void log_key(const char *src, uint8_t state, uint8_t code) {
 static uint32_t uart_keys(void) {
     int ch = getchar_timeout_us(0);
     if (ch == PICO_ERROR_TIMEOUT) return 0;
-    picocalc_event_t ev[KEYMAP_TEXT_EVENTS];
+    picocalc_event_t ev[ACE_KEY_TEXT_EVENTS];
     unsigned n = keymap_picocalc_text((uint8_t)ch, ev);
     if (n == 0) log_printf("  key          : uart byte 0x%02X sends no key\n", (uint8_t)ch);
     for (unsigned i = 0; i < n; i++) log_key("uart", ev[i].state, ev[i].code);

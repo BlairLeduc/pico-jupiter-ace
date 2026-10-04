@@ -196,7 +196,7 @@ uint8_t keymap_picocalc_canonical(uint8_t code) {
     }
 }
 
-unsigned keymap_picocalc_text(uint8_t ch, picocalc_event_t out[KEYMAP_TEXT_EVENTS]) {
+unsigned keymap_picocalc_text(uint8_t ch, picocalc_event_t out[ACE_KEY_TEXT_EVENTS]) {
     uint8_t mod = 0, code;
     if (ch == '\r' || ch == '\n') {
         code = PICOCALC_KEY_ENTER;

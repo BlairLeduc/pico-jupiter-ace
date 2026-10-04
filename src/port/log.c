@@ -9,8 +9,11 @@
 #include "hardware/uart.h"
 #include "pico/stdlib.h"
 
+#include "config.h"
+
 /* Power of two, so the indices can run free and wrap by mask. */
-#define LOG_RING 2048u
+#define LOG_RING ACE_LOG_RING
+_Static_assert((LOG_RING & (LOG_RING - 1u)) == 0, "the log ring must be a power of two");
 
 static char              s_ring[LOG_RING];
 static volatile uint32_t s_head;       /* written by core 0 only */
@@ -22,7 +25,7 @@ void log_printf(const char *fmt, ...) {
     (void)fmt;          /* nowhere to send it, so not even formatted */
     return;
 #else
-    char line[512];
+    char line[ACE_LOG_LINE];
     va_list ap;
     va_start(ap, fmt);
     int n = vsnprintf(line, sizeof line, fmt, ap);

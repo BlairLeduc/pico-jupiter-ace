@@ -10,7 +10,7 @@
 #define SB_FIFO_DEPTH 31u   /* hardware-notes.md §6.1 */
 
 /* Power of two, so the indices can run free and wrap by mask. */
-#define RING 64u
+#define RING ACE_KEY_RING
 _Static_assert(RING >= ACE_KEY_EVENT_QUEUE && (RING & (RING - 1u)) == 0,
                "the ring must hold a full queue and be a power of two");
 
