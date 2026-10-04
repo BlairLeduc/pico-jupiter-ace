@@ -119,11 +119,15 @@ static void serve_load(ace_t *m, const tape_t *t) {
     /* LOAD's header read names a file: that file, if the card has it. */
     char named[ACE_PATH_MAX];
     if (t->flag == TAPE_FLAG_HEADER && t->ret == TAPE_LOAD_HEADER_RET &&
-        name_path(m, TAPE_HEADER_ASKED + 1u, named) && strcmp(named, s_path) != 0 &&
-        open_read(named) == FR_OK) {
-        f_close(&s_f);
-        set_deck(named, false);
-        log_core1("  tape         : %s found by name\n", named);
+        name_path(m, TAPE_HEADER_ASKED + 1u, named) && strcmp(named, s_path) != 0) {
+        FRESULT fr = open_read(named);
+        if (fr == FR_OK) {
+            f_close(&s_f);
+            set_deck(named, false);
+            log_core1("  tape         : %s found by name\n", named);
+        } else {
+            log_core1("  tape         : no %s (FatFs %d)\n", named, (int)fr);
+        }
     }
     if (!s_path[0]) {
         decline(m, "no tape, and no file by that name");

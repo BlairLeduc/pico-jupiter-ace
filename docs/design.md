@@ -928,14 +928,39 @@ stand aside for anything else (EL §8.2):
   buffer, system variables, the speaker level. Test it by running the ROM's
   own routine with only its bit-level I/O hooked and requiring the trapped
   call to leave the same machine in every byte of RAM.
-- **Format: `.tap` as the Ace community uses it.** As we understand it, each
-  block has a 2-byte little-endian length, then the block bytes, then a
-  checksum. A header is the file type (dictionary or bytes), a ten-character
-  name, the length, the start address and several dictionary pointers. All of
-  this is unverified (§16). Settle it against the ROM's own routines and
-  against files from the archive, not against a description.
+- **Format: `.tap` as the Ace community uses it**, settled against the ROM
+  and an archive file (§16): each block is a 2-byte little-endian length,
+  the block's bytes, and their XOR. The flag byte that precedes a block on
+  tape is not stored, so a block's flag is its place: even blocks from the
+  start of the file are headers, odd ones data.
 - `SAVE` appends a header and data block to the selected tape image through
   `.new` and rename (EL §8.6).
+
+**As built (M10).** The trap is on the two block routines, `$1820` and
+`$18A7`, and the words around them (finding a name, printing it, checking
+the length) stay the ROM's: it calls again for the next block, as it would
+with a recorder. The CPU offers a trapped PC to the bus before running it,
+in a second loop of `z80_run` used only when traps are set (`z80.h`). The
+trap stands aside unless the ROM's bytes from `$1820` to `$192C` are the
+stock ROM's. A served block does not return by itself: the trap puts the
+machine where the ROM's routine is as it finishes reading the last byte it
+would have taken (`$190C`), or sending the checksum (`$1872`), with the
+stack the routine leaves, and the ROM runs its own last instructions: the
+checksum test, the flag mismatch, a verify's difference, the BREAK check,
+`EI` and the `RET`. So what the routine leaves is the ROM's own work, and
+`test_tape` holds the rest to the ROM's routine fed its own recorded
+signal (§16). Two deliberate differences: R, which counts instructions the
+trap does not run; and a block shorter than the ROM asks for, which is
+taken as a time-out where a tape would go on to read the next leader as
+bytes.
+
+The deck (`tapeio.c`) holds one tape and reads it a block at a time from
+where it stands. With the deck empty, `LOAD SQ` plays `/ace/tapes/SQ.tap`
+and `SAVE SQ` appends to it, creating it; a `LOAD` whose name is a file on
+the card plays that file whatever is in the deck. A load that reaches the
+end of the tape rewinds once, so a program already passed is found; at the
+end a second time it is declined, and the ROM waits for a signal until
+BREAK, as the real machine does.
 
 ### 10.4 Tape, phase 2: the signal
 
@@ -1039,6 +1064,20 @@ EL §10, with the Ace's specifics:
   temperature, the ROM's SHA-1, RAM size, settings file state.
 - A **status row** in the menu names the first problem.
 - Firmware names no titles. Per-title configuration lives on the card.
+
+**As built (M10).** The menu (`menu.c`) runs on core 1 with the guest
+parked (§4.5), and owns the keyboard while it is open: core 0 leaves the
+key ring to it. Its pages are the main page (Tape, Settings, Save settings,
+Reset), Tape (empty the deck, rewind, the files in `/ace/tapes/` with each
+one's first header name) and Settings (volume, perf line). F2-F5 open the
+main page saying the page is not in this firmware yet; Snapshot is M11's.
+What the menu changes for core 0, the volume and a reset, goes through
+`g_ui` and is applied by core 0 when it has the machine back (EL §2.5).
+Alt+R resets the CPU with RAM kept. Save settings writes the running
+machine's RAM size, the volume, the perf line and the tape in the deck, if
+the user put it there, as `boot_tape`. Over the UART, RS opens the menu
+and US pauses, and while either is up the UART's bytes are its keys, with
+^P ^N ^B ^F for the arrows (`park.c`).
 
 ---
 
@@ -1627,10 +1666,10 @@ runtime configuration (EL §14.2).
 | ROM halts when waiting for a key | no | ROM | **settled** 2026-10-03, by execution: at the prompt it spins on FLAGS (`$3C28`) bit 5 at `$059B`, which the interrupt sets on ENTER, and never halts (`test_boot`). It does `HALT` once a word in `VLIST` (`$0679`), found by the trace diff |
 | RNG seed location | none | ROM | **settled** 2026-10-03: the ROM has no random-number word (its dictionary names were listed). The manual's `RND` keeps its own seed and seeds it from FRAMES (`$3C2B`), which the interrupt counts, so zeroed RAM leaves nothing stuck (§6.3) |
 | Key minimum hold, in fields | 3 scans | **ROM, executed** | **settled** 2026-10-03: the interrupt's scan (`$0310`) counts a held key down from `$20` in `$3C27` and takes it on the third consecutive field; the next key needs one field with every key up; a key held 33 fields repeats, and then every 4. Typing a line at 2 fields held or with no gap loses keys (`test_keyboard`'s controls). The replay uses 4 and 2 (§9.1) |
-| `.tap` block layout | §10.3 | ROM tape routines; archive files | medium-low |
+| `.tap` block layout | §10.3 | ROM tape routines; archive files | **settled** 2026-10-04: on tape a block is the flag byte (`$00` header, `$FF` data), the bytes, and their XOR; the `.tap` keeps a 2-byte little-endian length (bytes + 1), the bytes and the XOR, with no flag, and the ROM writes a 25-byte header then its data. The archive's `tut-tut.tap` (jupiter-ace.co.uk, fetched 2026-10-04) is exactly that: a 26-byte block naming `TUTTUT`, then 11,998 bytes, both XORing to zero. A block's flag is therefore taken from its place, even blocks headers (`tape.h`) |
 | `.ace` snapshot encoding | §10.5 | xAce/EightyOne docs; sample files | low |
 | Tape signal timings | — | ROM tape routines | unknown |
-| Tape block routines | load `$18A7`, save `$1820` | ROM | medium: xAce patches the ROM at these two addresses, and with them loaded an archive `.tap` through this ROM, 2026-10-03 (`out/m3-xace-tape.log`). Read the routines in M10 before trapping them (§10.3) |
+| Tape block routines | load `$18A7`, save `$1820` | ROM | **settled** 2026-10-04 by reading them (`tape.c` names every address used) and by execution: `test_tape` records the ROM's own SAVE off D3, plays it into the ROM's LOAD and VERIFY, and the trapped calls leave the same machine in every byte of RAM and every register but R. The tape input is D5; the loader keeps the last level it saw in C. The signal must be played inverted against D3 for the line to rest at the input's idle level (D5 high) between blocks |
 
 Record how each was settled, and the date, in this table when it changes.
 
