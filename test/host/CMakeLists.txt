@@ -3,6 +3,7 @@
 
 set(PICO_ACE_HOST_TESTS
     test_keymap
+    test_settings
     test_skeleton
     test_z80_behaviour
     test_z80_fuse

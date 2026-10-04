@@ -1,10 +1,11 @@
-/* main.c — bring-up, then the two cores' loops (design.md §4.1, §15.2 M7).
+/* main.c — bring-up, then the two cores' loops (design.md §4.1, §15.2 M9).
  *
  * Core 0 owns the Z80, the machine and audio; core 1 owns the LCD, the
- * southbridge and the log's way out (§4.3). main() sets the clock, logs
- * the banner, powers the 19K machine on with the embedded ROM (§10.2,
- * §18 item 1), starts core 1 and waits for its bring-up, then becomes
- * core 0's loop.
+ * southbridge, the card and the log's way out (§4.3). main() sets the
+ * clock, logs the banner, starts core 1 and waits while it brings up the
+ * panel and reads the card's settings, then powers on the machine they
+ * name (19K by default, §18 item 1) with the embedded ROM (§10.2) and
+ * becomes core 0's loop.
  */
 
 #include <stdbool.h>
@@ -19,12 +20,14 @@
 #include "ace_rom.h"
 #include "audio.h"
 #include "board.h"
+#include "card.h"
 #include "core0.h"
 #include "core1.h"
 #include "handoff.h"
 #include "keymatrix.h"
 #include "log.h"
 #include "pico_ace_version.h"
+#include "settingsio.h"
 
 /* The guest lives in .bss, not the heap: src/core/ has no allocator, and
  * keeping it static is what makes the §3.3 budget a link-time fact. */
@@ -49,16 +52,10 @@ int main(void) {
                "not be the ones this build assumes\n");
     }
 
-    ace_config_t cfg;
-    ace_config_default(&cfg);
-    cfg.rom = ace_rom;
-    if (!ace_init(&g_ace, &cfg)) {
-        printf("  guest        : refused its configuration; not started\n");
-        for (;;) sleep_ms(1000);
-    }
     keymatrix_init(&g_keys);
     handoff_init();
 
+    /* Core 1 reads the card while core 0 waits (§4.5, §10.6). */
     multicore_launch_core1(core1_main);
     while (!g_c1.ready) sleep_ms(1);
     __dmb();
@@ -67,9 +64,32 @@ int main(void) {
     log_printf("  i2c          : %lu Hz, southbridge version %ld\n",
                (unsigned long)g_c1.i2c_hz, (long)g_c1.sb_version);
     log_printf("  lcd          : spi %lu Hz\n", (unsigned long)g_c1.spi_hz);
-    log_printf("  guest        : %lu bytes of user RAM, %lu T a field at %lu Hz, "
+    log_printf("  settings     : card %s, file %s%s%s; ram %s, volume %u, perf_line %s, "
+               "layout %s, boot_tape %s\n",
+               card_state_str(g_boot.job.state), settingsio_state_str(g_boot.cfg),
+               g_boot.cfg_error[0] ? ", first problem " : "", g_boot.cfg_error,
+               ace_ram_name(g_boot.settings.ram), g_boot.settings.volume,
+               g_boot.settings.perf_line ? "on" : "off",
+               g_boot.settings.layout[0] ? g_boot.settings.layout : "standard",
+               g_boot.settings.boot_tape[0] ? g_boot.settings.boot_tape : "none");
+    /* M10: volume, perf_line, layout and boot_tape are read and checked
+     * but not yet applied; only ram is (§15.2 M9). */
+
+    ace_config_t cfg;
+    ace_config_default(&cfg);
+    cfg.rom = ace_rom;
+    cfg.ram = g_boot.settings.ram;
+#ifdef PICO_ACE_BOOT_RAM
+    cfg.ram = PICO_ACE_BOOT_RAM;   /* over the file's (EL §8.7) */
+#endif
+    if (!ace_init(&g_ace, &cfg)) {
+        log_printf("  guest        : refused its configuration; not started\n");
+        for (;;) sleep_ms(1000);
+    }
+    log_printf("  guest        : %s, %lu bytes of user RAM, %lu T a field at %lu Hz, "
                "ROM %s, hot code in SRAM to tier %u (hot.h)\n",
-               (unsigned long)ace_ram_bytes(cfg.ram), (unsigned long)ace_field_t(&g_ace),
+               ace_ram_name(cfg.ram), (unsigned long)ace_ram_bytes(cfg.ram),
+               (unsigned long)ace_field_t(&g_ace),
                (unsigned long)ACE_CPU_HZ, ACE_ROM_SHA1, (unsigned)PICO_ACE_RAM_TIER);
 
     /* Audio last in bring-up order (hardware-notes.md §10), on core 0,

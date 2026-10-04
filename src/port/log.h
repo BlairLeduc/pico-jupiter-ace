@@ -21,6 +21,12 @@ void log_printf(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 /* Core 1. Writes what fits in the UART FIFO now; never waits. */
 void log_pump(void);
 
+/* Core 1's own lines, printed directly, but never into the middle of a
+ * line of core 0's that log_pump has half sent: it waits for that line's
+ * end first. For rare events only (the card, a park), since the wait
+ * holds up core 1's loop. */
+void log_core1(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
+
 unsigned log_dropped(void);
 
 #endif /* PICO_ACE_LOG_H */
