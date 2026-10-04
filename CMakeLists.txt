@@ -18,6 +18,7 @@ set(PICO_ACE_CORE_SOURCES
     src/core/keymap_picocalc.c
     src/core/keymatrix.c
     src/core/render.c
+    src/core/romfont.c
     src/core/settings.c
     src/core/snappool.c
     src/core/tape.c

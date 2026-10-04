@@ -4,8 +4,8 @@
 
 #include <string.h>
 
-/* Printable ASCII is the font's own order (font.h); anything else is a
- * blank. */
+/* The Ace's codes are ASCII but for $60, its pound sign, and $7F, its
+ * copyright sign (design.md §7.5); anything outside $20-$7E is a blank. */
 static uint8_t glyph(char c, bool inverse) {
     uint8_t a = (uint8_t)c;
     if (a < 0x20u || a > 0x7Eu) a = ' ';

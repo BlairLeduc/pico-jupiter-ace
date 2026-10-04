@@ -8,7 +8,6 @@
 #include "pico/stdlib.h"
 
 #include "display.h"
-#include "font.h"
 #include "handoff.h"
 #include "kbd.h"
 #include "keymatrix.h"
@@ -145,7 +144,7 @@ static void draw(void) {
     textpage_line(s_scr, ROW_KEYS, s.page == P_TAPE ? " ENTER INSERTS  ESC BACK"
                                  : s.page == P_SETTINGS ? " < > CHANGES  ESC BACK"
                                  : " ARROWS  ENTER  ESC RESUMES", true);
-    display_present(s_scr, ace_font, NULL);
+    display_present(s_scr, display_font(), NULL);
 }
 
 /* ---- actions --------------------------------------------------------------- */

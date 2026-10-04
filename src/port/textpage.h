@@ -2,7 +2,7 @@
  * the menu and pause (design.md §12).
  *
  * The page is 768 screen bytes, as the guest's are, drawn with the
- * emulator's own font (font.h) through the same row generator, so it
+ * Ace's own character set (display_font) through the same row generator, so it
  * costs no new drawing code and closing it is display_invalidate()
  * (§7.5, EL §10). Codes are ASCII; bit 7 is inverse video, as on the Ace.
  */
