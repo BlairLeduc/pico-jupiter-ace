@@ -26,6 +26,8 @@
 #include "handoff.h"
 #include "keymatrix.h"
 #include "log.h"
+#include "menu.h"
+#include "park.h"
 #include "pico_ace_version.h"
 #include "settingsio.h"
 
@@ -72,8 +74,11 @@ int main(void) {
                g_boot.settings.perf_line ? "on" : "off",
                g_boot.settings.layout[0] ? g_boot.settings.layout : "standard",
                g_boot.settings.boot_tape[0] ? g_boot.settings.boot_tape : "none");
-    /* M10: volume, perf_line, layout and boot_tape are read and checked
-     * but not yet applied; only ram is (§15.2 M9). */
+    /* ram is the machine; volume and perf_line go to the menu's state,
+     * which core 0 applies; boot_tape went into the deck as core 1 read
+     * the card. layout waits for game layouts (§9.4, M15). */
+    g_ui.volume = g_boot.settings.volume;
+    g_ui.perf_line = g_boot.settings.perf_line;
 
     ace_config_t cfg;
     ace_config_default(&cfg);
@@ -111,5 +116,6 @@ int main(void) {
     log_printf("  audio        : off; pacing on the microsecond timer\n");
 #endif
 
+    park_init(&g_ace);
     core0_run(&g_ace, &g_keys);
 }

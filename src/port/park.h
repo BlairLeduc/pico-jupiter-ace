@@ -8,8 +8,11 @@
  * drains, so audio neither underruns nor loses its pacing, and guest
  * time does not pass.
  *
- * M9 has one reason, the UART's hold, which runs the card job; the menu,
- * pause and the tape trap are M10's.
+ * Four reasons: the UART's hold, which runs the card job; a tape request
+ * the CPU is stalled on (tapeio.h); the menu; and pause (menu.h). The
+ * menu and pause own the keyboard while they last, so core 0 leaves the
+ * key ring to core 1 for them; a hold's keys are not the guest's either,
+ * and core 0 drops them; a tape's wait for the guest.
  */
 #ifndef PICO_ACE_PARK_H
 #define PICO_ACE_PARK_H
@@ -17,9 +20,13 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "ace.h"
+
 #define PARK_NONE 0u
-#define PARK_HOLD 1u   /* GS over the UART, until a second GS (tools/uart-hold.sh) */
-/* M10: PARK_MENU, PARK_PAUSE, PARK_TAPE. */
+#define PARK_HOLD  1u  /* GS over the UART, until a second GS (tools/uart-hold.sh) */
+#define PARK_TAPE  2u  /* the CPU stalled on a tape block (tape.h)        */
+#define PARK_MENU  3u  /* Alt+M or an F-key (design.md §12)               */
+#define PARK_PAUSE 4u  /* Alt+P                                           */
 
 /* GS, which no key sends: park the guest, check the card, and stay
  * parked until the next GS. */
@@ -33,11 +40,14 @@ typedef struct {
 
 extern volatile park_stats_t g_park_stats;
 
+/* Core 0, before the first park: the machine core 1 is handed. */
+void park_init(ace_t *m);
+
 /* Core 0, between two fields: hand the machine to core 1 and wait for it
- * back. Returns the wall time parked, in microseconds. Keys that arrive
- * meanwhile are not the guest's and are dropped; the caller starts the
- * held set again. */
-uint32_t park(uint32_t why);
+ * back. `page` and `alt` are the menu's (menu_run). Returns the wall time
+ * parked, in microseconds. After a hold, the menu or a pause the caller
+ * starts the held set again: their keys were not the guest's. */
+uint32_t park(uint32_t why, unsigned page, bool alt);
 
 /* Core 1, once a loop: the parked job, run when the park begins and again
  * on each card change, and the machine handed back once released. Between

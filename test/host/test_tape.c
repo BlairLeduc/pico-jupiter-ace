@@ -10,6 +10,7 @@
  * register but R, which counts instructions the trap does not run.
  */
 
+#include <stdlib.h>
 #include <string.h>
 
 #include "guest.h"
@@ -153,7 +154,7 @@ static bool run_until_returned(guest_t *g, unsigned calls, int max_fields) {
 
 /* ---- the .tap the trap writes ------------------------------------------ */
 
-static uint8_t  s_tap[4096];
+static uint8_t  s_tap[65536];
 static size_t   s_tap_len;
 
 /* Where each block's bytes start in s_tap, and how many there are,
@@ -422,6 +423,50 @@ static int test_trapped_load(void) {
     return 0;
 }
 
+/* An archive .tap, when PICO_ACE_TAP names one (none is committed):
+ * every block in turn, LOAD by the first header's name, then the word
+ * run for 200 fields. */
+static int test_archive(void) {
+    const char *path = getenv("PICO_ACE_TAP");
+    if (!path) return 0;
+    FILE *f = fopen(path, "rb");
+    CHECK(f != NULL, "open %s", path);
+    if (!f) return 1;
+    static uint8_t img[65536];
+    size_t n = fread(img, 1, sizeof img, f);
+    fclose(f);
+    if (n > sizeof s_tap) { printf("archive: %zu bytes, more than the test holds\n", n); return 0; }
+    memcpy(s_tap, img, n);
+    s_tap_len = n;
+    s_blocks = 0;
+    for (size_t p = 0; p + 2u <= n && s_blocks < 8; ) {
+        size_t len = (size_t)(img[p] | (img[p + 1u] << 8));
+        s_blk_off[s_blocks] = p + 2u;
+        s_blk_len[s_blocks] = len;
+        s_blocks++;
+        p += 2u + len;
+    }
+    char name[TAPE_NAME_LEN + 1];
+    memcpy(name, s_tap + s_blk_off[0] + 1, TAPE_NAME_LEN);
+    name[TAPE_NAME_LEN] = 0;
+    for (int i = TAPE_NAME_LEN - 1; i >= 0 && name[i] == ' '; i--) name[i] = 0;
+
+    static guest_t h;
+    unsigned served = 0;
+    CHECK(guest_boot(&h, ACE_RAM_19K, 400), "boot");
+    char line[40];
+    snprintf(line, sizeof line, "LOAD %s\n", name);
+    guest_type(&h, line);
+    deck_fields(&h, 50, &served);
+    printf("archive %s: %u blocks served\n", name, served);
+    guest_dump(&h.m, stdout);
+    snprintf(line, sizeof line, "%s\n", name);
+    guest_type(&h, line);
+    guest_fields(&h, 200);
+    guest_dump(&h.m, stdout);
+    return 0;
+}
+
 int main(void) {
     if (test_save()) TEST_DONE();
     if (test_load()) TEST_DONE();
@@ -429,5 +474,6 @@ int main(void) {
     if (test_flag_mismatch()) TEST_DONE();
     test_stands_aside();
     test_trapped_load();
+    test_archive();
     TEST_DONE();
 }

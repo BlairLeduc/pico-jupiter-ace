@@ -3,6 +3,7 @@
 #include "card.h"
 
 #include <stdio.h>
+#include <string.h>
 
 #include "pico/stdlib.h"
 
@@ -10,6 +11,7 @@
 #include "sd.h"
 #include "settingsio.h"
 #include "storage.h"
+#include "tapeio.h"
 
 /* Card detect must hold a new level this long before it counts: the
  * contacts bounce as a card goes in, and a card half in does not answer
@@ -21,6 +23,22 @@ static bool     s_raw;            /* last read */
 static uint32_t s_raw_since;
 static volatile uint32_t s_changes;
 static bool     s_polled;
+
+/* boot_tape: a bare name is a file in /ace/tapes/ (design.md §10.6). A
+ * build-time PICO_ACE_BOOT_TAPE wins over the file's (EL §8.7). */
+static void boot_tape(const settings_t *s) {
+    const char *name = s->boot_tape;
+#ifdef PICO_ACE_BOOT_TAPE
+    name = PICO_ACE_BOOT_TAPE;
+#endif
+    if (!name[0]) return;
+    char path[ACE_PATH_MAX + sizeof SETTINGS_TAPE_DIR];
+    if (strchr(name, '/')) snprintf(path, sizeof path, "%s", name);
+    else snprintf(path, sizeof path, "%s/%s", SETTINGS_TAPE_DIR, name);
+    const char *err = tapeio_insert(path);
+    log_core1("  card         : boot_tape %s%s%s\n", path, err ? ": " : " in the deck",
+              err ? err : "");
+}
 
 static void job(settings_t *out, card_job_t *j, const char *why) {
     j->mount_us = j->read_us = 0;
@@ -47,6 +65,7 @@ static void job(settings_t *out, card_job_t *j, const char *why) {
     t0 = time_us_32();
     settingsio_load(out);
     j->read_us = time_us_32() - t0;
+    if (why[0] == 'b') boot_tape(out);
     storage_unmount();
     log_core1("  card         : %s: mounted in %lu us, settings %s in %lu us\n", why,
            (unsigned long)j->mount_us, settingsio_state_str(settingsio_state()),

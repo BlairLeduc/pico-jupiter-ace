@@ -171,6 +171,9 @@ bool ace_init(ace_t *m, const ace_config_t *cfg) {
 
 void ace_reset(ace_t *m) {
     z80_reset(&m->cpu);
+    /* A request goes with the program that made it. */
+    m->tape.op = TAPE_NONE;
+    m->tape.pass = false;
 }
 
 /* The page table is a function of cfg, so the copy's is rebuilt over its

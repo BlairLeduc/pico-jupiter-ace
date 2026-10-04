@@ -98,6 +98,8 @@
 #define ACE_SETTINGS_FILE_MAX 2048u /* /ace/pico-ace.cfg, read whole       */
 #define ACE_SETTINGS_LINE_MAX (ACE_PATH_MAX + 32u)  /* "boot_tape = " and a path */
 #define ACE_KEYMAP_NAME_LEN    16u  /* a layout's name (§9.4)              */
+#define ACE_TAPE_CHUNK        512u  /* card reads and writes for the tape  */
+#define ACE_TAPE_LIST_MAX      64u  /* .tap files the Tape page lists      */
 
 /* ---- Timing (design.md §2.1, §11) ------------------------------------ */
 

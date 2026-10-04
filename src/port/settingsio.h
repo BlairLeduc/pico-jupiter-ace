@@ -9,10 +9,9 @@
  * row once there is one (M10): a line the parser refused, or a file that
  * could not be read.
  *
- * M10: the menu's save writes the file through a temporary file and a
- * rename (EL §8.6). Until then nothing here writes; a load that finds
- * only the temporary file, a save cut off between the two, already
- * takes it.
+ * The menu's save writes the file through a temporary file and a rename
+ * (EL §8.6); a load that finds only the temporary file, a save cut off
+ * between the two, takes it.
  */
 #ifndef PICO_ACE_SETTINGSIO_H
 #define PICO_ACE_SETTINGSIO_H
@@ -47,5 +46,10 @@ uint32_t settingsio_bytes(void);
 
 /* "" when there was no problem; else, e.g., "line 3: no such setting". */
 const char *settingsio_error(void);
+
+/* *s into the file, edited in place (settings_rewrite) and written
+ * through SETTINGSIO_TEMP and a rename. The card must be mounted. NULL,
+ * or why not, in capitals for the menu's status row. */
+const char *settingsio_save(const settings_t *s);
 
 #endif /* PICO_ACE_SETTINGSIO_H */

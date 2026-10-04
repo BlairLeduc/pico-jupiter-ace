@@ -125,7 +125,8 @@ static inline uint32_t ace_field_t(const ace_t *m) {
  * (the budget is signed). */
 bool ace_init(ace_t *m, const ace_config_t *cfg);
 
-/* The CPU's reset line: RAM and the page table are kept. */
+/* The CPU's reset line: RAM and the page table are kept, and a tape
+ * request the CPU was stalled on is dropped. */
 void ace_reset(ace_t *m);
 
 /* Run whole instructions until at least t_states have passed, and return
