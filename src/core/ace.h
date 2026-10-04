@@ -15,6 +15,7 @@
 
 #include "beeper.h"
 #include "config.h"
+#include "tape.h"
 #include "z80.h"
 
 /* The three machines of §6.2, by user RAM. */
@@ -50,6 +51,11 @@ typedef struct {
      * which the CPU cannot read, and unpopulated addresses (§2.2). */
     uint8_t cram_read;
     uint8_t open_bus;
+
+    /* Serve the ROM's tape block routines from files (tape.h, §10.3).
+     * Even when set, the trap stands aside for a ROM whose routines are
+     * not the stock ROM's. */
+    bool tape_traps;
 } ace_config_t;
 
 typedef struct ace_s {
@@ -78,6 +84,9 @@ typedef struct ace_s {
      * counts them in beeper.edges. */
     bool     speaker;
     beeper_t beeper;
+
+    /* The tape request the CPU may be stalled on (tape.h). */
+    tape_t tape;
 
     ace_config_t cfg;
 
@@ -116,7 +125,8 @@ static inline uint32_t ace_field_t(const ace_t *m) {
  * (the budget is signed). */
 bool ace_init(ace_t *m, const ace_config_t *cfg);
 
-/* The CPU's reset line: RAM and the page table are kept. */
+/* The CPU's reset line: RAM and the page table are kept, and a tape
+ * request the CPU was stalled on is dropped. */
 void ace_reset(ace_t *m);
 
 /* Run whole instructions until at least t_states have passed, and return
@@ -156,5 +166,9 @@ static inline const uint8_t *ace_charset(const ace_t *m) { return m->cram; }
 /* A guest read with no side effects, for tests and dumps: what the CPU
  * would see, through the page table and the slow path. */
 uint8_t ace_peek(const ace_t *m, uint16_t addr);
+
+/* A guest write with no time passing, as the CPU's LD would make it:
+ * through the page table, and nowhere for ROM and unpopulated pages. */
+void ace_poke(ace_t *m, uint16_t addr, uint8_t v);
 
 #endif /* PICO_ACE_ACE_H */

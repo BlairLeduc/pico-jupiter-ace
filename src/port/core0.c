@@ -15,6 +15,7 @@
 #include "park.h"
 #include "settingsio.h"
 #include "southbridge.h"
+#include "tapeio.h"
 
 /* The heartbeat's period (design.md §14). */
 #define HEARTBEAT_US 5000000u
@@ -32,6 +33,10 @@
  * instead (tools/uart-screen.sh), so a run driven over the UART can read
  * back what the panel shows. */
 #define UART_SCREEN_DUMP 0x1Cu
+/* RS opens the menu and US pauses, as Alt+M and Alt+P do; while either
+ * is up the UART's bytes are its keys (park.c). */
+#define UART_MENU  0x1Eu
+#define UART_PAUSE 0x1Fu
 
 #if PICO_ACE_UART
 /* The guest's screen RAM as 24 lines of text: printable codes as
@@ -65,6 +70,8 @@ static bool uart_keys(keymatrix_t *k, const ace_t *m) {
         return false;
     }
     if (ch == UART_HOLD) return true;
+    if (ch == UART_MENU) { k->menu_request = true; k->menu_page = KM_PAGE_MAIN; return false; }
+    if (ch == UART_PAUSE) { k->pause_request = true; return false; }
     picocalc_event_t ev[ACE_KEY_TEXT_EVENTS];
     unsigned n = keymap_picocalc_text((uint8_t)ch, ev);
     for (unsigned i = 0; i < n; i++) keymatrix_event(k, ev[i].state, ev[i].code);
@@ -87,26 +94,47 @@ static bool cursor_shown(const ace_t *m) {
     return false;
 }
 
-/* What the card gave the boot, for the heartbeat: the slot now, and the
- * settings file's state and first problem then (§15.2 M9). */
+/* What the card gave the boot, for the heartbeat: the slot now, the
+ * settings file's state and first problem then (§15.2 M9), and the
+ * tape's counters (M10). */
 static const char *card_text(void) {
-    static char text[96];
-    snprintf(text, sizeof text, "card %s (%lu changes), cfg %s%s%s",
+    static char text[192];
+    snprintf(text, sizeof text, "card %s (%lu changes), cfg %s%s%s | tape %lu loads, "
+             "%lu saves, %lu declined, %lu errors, max %lu us",
              card_present() ? "in" : "out", (unsigned long)card_changes(),
              settingsio_state_str(g_boot.cfg), g_boot.cfg_error[0] ? ": " : "",
-             g_boot.cfg_error);
+             g_boot.cfg_error, (unsigned long)g_tape_stats.loads,
+             (unsigned long)g_tape_stats.saves, (unsigned long)g_tape_stats.declined,
+             (unsigned long)g_tape_stats.errors, (unsigned long)g_tape_stats.max_us);
     return text;
 }
 
-/* The keys that ask the emulator rather than the guest for something.
- * Nothing answers them until the menu (M10) and pause (M10); until then
- * they are logged and dropped, so a request does not wait for ever. */
-static void requests(keymatrix_t *k) {
-    if (k->menu_request)
-        log_printf("  keys         : menu page %u asked for (M10)\n", (unsigned)k->menu_page);
-    if (k->pause_request) log_printf("  keys         : pause asked for (M10)\n");
-    if (k->reset_request) log_printf("  keys         : reset asked for (M10)\n");
-    k->menu_request = k->pause_request = k->reset_request = false;
+/* The keys that ask the emulator rather than the guest for something
+ * (design.md §12): the menu and pause park the guest at the next
+ * boundary; Alt+R resets the CPU now, RAM kept. Returns the park, or
+ * PARK_NONE. */
+static uint32_t requests(keymatrix_t *k, ace_t *m) {
+    uint32_t why = PARK_NONE;
+    if (k->reset_request) {
+        ace_reset(m);
+        log_printf("  keys         : reset\n");
+    }
+    if (k->menu_request) why = PARK_MENU;
+    else if (k->pause_request) why = PARK_PAUSE;
+    k->reset_request = k->pause_request = k->menu_request = false;
+    return why;
+}
+
+/* What the menu changed, applied by the core that owns it (EL §2.5). */
+static void apply_ui(ace_t *m) {
+#if PICO_ACE_AUDIO
+    audio_set_volume(g_ui.volume * 32u);
+#endif
+    if (g_ui.reset) {
+        g_ui.reset = false;
+        ace_reset(m);
+        log_printf("  menu         : reset\n");
+    }
 }
 
 static void tenths(char *out, size_t n, uint32_t v10) {
@@ -136,7 +164,10 @@ void core0_run(ace_t *m, keymatrix_t *k) {
     uint32_t sec_insns = m->cpu.insns;
     uint64_t hb_run_us = 0, hb_busy_us = 0, sec_run_us = 0, sec_busy_us = 0;
     bool prompt = false;
-    bool hold = false;
+    uint32_t why = PARK_NONE;
+    unsigned page = 0;
+    bool alt = false;
+    apply_ui(m);
 
     for (;;) {
         uint64_t now;
@@ -160,11 +191,17 @@ void core0_run(ace_t *m, keymatrix_t *k) {
          * time does not pass, so the schedule and the measuring windows
          * start again from now, as if the guest had just started: a
          * window across the park would count its silence as consumed
-         * samples. The keys start again from none held. */
-        if (hold) {
-            hold = false;
-            uint32_t parked = park(PARK_HOLD);
-            keymatrix_init(k);
+         * samples. After a hold, the menu or a pause the keys start again
+         * from none held: theirs were not the guest's. A tape request
+         * goes first, then whatever the keys asked for. */
+        while (why != PARK_NONE || ace_tape_pending(m)) {
+            uint32_t w = ace_tape_pending(m) ? PARK_TAPE : why;
+            uint32_t parked = park(w, page, alt);
+            if (w != PARK_TAPE) {
+                keymatrix_init(k);
+                why = PARK_NONE;
+            }
+            apply_ui(m);
             hb_us = sec_us = time_us_64();
             hb_t = m->cpu.t;
             hb_insns = sec_insns = m->cpu.insns;
@@ -176,18 +213,24 @@ void core0_run(ace_t *m, keymatrix_t *k) {
             sched_us = hb_us + 1000u;
             sched_fields = 0;
 #endif
-            log_printf("  park         : %lu us parked\n", (unsigned long)parked);
+            if (w == PARK_TAPE)
+                log_printf("  park         : tape, %lu us parked\n", (unsigned long)parked);
+            else
+                log_printf("  park         : %lu us parked\n", (unsigned long)parked);
         }
 
         uint32_t t_busy = time_us_32();
 
         /* Keys first, so the matrix the guest scans this field is the
          * one the events describe (§9.1). */
-        hold = uart_keys(k, m);
+        bool hold = uart_keys(k, m);
         uint8_t state, code;
         while (kbd_pop(&state, &code)) keymatrix_event(k, state, code);
         keymatrix_field(k, m);
-        requests(k);
+        page = k->menu_page;
+        alt = k->alt;
+        why = requests(k, m);
+        if (hold) why = PARK_HOLD;
 
         uint32_t t_run = time_us_32();
         ace_run_field(m);

@@ -50,6 +50,30 @@ bool kbd_pop(uint8_t *state, uint8_t *code) {
     return true;
 }
 
+static uint16_t          s_uring[RING];
+static volatile uint32_t s_uhead;      /* written by core 0 only */
+static volatile uint32_t s_utail;      /* written by core 1 only */
+
+void kbd_push_uart(uint8_t state, uint8_t code) {
+    uint32_t head = s_uhead;
+    if (head - s_utail >= RING) return;
+    s_uring[head % RING] = (uint16_t)(state << 8 | code);
+    __dmb();
+    s_uhead = head + 1u;
+}
+
+bool kbd_pop_uart(uint8_t *state, uint8_t *code) {
+    uint32_t tail = s_utail;
+    if (tail == s_uhead) return false;
+    __dmb();
+    uint16_t e = s_uring[tail % RING];
+    __dmb();
+    s_utail = tail + 1u;
+    *state = (uint8_t)(e >> 8);
+    *code  = (uint8_t)e;
+    return true;
+}
+
 uint32_t kbd_overflows(void) {
     return s_overflows;
 }

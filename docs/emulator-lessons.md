@@ -788,6 +788,11 @@ Rules that worked:
   comments, blank lines, unparsed lines and the file's line ending. Append a
   missing key only if its value differs from the default. A value that
   already says the same keeps its spelling, so a second save changes nothing.
+  A line whose value the parser refused is that key's line, unless another
+  line gives the key a good value: the save writes the value in force over
+  it, and if another line does, makes it a comment, keeping its text. So
+  saving clears the problem the status row names rather than keeping it
+  for ever.
   Keep comment columns aligned. Refuse a save when the file has a duplicate
   key.
 - **Parse your own output before writing it**, and refuse if it does not give

@@ -4,6 +4,8 @@
 
 #include <string.h>
 
+#include "ace_rom.h"
+#include "font.h"
 #include "guest.h"
 #include "test_util.h"
 
@@ -42,6 +44,19 @@ int main(void) {
         const char *name = machines[i].name;
         CHECK(guest_boot(&g, machines[i].ram, 500), "%s: no cursor in 500 fields", name);
         ace_t *m = &g.m;
+
+        /* The character set the ROM wrote is the one font_from_rom
+         * expands from the same ROM: the menu's font is the Ace's. */
+        {
+            static uint8_t font[ACE_CHARSET_BYTES];
+            font_from_rom(ace_rom, font);
+            int d = -1;
+            for (int b = 0; b < (int)ACE_CHARSET_BYTES && d < 0; b++)
+                if (font[b] != m->cram[b]) d = b;
+            CHECK(d < 0, "%s: font_from_rom differs from character RAM at glyph %d row %d: "
+                  "%02X, the ROM wrote %02X", name, d / 8, d % 8, d < 0 ? 0 : font[d],
+                  d < 0 ? 0 : m->cram[d]);
+        }
 
         printf("Ace %s: prompt after %llu T (%.3f s at 3.25 MHz)\n", name,
                (unsigned long long)g.t_to_prompt, (double)g.t_to_prompt / ACE_CPU_HZ);

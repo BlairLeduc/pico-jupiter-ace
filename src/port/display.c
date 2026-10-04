@@ -6,6 +6,7 @@
 
 #include "pico/stdlib.h"
 
+#include "ace_rom.h"
 #include "config.h"
 #include "font.h"
 #include "lcd.h"
@@ -27,6 +28,10 @@ _Static_assert(ACE_PERF_Y >= ACE_SCREEN_Y + ACE_SCREEN_H &&
 static render_t        s_render;
 static render_shadow_t s_shadow;
 
+/* The emulator's pages and lines are in the Ace's own character set,
+ * expanded from the embedded ROM (font.h). */
+static uint8_t s_font[ACE_CHARSET_BYTES];
+
 /* DMA ping-pong (hardware-notes.md §4.6), the panel's width so that the
  * text lines can use them too. */
 static uint16_t s_line[ACE_LINEBUF_COUNT][ACE_LINEBUF_PIXELS];
@@ -39,8 +44,13 @@ static char s_perf[ACE_TEXT_COLS];
 
 void display_init(void) {
     render_init(&s_render, ACE_INK_RGB565, ACE_PAPER_RGB565);
+    font_from_rom(ace_rom, s_font);
     memset(s_perf, ' ', sizeof s_perf);
     s_shadow.valid = false;
+}
+
+const uint8_t *display_font(void) {
+    return s_font;
 }
 
 void display_invalidate(void) {
@@ -95,7 +105,7 @@ void display_perf(const char *text) {
         cur ^= 1u;
         uint16_t *px = s_line[cur];
         for (unsigned c = 0; c < ACE_TEXT_COLS; c++) {
-            uint8_t bits = ace_font[(uint8_t)(line[c] & 0x7F) * ACE_GLYPH_ROWS + r];
+            uint8_t bits = s_font[(uint8_t)(line[c] & 0x7F) * ACE_GLYPH_ROWS + r];
             for (unsigned b = 0; b < ACE_GLYPH_COLS; b++)
                 *px++ = (bits & (0x80u >> b)) ? TEXT_INK : ACE_PAPER_RGB565;
         }

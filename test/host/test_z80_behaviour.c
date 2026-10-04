@@ -27,7 +27,7 @@ static z80_t *boot(const uint8_t *prog, size_t n) {
     for (unsigned p = 0; p < Z80_PAGE_COUNT; p++)
         pages[p] = (page_t){ mem + p * 256u, mem + p * 256u };
     memset(&cpu, 0, sizeof cpu);
-    cpu.bus = (z80_bus_t){ pages, NULL, unused_read, unused_write, unused_read, unused_write };
+    cpu.bus = (z80_bus_t){ pages, NULL, unused_read, unused_write, unused_read, unused_write, NULL, NULL };
     z80_reset(&cpu);
     cpu.sp = 0x8000;
     return &cpu;

@@ -26,6 +26,8 @@ void ace_config_default(ace_config_t *cfg) {
      * level and the usual pulled-up bus. */
     cfg->cram_read = 0xFFu;
     cfg->open_bus  = 0xFFu;
+
+    cfg->tape_traps = true;
 }
 
 uint32_t ace_ram_bytes(ace_ram_t ram) {
@@ -160,6 +162,7 @@ bool ace_init(ace_t *m, const ace_config_t *cfg) {
     m->tape_in = true;
     build_pages(m);
     connect_bus(m);
+    tape_init(m);
     z80_reset(&m->cpu);
     beeper_init(&m->beeper, m->cpu.t, m->speaker, ACE_CPU_HZ,
                 ACE_AUDIO_RATE_NUM, ACE_AUDIO_RATE_DEN);
@@ -168,6 +171,9 @@ bool ace_init(ace_t *m, const ace_config_t *cfg) {
 
 void ace_reset(ace_t *m) {
     z80_reset(&m->cpu);
+    /* A request goes with the program that made it. */
+    m->tape.op = TAPE_NONE;
+    m->tape.pass = false;
 }
 
 /* The page table is a function of cfg, so the copy's is rebuilt over its
@@ -236,4 +242,10 @@ uint8_t ace_peek(const ace_t *m, uint16_t addr) {
     const uint8_t *p = m->page[addr >> 8].read;
     if (p) return p[addr & 0xFFu];
     return mem_read((void *)m, addr);
+}
+
+void ace_poke(ace_t *m, uint16_t addr, uint8_t v) {
+    uint8_t *p = m->page[addr >> 8].write;
+    if (p) p[addr & 0xFFu] = v;
+    else mem_write(m, addr, v);
 }

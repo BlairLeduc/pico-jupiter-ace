@@ -18,8 +18,10 @@ set(PICO_ACE_CORE_SOURCES
     src/core/keymap_picocalc.c
     src/core/keymatrix.c
     src/core/render.c
+    src/core/romfont.c
     src/core/settings.c
     src/core/snappool.c
+    src/core/tape.c
     src/core/z80.c
 )
 
@@ -198,6 +200,9 @@ else()
     # The machine a run over the UART boots, over the settings file's
     # (EL §8.7): 3k, 19k or 51k, or empty for the file's.
     set(PICO_ACE_BOOT_RAM "" CACHE STRING "Boot this RAM size over the card's (3k, 19k, 51k)")
+    # A tape put in the deck at boot over the file's boot_tape: a bare
+    # name in /ace/tapes/ or a path, or empty for the file's.
+    set(PICO_ACE_BOOT_TAPE "" CACHE STRING "Put this tape in the deck at boot, over the card's")
 
     add_executable(pico-ace
         src/port/audio.c
@@ -212,11 +217,14 @@ else()
         src/port/lcd.c
         src/port/log.c
         src/port/main.c
+        src/port/menu.c
         src/port/park.c
         src/port/sd.c
         src/port/settingsio.c
         src/port/southbridge.c
         src/port/storage.c
+        src/port/tapeio.c
+        src/port/textpage.c
     )
     pico_ace_firmware(pico-ace)
     if (PICO_ACE_BOOT_RAM)
@@ -225,6 +233,9 @@ else()
             message(FATAL_ERROR "pico-ace: PICO_ACE_BOOT_RAM is 3k, 19k or 51k, not ${PICO_ACE_BOOT_RAM}")
         endif()
         target_compile_definitions(pico-ace PRIVATE PICO_ACE_BOOT_RAM=ACE_RAM_${boot_ram})
+    endif()
+    if (PICO_ACE_BOOT_TAPE)
+        target_compile_definitions(pico-ace PRIVATE PICO_ACE_BOOT_TAPE="${PICO_ACE_BOOT_TAPE}")
     endif()
     target_compile_definitions(pico-ace PRIVATE PICO_ACE_AUDIO=${PICO_ACE_AUDIO_ON})
     target_link_libraries(pico-ace

@@ -70,4 +70,15 @@ typedef struct {
 
 extern volatile core0_perf_t g_c0;
 
+/* What the menu changes (design.md §12), written by core 1 while the
+ * guest is parked and applied by core 0 when it has the machine back
+ * (EL §2.5). Core 1 reads perf_line to draw the perf line. */
+typedef struct {
+    volatile unsigned volume;      /* 0-8, as settings_t has it       */
+    volatile bool     perf_line;
+    volatile bool     reset;       /* the menu's Reset: core 0 clears it */
+} ui_t;
+
+extern ui_t g_ui;
+
 #endif /* PICO_ACE_HANDOFF_H */

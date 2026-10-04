@@ -96,3 +96,50 @@ uint32_t settingsio_bytes(void) {
 const char *settingsio_error(void) {
     return s_error;
 }
+
+static FRESULT write_all(const char *p, size_t n) {
+    UINT put = 0;
+    FRESULT fr = f_write(&s_file, p, (UINT)n, &put);
+    return fr == FR_OK && put != n ? FR_DENIED : fr;
+}
+
+const char *settingsio_save(const settings_t *s) {
+    UINT got = 0;
+    const char *from;
+    FRESULT fr = read_text(&got, &from);
+    if (fr == FR_NO_FILE || fr == FR_NO_PATH) {
+        /* A card without the file gets one: a comment saying what it is,
+         * then the lines that differ from the defaults (EL §8.7). */
+        static const char head[] = "# pico-ace: what the machine powers on with\n";
+        memcpy(s_text, head, sizeof head - 1u);
+        got = sizeof head - 1u;
+    } else if (fr != FR_OK) {
+        return fr == FR_DENIED ? "file too big" : "cannot read";
+    }
+
+    const char *text;
+    size_t len;
+    settings_status_t st = settings_rewrite(s_text, got, s, &text, &len);
+    if (st != SET_OK) {
+        log_core1("  settings     : not saved: %s\n", settings_status_str(st));
+        return settings_status_str(st);
+    }
+
+    (void)f_mkdir(SETTINGSIO_DIR);
+    fr = f_open(&s_file, SETTINGSIO_TEMP, FA_WRITE | FA_CREATE_ALWAYS);
+    if (fr == FR_OK) {
+        fr = write_all(text, len);
+        FRESULT fc = f_close(&s_file);
+        if (fr == FR_OK) fr = fc;
+    }
+    if (fr == FR_OK) {
+        (void)f_unlink(SETTINGSIO_PATH);
+        fr = f_rename(SETTINGSIO_TEMP, SETTINGSIO_PATH);
+    }
+    if (fr != FR_OK) {
+        log_core1("  settings     : not saved: FatFs error %d\n", (int)fr);
+        return "write failed";
+    }
+    log_core1("  settings     : %s saved, %u bytes\n", SETTINGSIO_PATH, (unsigned)len);
+    return NULL;
+}

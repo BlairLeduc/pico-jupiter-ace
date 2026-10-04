@@ -24,6 +24,10 @@ void display_init(void);
  * (32, 64) (§7.4), and make the snapshot the shadow. */
 void display_present(const uint8_t *screen, const uint8_t *charset, display_stats_t *st);
 
+/* The character set the emulator's pages use: the Ace's own, from its
+ * ROM (font.h), so that a page reads as the guest's screen does. */
+const uint8_t *display_font(void);
+
 /* Forget what is on the panel, so the next present sends everything. */
 void display_invalidate(void);
 

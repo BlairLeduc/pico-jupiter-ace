@@ -47,6 +47,14 @@ typedef struct {
     void    (*mem_write)(void *ctx, uint16_t addr, uint8_t v); /* write NULL */
     uint8_t (*io_read)(void *ctx, uint16_t port);    /* the full 16 bits  */
     void    (*io_write)(void *ctx, uint16_t port, uint8_t v);
+
+    /* Optional, NULL for none: a PC whose low byte is non-zero here is
+     * offered to trap() at the instruction boundary before it, unless an
+     * interrupt is due there. True stalls the CPU as if WAIT were held:
+     * the rest of the run passes with no instruction executed, and the
+     * next run offers the PC again (design.md §10.3). */
+    const uint8_t *trap_lo;
+    bool    (*trap)(void *ctx);
 } z80_bus_t;
 
 /* A register pair, addressable as a word or as its two halves. */
@@ -88,7 +96,8 @@ void     z80_reset(z80_t *c);
 
 /* Run whole instructions until at least t_states have passed, and return
  * the T-states actually run (design.md §4.2: the caller carries the
- * overshoot). An interrupt acceptance counts as an instruction. */
+ * overshoot). An interrupt acceptance counts as an instruction. A trap
+ * that stalls ends the run at exactly t_states. */
 uint32_t z80_run(z80_t *c, uint32_t t_states);
 
 /* One instruction, or one interrupt acceptance, which also counts in

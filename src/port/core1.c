@@ -15,6 +15,7 @@
 #include "kbd.h"
 #include "lcd.h"
 #include "log.h"
+#include "menu.h"
 #include "park.h"
 #include "southbridge.h"
 
@@ -29,6 +30,10 @@
  * longest present and dropped snapshots over its own second. */
 static void draw_perf(uint32_t present_max_us, uint32_t dropped) {
     char text[96];   /* wider than the line: display_perf cuts it */
+    if (!g_ui.perf_line) {
+        display_perf("");   /* drawn only when its text changes */
+        return;
+    }
     if (g_c0.seconds == 0) {
         snprintf(text, sizeof text, "present %lu.%lums",
                  (unsigned long)(present_max_us / 1000u),
@@ -69,6 +74,7 @@ void core1_main(void) {
     g_boot.cfg_bytes = settingsio_bytes();
     snprintf(g_boot.cfg_error, sizeof g_boot.cfg_error, "%s", settingsio_error());
     g_boot.ready_us = time_us_32();
+    menu_init(&g_boot.settings);
 
     __dmb();
     g_c1.ready = true;

@@ -17,6 +17,12 @@ unsigned kbd_poll(void);
 /* Core 0: take one event, if there is one. */
 bool kbd_pop(uint8_t *state, uint8_t *code);
 
+/* The UART's keys while the menu or pause has the keyboard (park.h):
+ * core 0 pushes, core 1 pops, a ring of its own so that each ring keeps
+ * one producer. Dropped when full. */
+void kbd_push_uart(uint8_t state, uint8_t code);
+bool kbd_pop_uart(uint8_t *state, uint8_t *code);
+
 /* Events the ring had no room for. The ring holds more than the MCU's
  * FIFO, so this is zero unless core 0 stops draining. */
 uint32_t kbd_overflows(void);

@@ -152,12 +152,11 @@ int main(void) {
         const char *want =
             "# my PicoCalc\r\n"
             "  ram = 51k         # the stock machine\r\n"
-            "volume = 11\r\n"
+            "volume = 5\r\n"
             "boot_tape = NEW01.tap # none\r\n"
             "frobnicate = yes\r\n"
             "\r\n"
-            "layout = cursor games\r\n"
-            "volume = 5\r\n";
+            "layout = cursor games\r\n";
         CHECK(IS(want), "the user's file, edited:\n%.*s\nwanted:\n%s", (int)out_len, out, want);
 
         /* Saving again changes nothing more. */
@@ -166,6 +165,27 @@ int main(void) {
         size_t again_len = out_len;
         CHECK(settings_rewrite(again, again_len, &s, &out, &out_len) == SET_OK &&
               out_len == again_len && memcmp(out, again, out_len) == 0, "a second save is the same");
+    }
+
+    /* A refused value is replaced where it stands, even by the default,
+     * so a save clears the problem; when another line gives the key a
+     * good value, which writing it would make given twice, the refused
+     * line becomes a comment instead. */
+    {
+        settings_default(&s);
+        CHECK(REWRITE("ram = 3k\nvolume = 9\n", &s) == SET_OK &&
+              IS("ram = 19k\nvolume = 8\n"), "refused, replaced: %.*s", (int)out_len, out);
+        settings_default(&s);
+        CHECK(settings_parse(&s, out, out_len, &line) == SET_OK && line == 0,
+              "and read back without a problem");
+        settings_default(&s);
+        s.volume = 3u;
+        CHECK(REWRITE("ram = 3k\nvolume = 9\nvolume = 2\n", &s) == SET_OK &&
+              IS("ram = 19k\n# volume = 9\nvolume = 3\n"),
+              "refused, but another line is the key's: %.*s", (int)out_len, out);
+        settings_default(&s);
+        CHECK(settings_parse(&s, out, out_len, &line) == SET_OK && line == 0 && s.volume == 3u,
+              "and read back without a problem");
     }
 
     /* A value that already says the same stays as the user wrote it,
@@ -228,7 +248,8 @@ int main(void) {
     CHECK(REWRITE("volume = 3\nram = 3k\nvolume = 4\n", &s) == SET_DUPLICATE,
           "a key given twice refuses the save");
     CHECK(REWRITE("volume = 11\nvolume = 4\n", &s) == SET_OK &&
-          IS("volume = 11\nvolume = 2\n"), "a refused line is not the key's: %.*s", (int)out_len, out);
+          IS("# volume = 11\nvolume = 2\n"),
+          "a refused line beside the key's own becomes a comment: %.*s", (int)out_len, out);
     {
         static char big[ACE_SETTINGS_FILE_MAX + 1];
         memset(big, '#', ACE_SETTINGS_FILE_MAX - 4u);

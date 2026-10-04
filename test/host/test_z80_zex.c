@@ -88,7 +88,7 @@ int main(int argc, char **argv) {
     for (unsigned p = 0; p < Z80_PAGE_COUNT; p++)
         pages[p] = (page_t){ mem + p * 256u, mem + p * 256u };
 
-    cpu.bus = (z80_bus_t){ pages, &cpu, mem_read, mem_write, io_read, io_write };
+    cpu.bus = (z80_bus_t){ pages, &cpu, mem_read, mem_write, io_read, io_write, NULL, NULL };
     z80_reset(&cpu);
     cpu.pc = 0x0100;
     cpu.sp = BDOS_STUB;
