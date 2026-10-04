@@ -165,10 +165,21 @@ else()
 
     add_executable(pico-ace
         src/port/board.c
+        src/port/display.c
+        src/port/kbd.c
+        src/port/lcd.c
+        src/port/log.c
         src/port/main.c
+        src/port/southbridge.c
     )
     pico_ace_firmware(pico-ace)
-    target_link_libraries(pico-ace pico_status_led)
+    target_link_libraries(pico-ace
+        hardware_dma
+        hardware_i2c
+        hardware_spi
+        hardware_sync
+        pico_multicore
+    )
 
     # M2's bench: the Z80 alone, timed on the forth program and on ZEXDOC
     # when tools/fetch-test-suites.sh has fetched it (design.md §15.2 M2).

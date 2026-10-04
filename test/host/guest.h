@@ -50,8 +50,9 @@ bool guest_settle(guest_t *g, int max_fields);
  * types it as a Shift chord, and inside Alt if `alt`; then settle. */
 void guest_press(guest_t *g, uint8_t code, bool alt);
 
-/* Type text as a PicoCalc would send it: printable ASCII as itself,
- * '\n' as Enter and '\b' as Backspace. Anything else is a test bug, and
+/* Type text as a PicoCalc would send it, by the firmware's own
+ * translation (keymap_picocalc_text): printable ASCII as itself, '\n' as
+ * Enter, '\b' as Backspace. A byte no key sends is a test bug, and
  * aborts. */
 void guest_type(guest_t *g, const char *s);
 

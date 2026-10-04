@@ -308,7 +308,7 @@ in SRAM. Keep every fixed capacity in `src/core/config.h` and print `arm-none-ea
 | Interpreter and hot paths moved to SRAM | 20–40 K | a measured tier, not a promise (§3.2) |
 | FatFs, sector buffers, settings text | 8 K | |
 | Stacks, both cores | 8 K | measure high water |
-| Log ring | 4 K | EL §2.3 |
+| Log ring | 4 K | EL §2.3. As built in M6: a 2 KiB ring (`ACE_LOG_RING`) and a 512 B line on core 0's stack |
 | **Total** | **~180–200 K** | **35–38 %** |
 
 SRAM is not this project's constraint, unlike the previous one's (EL §1). Spend

@@ -99,6 +99,41 @@ int main(void) {
     CHECK(keymap_picocalc_canonical('!') == '1', "! is 1");
     CHECK(keymap_picocalc_canonical(':') == ';', ": is ;");
 
+    /* ---- text as PicoCalc events: the UART's path (§9.1) ------------- */
+    {
+        picocalc_event_t ev[ACE_KEY_TEXT_EVENTS];
+        CHECK(keymap_picocalc_text('a', ev) == 2 && ev[0].state == KEY_EV_PRESSED &&
+                  ev[0].code == 'a' && ev[1].state == KEY_EV_RELEASED && ev[1].code == 'a',
+              "a is a press and a release");
+        CHECK(keymap_picocalc_text('!', ev) == 4 && ev[0].code == PICOCALC_KEY_SHIFT_L &&
+                  ev[1].code == '!' && ev[2].code == '!' && ev[2].state == KEY_EV_RELEASED &&
+                  ev[3].code == PICOCALC_KEY_SHIFT_L && ev[3].state == KEY_EV_RELEASED,
+              "! is inside Shift, as the PicoCalc types it");
+        CHECK(keymap_picocalc_text('A', ev) == 4 && ev[0].code == PICOCALC_KEY_SHIFT_L,
+              "A is inside Shift");
+        CHECK(keymap_picocalc_text('`', ev) == 2, "` is a key of its own");
+        CHECK(keymap_picocalc_text('\r', ev) == 2 && ev[0].code == PICOCALC_KEY_ENTER,
+              "CR is Enter");
+        CHECK(keymap_picocalc_text('\n', ev) == 2 && ev[0].code == PICOCALC_KEY_ENTER,
+              "LF is Enter");
+        CHECK(keymap_picocalc_text(0x7Fu, ev) == 2 && ev[0].code == PICOCALC_KEY_BACKSPACE,
+              "DEL is Backspace");
+        CHECK(keymap_picocalc_text(0x1Bu, ev) == 2 && ev[0].code == PICOCALC_KEY_ESC,
+              "ESC is Esc");
+        CHECK(keymap_picocalc_text(0x09u, ev) == 4 && ev[0].code == PICOCALC_KEY_CTRL &&
+                  ev[1].code == 'i' && ev[3].code == PICOCALC_KEY_CTRL,
+              "^I is Ctrl+i");
+        CHECK(keymap_picocalc_text(0x00u, ev) == 0 && keymap_picocalc_text(0x80u, ev) == 0 &&
+                  keymap_picocalc_text(0x1Cu, ev) == 0,
+              "bytes no key sends give no events");
+        /* Every printable byte's events reach a binding in the table. */
+        for (unsigned c = 0x20; c < 0x7F; c++) {
+            unsigned n = keymap_picocalc_text((uint8_t)c, ev);
+            CHECK(n >= 2 && entry_for(ev[n == 4 ? 1 : 0].code, false),
+                  "'%c' sends a code with no binding", c);
+        }
+    }
+
     /* ---- the held set: pacing (§9.1) ---------------------------------- */
     {
         /* Press and release in one poll: the key is down for exactly
@@ -294,6 +329,22 @@ int main(void) {
         press(PICOCALC_KEY_ENTER);
         fields(1);
         CHECK(cell_down(6, 0), "Enter after Alt+I is not taken for a repeat");
+
+        /* The sequence the device sent, captured 2026-10-03
+         * (out/m6-soak.log): Alt let go while I was down, then the MCU's
+         * auto-repeat retranslated as presses of 'i', then 'i' released. */
+        fresh();
+        keymatrix_event(&k, KEY_EV_PRESSED, PICOCALC_KEY_ALT);
+        keymatrix_event(&k, KEY_EV_HELD, PICOCALC_KEY_ALT);
+        press(PICOCALC_KEY_INSERT);
+        keymatrix_event(&k, KEY_EV_HELD, PICOCALC_KEY_ALT);
+        release(PICOCALC_KEY_ALT);
+        for (int i = 0; i < 4; i++) press('i');
+        release('i');
+        fields(10);
+        CHECK(k.n_open == 0 && keymatrix_idle(&k) && matrix_empty(),
+              "the captured Alt+I left %u press(es) open", k.n_open);
+        CHECK(k.q_len == 0, "the repeats were not absorbed");
 
         /* With Alt still down, I's release is Insert again: same key. */
         fresh();
