@@ -927,9 +927,29 @@ uint32_t ACE_HOT2(z80_step)(z80_t *c) {
     return c->t - t0;
 }
 
+/* Would z80_step accept an interrupt rather than run an instruction? */
+static inline bool int_due(const z80_t *c) {
+    return c->nmi_pending || (c->int_line && c->iff1 && !c->int_blocked);
+}
+
 uint32_t ACE_HOT2(z80_run)(z80_t *c, uint32_t t_states) {
     uint32_t t0 = c->t;
-    while ((uint32_t)(c->t - t0) < t_states)
+    const uint8_t *lo = c->bus.trap_lo;
+    if (!lo) {
+        while ((uint32_t)(c->t - t0) < t_states)
+            z80_step(c);
+        return c->t - t0;
+    }
+    /* One load per instruction while traps are set (EL §8.2). An
+     * interrupt due at the boundary is taken first, as the real CPU
+     * would before fetching the trapped instruction. */
+    while ((uint32_t)(c->t - t0) < t_states) {
+        if (__builtin_expect(lo[PC & 0xFFu], 0) && !c->prefix && !c->halted &&
+            !int_due(c) && c->bus.trap(c->bus.ctx)) {
+            c->t = t0 + t_states;
+            break;
+        }
         z80_step(c);
+    }
     return c->t - t0;
 }

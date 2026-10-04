@@ -20,6 +20,7 @@ set(PICO_ACE_CORE_SOURCES
     src/core/render.c
     src/core/settings.c
     src/core/snappool.c
+    src/core/tape.c
     src/core/z80.c
 )
 

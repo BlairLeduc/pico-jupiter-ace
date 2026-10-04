@@ -151,7 +151,7 @@ static const char *const field_names[NFIELDS] = {
 static bool run_one(const char *name, const state_t *in, const state_t *exp) {
     z80_t c;
     memset(&c, 0, sizeof c);
-    c.bus = (z80_bus_t){ no_pages, NULL, mem_read, mem_write, io_read, io_write };
+    c.bus = (z80_bus_t){ no_pages, NULL, mem_read, mem_write, io_read, io_write, NULL, NULL };
     z80_reset(&c);
     set_state(&c, in);
     c.t = 0;

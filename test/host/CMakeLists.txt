@@ -32,6 +32,7 @@ set(PICO_ACE_GUEST_TESTS
     test_keyboard
     test_render
     test_snappool
+    test_tape
 )
 foreach(t ${PICO_ACE_GUEST_TESTS})
     add_executable(${t} ${t}.c guest.c)
