@@ -9,8 +9,27 @@ Raspberry Pi Pico SDK. The guest is a Z80A at 3.25 MHz with an 8 KiB Forth
 ROM, a 32×24 character display from 768 bytes of screen RAM and 1 KiB of
 character RAM, a 40-key matrix, and a one-bit speaker and tape port.
 
-**Implementation status, 2026-10-04: M9 done.** Next is M10, the menu
-and fast tape (`docs/design.md` §15).
+**Implementation status, 2026-10-04: M10 done.** Next is M11,
+snapshots (`docs/design.md` §15).
+
+**M10, the menu and fast tape** (`src/core/tape.c`, `romfont.c`;
+`src/port/tapeio.c`, `menu.c`, `textpage.c`, `park.c`), on the Plus 2 W
+(id `7458DC82A89AAC12`) at 150 MHz, gcc 15.2, 2026-10-04. The trap is on
+the ROM's block routines (`$1820`, `$18A7`) and hands back to the ROM's
+own code for the last byte, so the checksum test, BREAK check, `EI` and
+`RET` are the ROM's; `test_tape` holds it to the ROM's routines fed their
+own recorded signal, every byte of RAM and every register but R. On the
+board: a word SAVEd to the card loaded back after the owner's power cycle
+(`3 CUBE .` printed 27); a LOAD from a tape in the deck passed another
+program first; a LOAD no file answers fell through to the ROM; the
+archive's `tut-tut.tap` loaded and ran in the 19K machine. A 16 KiB block
+loads in a 41.9 ms park and saves in 94.4 ms, with 0 underruns through
+all card work. The owner checked Alt+M, F1 and Alt+P on the panel; the
+menu is in mixed case in the Ace's own character set, expanded from the
+ROM and held by `test_boot` to what the ROM writes. **Not checked:** the
+settings save on the board; VERIFY on the board; a card pulled mid-job;
+the shipping build. Once the UART went silent and the probe needed a
+replug, cause unknown, not seen again.
 
 **M9, the card** (`src/port/sd.c`, `diskio.c`, `storage.c`, `card.c`,
 `park.c`, `settingsio.c`; `src/core/settings.c`), on the Plus 2 W (id
@@ -232,7 +251,7 @@ core were verified on a Plus 2 W, and `design.md` §4.6 says which files to
 
 ## Build and test
 
-As of M9 these all work, and `tools/uart-type.sh` types at the guest.
+As of M10 these all work, and `tools/uart-type.sh` types at the guest.
 
 ```sh
 # host: src/core/ with the system compiler, no Pico SDK, under CTest
@@ -249,6 +268,7 @@ tools/build.sh -DPICO_ACE_RAM_TIER=2 build/pico-t2      # an SRAM tier, in its o
 tools/build.sh -DPICO_ACE_UART=OFF build/pico-release   # the build that ships
 tools/build.sh -DPICO_ACE_AUDIO=OFF build/pico-noaudio  # paced on the timer, a control
 tools/build.sh -DPICO_ACE_BOOT_RAM=3k build/pico-3k     # this machine over the card's
+tools/build.sh -DPICO_ACE_BOOT_TAPE=SQ.tap build/pico-t # this tape in the deck at boot
 
 # hardware, with the Debug Probe's SWD and UART both connected
 tools/uart-log.sh 30 out/run.log &   # capture UART1 first, so the banner is in it
@@ -257,6 +277,9 @@ tools/flash.sh build/pico/pico-ace-bench.elf   # M2's bench; embeds ZEXDOC if fe
 tools/uart-type.sh '2 2 + .\r'       # type at the guest over the same UART
 tools/uart-screen.sh                 # the guest's screen, as text, into the log
 tools/uart-hold.sh                   # park the guest and check the card; again to resume
+tools/uart-type.sh '\x1e'             # RS opens the menu (US pauses); then the UART's bytes
+tools/uart-type.sh '\x0e\r'           #   are its keys, ^P ^N ^B ^F the arrows, ESC closes
+PICO_ACE_TAP=game.tap build/host/test/host/test_tape  # an archive .tap through the trap
 
 # trace diff against xAce (design.md §13.4); CI runs the second line too
 tools/trace/build-xace.sh            # clones xAce at a pinned commit into out/trace

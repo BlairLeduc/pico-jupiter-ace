@@ -734,6 +734,19 @@ that bit 7 is leftmost, and CI checks the two agree. `test_render` checks
 its `A` against the upstream README's drawing. The menu fills its own 768-byte screen and supplies its
 own 1,024-byte character set, and goes through the same row generator (§12).
 
+**Changed in M10, 2026-10-04, at the owner's request:** the 8×8 font was
+hard to read on the panel, so the pages now use **the Ace's own character
+set, expanded from the embedded ROM** (`font_from_rom`, `romfont.c`), as its
+power-on code at `$0052`-`$008D` writes it: the 32 block graphics worked out
+from their codes, the 95 printable glyphs from a table read down from
+`$1FF3` (a blank top row, then seven rows, or six and a blank bottom row
+when bit 5 of the count is set), and the copyright sign from `$1FF4`. It
+still does not depend on character RAM. `test_boot` requires it to equal
+the character RAM the ROM writes, in all three machines, and a planted bug
+fails that. The menu, the PAUSED line and the perf line use it, and the menu
+is in mixed case. `font8x8` is no longer in the firmware; it stays as the
+font of `test_golden`'s `font.ppm` and `test_render`'s checks.
+
 ### 7.6 Golden images
 
 Fixed screens with the ROM's character set, inverse cells, a redefined
@@ -960,7 +973,11 @@ and `SAVE SQ` appends to it, creating it; a `LOAD` whose name is a file on
 the card plays that file whatever is in the deck. A load that reaches the
 end of the tape rewinds once, so a program already passed is found; at the
 end a second time it is declined, and the ROM waits for a signal until
-BREAK, as the real machine does.
+BREAK, as the real machine does. Archive files are seldom named after the
+program they hold (`tut-tut.tap` holds `TUTTUT`), so with the deck empty
+and no file of the name asked for, the first tape whose first header
+carries that name is played. The Tape page skips the `._` files macOS
+writes beside every file it copies.
 
 ### 10.4 Tape, phase 2: the signal
 
@@ -1071,6 +1088,7 @@ key ring to it. Its pages are the main page (Tape, Settings, Save settings,
 Reset), Tape (empty the deck, rewind, the files in `/ace/tapes/` with each
 one's first header name) and Settings (volume, perf line). F2-F5 open the
 main page saying the page is not in this firmware yet; Snapshot is M11's.
+The pages are in mixed case, in the Ace's own character set (§7.5).
 What the menu changes for core 0, the volume and a reset, goes through
 `g_ui` and is applied by core 0 when it has the machine back (EL §2.5).
 Alt+R resets the CPU with RAM kept. Save settings writes the running
@@ -1567,6 +1585,42 @@ through to the ROM's own routine; the host test shows the trapped call
 leaves the same RAM as the ROM's routine; no underruns during any load.
 *Measured:* load time of a 16 KiB program; underruns during card work.
 *Leaves out:* signal-level tape, recording to new image formats.
+*Done, 2026-10-04* (Plus 2 W, RP2350B rev 2, id `7458DC82A89AAC12`, at
+150 MHz, gcc 15.2). The trap is §10.3's, on the ROM's two block routines;
+`test_tape` records the ROM's own SAVE off D3, plays it into the ROM's LOAD
+and VERIFY, and the trapped calls (SAVE header and data, LOAD and VERIFY
+header and data, a header asked for and data found) leave the same machine
+as the ROM's routines in every byte of RAM and every register but R; the
+same file serves `LOAD` end to end through the trap, and a damaged byte is
+the ROM's error. Of three planted bugs one failed it; the other two changed
+state the ROM's exit overwrites, and were dead. The menu, pause, Alt+R and
+the settings save are §12's; volume, perf_line and boot_tape are applied.
+**On the board:** `SAVE SQ` wrote `/ace/tapes/SQ.tap` (parks of 94.4 and
+48.9 ms for its two blocks); after a reset `LOAD SQ` found it by name and
+`5 SQ .` printed `25` (`out/m10-save-load.log`). With `SQ.tap` put in the
+deck from the menu, `SAVE CUBE` appended to it, and after `FORGET SQ`,
+`LOAD CUBE` read the tape in order, the ROM skipping SQ's header and the
+deck SQ's data, and `3 CUBE .` printed `27` (`out/m10-deck.log`). The
+owner power-cycled the PicoCalc and `CUBE` loaded and printed `27` again.
+The card, read on the workstation, held both tapes block for block with
+good checksums and no `.new` left. `LOAD SQSQ`, which no file answers, was
+declined and the ROM waited on the tape input until BREAK. The archive's
+`tut-tut.tap`, copied to the card, loaded in the 19K machine from the
+deck and, after the header lookup was added, by name with the deck empty,
+and `TUTTUT` ran to its title screen (`out/m10-tuttut.log`). The owner
+checked Alt+M, F1 and Alt+P on the panel, and asked for the Ace's own
+font and mixed case in the menu (§7.5).
+*Measured:* a 16 KiB block (`BSAVE`/`BLOAD` of `$4000`, 19K) loads in a
+41.9 ms park, 73 ms with its header, and saves in 94.4 ms; Tut-Tut's 11,998
+bytes in 34.9 ms. Underrun samples 0 and late refills 0 through every load,
+save, menu and pause, at 36,621 Hz consumed.
+*Not verified:* the settings save on the board (the owner's card holds
+M9's test file; `test_settings` covers the rewrite on the host); VERIFY
+and BVERIFY on the board (host only); a card pulled during a tape job; the
+shipping build (`PICO_ACE_UART=OFF`) on the device. Once during the
+session the UART went silent with both cores later found in their normal
+loops, and the Debug Probe stopped enumerating until replugged; it did not
+recur after a reflash, and its cause is not known.
 
 #### M11. Snapshots
 
