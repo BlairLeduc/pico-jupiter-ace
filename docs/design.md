@@ -1015,7 +1015,10 @@ case, and a `#` at the start of a line or after a space begins a comment.
 Build-time `BOOT_*` overrides win (EL §13.1); M9 has `PICO_ACE_BOOT_RAM`.
 
 The parser and the in-place rewriter are pico-atom's `settings.*`, with
-these keys (§4.6), and `test_settings` came with them. Core 1 reads the
+these keys (§4.6), and `test_settings` came with them. M10 changed one rule:
+a refused value is replaced by the value in force when no other line gives
+that key a good value, so that saving clears the problem the status row
+names. Core 1 reads the
 file at boot, before core 0 powers the machine on, because `ram` is the
 machine. As of M9 only `ram` is applied; the other keys are read and
 checked, so a mistake in them is named, and M10 applies them.
@@ -1614,10 +1617,17 @@ font and mixed case in the menu (§7.5).
 41.9 ms park, 73 ms with its header, and saves in 94.4 ms; Tut-Tut's 11,998
 bytes in 34.9 ms. Underrun samples 0 and late refills 0 through every load,
 save, menu and pause, at 36,621 Hz consumed.
-*Not verified:* the settings save on the board (the owner's card holds
-M9's test file; `test_settings` covers the rewrite on the host); VERIFY
-and BVERIFY on the board (host only); a card pulled during a tape job; the
-shipping build (`PICO_ACE_UART=OFF`) on the device. Once during the
+The owner saved settings from the menu on the Plus 2 W, and the tape in
+the deck, the volume and the perf line came back after a reboot; the M9
+test file's refused `volume = 9` on line 4 survived the save, because the
+rewriter copied refused lines as they stood. It now writes the value in
+force over a refused one, unless another line gives that key a good value
+(§10.6, EL §8.7), with `test_settings` cases and a control that fails
+under the old rule; that fix was not yet run on the board. The owner ran
+the shipping build (`PICO_ACE_UART=OFF`) on a Pico 2 W, 2026-10-04, and it
+works (no UART, so no timings or board id).
+*Not verified:* VERIFY and BVERIFY on the board (host only); a card pulled
+during a tape job; the rewriter's fix on the board. Once during the
 session the UART went silent with both cores later found in their normal
 loops, and the Debug Probe stopped enumerating until replugged; it did not
 recur after a reflash, and its cause is not known.

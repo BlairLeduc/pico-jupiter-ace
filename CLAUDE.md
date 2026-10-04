@@ -26,10 +26,13 @@ archive's `tut-tut.tap` loaded and ran in the 19K machine. A 16 KiB block
 loads in a 41.9 ms park and saves in 94.4 ms, with 0 underruns through
 all card work. The owner checked Alt+M, F1 and Alt+P on the panel; the
 menu is in mixed case in the Ace's own character set, expanded from the
-ROM and held by `test_boot` to what the ROM writes. **Not checked:** the
-settings save on the board; VERIFY on the board; a card pulled mid-job;
-the shipping build. Once the UART went silent and the probe needed a
-replug, cause unknown, not seen again.
+ROM and held by `test_boot` to what the ROM writes. The owner saved
+settings on the board and they came back after a reboot, and ran the
+shipping build on a Pico 2 W. The save had kept the refused line it was
+given; the rewriter now writes over a refused value (EL §8.7). **Not
+checked:** that fix on the board; VERIFY on the board; a card pulled
+mid-job. Once the UART went silent and the probe needed a replug, cause
+unknown, not seen again.
 
 **M9, the card** (`src/port/sd.c`, `diskio.c`, `storage.c`, `card.c`,
 `park.c`, `settingsio.c`; `src/core/settings.c`), on the Plus 2 W (id
