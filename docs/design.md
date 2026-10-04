@@ -1739,10 +1739,14 @@ untouched; the ROM's SHA-1 is §10.2's.
 **On the board** (Plus 2 W, id `7458DC82A89AAC12`, 150 MHz, gcc 15.2):
 `: sq dup * ;`, saved to slot 1 from the menu over the UART; after
 `FORGET SQ`, `3 sq .` stopped at `sq`; slot 1 loaded, the saved screen came
-back, and `3 sq .` printed `9  OK` (`out/m11-sav.log`). Underrun samples 0
-and late refills 0 throughout, at 36,621 Hz consumed.
-*Measured:* a 19K state (19,604 bytes) saves in 132.0 ms and loads, both
-passes, in 47.1 ms on the board.
+back, and `3 sq .` printed `9  OK` (`out/m11-sav.log`). With the review's
+fixes, `: cube dup dup * * ;` saved to slot 2, and after a reflash slot 2
+loaded twice, the second time with the page remembering the slot, and
+`2 cube .` printed `8  OK` (`out/m11-sav2.log`). Underrun samples 0 and
+late refills 0 throughout, at 36,621 Hz consumed.
+*Measured:* a 19K state (19,604 bytes) saves in 132.0 ms to a new slot
+and 82.2 ms to another, and loads, both passes, in 47.0–47.1 ms on the
+board.
 *Not verified:* `.ace` loads on the board (no files on the card yet; the
 staged set is `out/m11-card/`); the Snapshot page looked at on the panel;
 the shipping build; a card pulled mid-save. After the first flash the

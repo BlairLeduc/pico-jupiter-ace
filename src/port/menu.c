@@ -47,6 +47,7 @@ enum { N_SLOT, N_SAVE, N_LOAD, N_DELETE, N_FIRST };
 enum { S_VOLUME, S_PERF, S_COUNT };
 
 static settings_t s_file;     /* what the file says, for the save */
+static unsigned   s_slot;     /* the Snapshot page's slot, kept between openings */
 
 static struct {
     ace_t   *m;
@@ -63,7 +64,6 @@ static struct {
 
     int      set_sel;
 
-    unsigned slot;
     bool     used[SNAPIO_SLOTS];
     unsigned n_aces;
     int      snap_sel, snap_top;
@@ -139,8 +139,8 @@ static void draw_snap(void) {
     char line[TEXT_COLS + 1];
     static const char *const what[N_FIRST] = { NULL, " Save state", " Load state", " Delete state" };
     for (int i = 0; i < N_FIRST; i++) {
-        if (i == N_SLOT) snprintf(line, sizeof line, " Slot          < %u >  %s", s.slot + 1u,
-                                  !s.card ? "" : s.used[s.slot] ? "in use" : "empty");
+        if (i == N_SLOT) snprintf(line, sizeof line, " Slot          < %u >  %s", s_slot + 1u,
+                                  !s.card ? "" : s.used[s_slot] ? "in use" : "empty");
         else snprintf(line, sizeof line, "%s", what[i]);
         textpage_line(s_scr, ROW_TOP + i, line, i == s.snap_sel);
     }
@@ -218,13 +218,13 @@ static bool load_failed_midway(bool changed) {
 static void snap_load_state(void) {
     bool recovered, changed;
     uint32_t us;
-    snap_status_t st = snapio_load(s.m, s.slot, &recovered, &changed, &us);
-    log_core1("  snapshot     : load slot %u: %s%s, %lu us\n", s.slot + 1u, snapshot_status_str(st),
+    snap_status_t st = snapio_load(s.m, s_slot, &recovered, &changed, &us);
+    log_core1("  snapshot     : load slot %u: %s%s, %lu us\n", s_slot + 1u, snapshot_status_str(st),
               recovered ? " (from the unpublished .new)" : "", (unsigned long)us);
     if (st == SNAP_OK) { s.done = true; return; }
     if (load_failed_midway(changed)) return;
-    if (st == SNAP_IO && !s.used[s.slot])
-        snprintf(s.status, sizeof s.status, " Slot %u is empty", s.slot + 1u);
+    if (st == SNAP_IO && !s.used[s_slot])
+        snprintf(s.status, sizeof s.status, " Slot %u is empty", s_slot + 1u);
     else
         say(" Not loaded: %.19s", snapshot_status_str(st));
 }
@@ -324,23 +324,23 @@ static void key_snap(uint8_t c) {
     case PICOCALC_KEY_LEFT:
     case PICOCALC_KEY_RIGHT:
         if (s.snap_sel < N_FIRST)
-            s.slot = (s.slot + (c == PICOCALC_KEY_RIGHT ? 1u : SNAPIO_SLOTS - 1u)) % SNAPIO_SLOTS;
+            s_slot = (s_slot + (c == PICOCALC_KEY_RIGHT ? 1u : SNAPIO_SLOTS - 1u)) % SNAPIO_SLOTS;
         break;
     case PICOCALC_KEY_ENTER:
         if (!s.card) { say(" No card", ""); break; }
         s.status[0] = 0;
         if (s.snap_sel == N_SAVE) {
             uint32_t us;
-            snap_status_t st = snapio_save(s.m, s.slot, &us);
-            log_core1("  snapshot     : save slot %u: %s, %lu us\n", s.slot + 1u,
+            snap_status_t st = snapio_save(s.m, s_slot, &us);
+            log_core1("  snapshot     : save slot %u: %s, %lu us\n", s_slot + 1u,
                       snapshot_status_str(st), (unsigned long)us);
             say(st == SNAP_OK ? " Saved" : " Not saved: %.20s", snapshot_status_str(st));
-            s.used[s.slot] = snapio_exists(s.slot);
+            s.used[s_slot] = snapio_exists(s_slot);
         } else if (s.snap_sel == N_LOAD) {
             snap_load_state();
         } else if (s.snap_sel == N_DELETE) {
-            say(snapio_delete(s.slot) ? " Deleted" : " Nothing to delete", "");
-            s.used[s.slot] = snapio_exists(s.slot);
+            say(snapio_delete(s_slot) ? " Deleted" : " Nothing to delete", "");
+            s.used[s_slot] = snapio_exists(s_slot);
         } else if (s.snap_sel >= N_FIRST) {
             snap_load_ace(s_aces[s.snap_sel - N_FIRST].path);
         }
