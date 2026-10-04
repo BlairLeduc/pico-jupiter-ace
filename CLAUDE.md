@@ -28,7 +28,9 @@ while parked, the slot bounced out-in-out-in, one mount failed
 `FR_NOT_READY`, nothing hung, and the guest resumed to `4  OK` with 0
 underruns. **Not checked:** an empty card (none to hand); unmountable
 cards; a card pulled mid-job; the card swap on the final build (the park
-itself was rechecked without a card); the shipping build.
+itself was rechecked without a card). The shipping build
+(`PICO_ACE_UART=OFF`) was run by the owner on a Pico 2 W, 2026-10-04, and
+works (no UART, so no board id, timings or park).
 
 **M8, audio** (`src/core/beeper.c`, `src/port/audio.c`, `core0.c`), on
 the Plus 2 W (id `7458DC82A89AAC12`) at 150 MHz, gcc 15.2, 2026-10-04.

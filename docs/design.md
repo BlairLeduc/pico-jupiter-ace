@@ -1509,8 +1509,11 @@ fixed, a 2.0 s park with no card read 36,621 Hz in the next window.
 *Not verified:* an empty card (no spare card was to hand; the card without
 `/ace/` takes the same path, `FR_NO_PATH`, to the defaults); a card that
 does not mount for other reasons (exFAT, unformatted); a card pulled during
-a job; the card swap while parked on the build with both fixes; the
-shipping build (`PICO_ACE_UART=OFF`), which has no hold to park with.
+a job; the card swap while parked on the build with both fixes. The
+shipping build (`PICO_ACE_UART=OFF`) was run by the owner on a Pico 2 W,
+2026-10-04, and works; it logs nothing and has no hold, so its boot
+timings, the settings file's problem line and a park were not observed on
+it.
 
 #### M10. Menu and fast tape
 
