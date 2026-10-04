@@ -77,6 +77,12 @@
 #define ACE_SCREEN_X           32u  /* the guest 1:1, centred across        */
 #define ACE_SCREEN_Y           64u  /* with a 64-row band above and below    */
 #define ACE_LINEBUF_COUNT       2u  /* DMA ping-pong (HW §4.6)              */
+
+/* The lines of text above and below the guest (§7.4), in the emulator's
+ * font: 40 cells span the panel. The perf line sits in the middle of the
+ * band below. M10: the status line in the band above. */
+#define ACE_TEXT_COLS          (ACE_PANEL_W / ACE_GLYPH_COLS)      /* 40  */
+#define ACE_PERF_Y             (ACE_SCREEN_Y + ACE_SCREEN_H + 28u) /* 284 */
 #define ACE_LINEBUF_PIXELS  ACE_PANEL_W
 
 /* ---- Port buffers (design.md §3.3) ------------------------------------ */

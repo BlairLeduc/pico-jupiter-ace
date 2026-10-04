@@ -9,8 +9,26 @@ Raspberry Pi Pico SDK. The guest is a Z80A at 3.25 MHz with an 8 KiB Forth
 ROM, a 32×24 character display from 768 bytes of screen RAM and 1 KiB of
 character RAM, a 40-key matrix, and a one-bit speaker and tape port.
 
-**Implementation status, 2026-10-03: M6 done.**
-Next is M7, the Ace on the device (`docs/design.md` §15).
+**Implementation status, 2026-10-04: M7 done.**
+Next is M8, audio (`docs/design.md` §15).
+
+**M7, the Ace on the device** (`src/port/core0.c`, `core1.c`,
+`handoff.c`, `display.c`), on the Plus 2 W (id `7458DC82A89AAC12`) at
+150 MHz, gcc 15.2; measured 2026-10-03, keyboard checked by the owner
+2026-10-04. Core 0 paces `ace_run_field` on `time_us_64()` against an
+absolute deadline; core 1 presents dirty bands at (32,64) and a grey perf
+line below. On the PicoCalc keyboard: `2 2 + .` prints `4  OK`, the
+arrows, DELETE and BREAK work, `VLIST` scrolls cleanly with the perf
+line's drops at 0. Over the UART, `VLIST` repeated ran 4,000+ fields with
+0 dropped snapshots at tiers 0 and 2, and a 10-minute idle run had no late
+fields, drops or I²C errors. Core 0: idle 20.1 %; compute 36.4 % at
+159.6 host cycles/insn (tier 0), 20.4 % at 89.4 (tier 2); scrolling
+38.6 % / 36.2 %, its counts inflated by `VLIST`'s `HALT` (design.md
+§3.2). Tier 1 gained nothing. Longest present 11.86 ms (the boot's full
+redraw). `tools/uart-screen.sh` dumps screen RAM to the log. The
+shipping build (`PICO_ACE_UART=OFF`) passed the same keyboard checks on a
+Pico 2 W, run by the owner 2026-10-04 (no UART, so no board id).
+**Not checked:** audio pacing (M8).
 
 **M6, board bring-up** (`src/port/southbridge.c`, `lcd.c`, `kbd.c`,
 `log.c`, `display.c`, `main.c`), on the Plus 2 W (id `7458DC82A89AAC12`,
@@ -175,8 +193,7 @@ core were verified on a Plus 2 W, and `design.md` §4.6 says which files to
 
 ## Build and test
 
-As of M6 these all work; until M7, `tools/uart-type.sh`'s events are logged
-rather than typed at a guest.
+As of M7 these all work, and `tools/uart-type.sh` types at the guest.
 
 ```sh
 # host: src/core/ with the system compiler, no Pico SDK, under CTest
@@ -197,6 +214,7 @@ tools/uart-log.sh 30 out/run.log &   # capture UART1 first, so the banner is in 
 tools/flash.sh                       # reset halt + resume, never reset run (HW §2.7)
 tools/flash.sh build/pico/pico-ace-bench.elf   # M2's bench; embeds ZEXDOC if fetched
 tools/uart-type.sh '2 2 + .\r'       # type at the guest over the same UART
+tools/uart-screen.sh                 # the guest's screen, as text, into the log
 
 # trace diff against xAce (design.md §13.4); CI runs the second line too
 tools/trace/build-xace.sh            # clones xAce at a pinned commit into out/trace
