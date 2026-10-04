@@ -24,8 +24,9 @@ on the host and on the board, video, the keyboard, audio and the card's
 settings file, each with what was checked on the device recorded under its
 milestone. Every number about the Ace below comes from secondary knowledge
 until §16's table says otherwise. Every performance figure is an
-**estimate** and is labelled as one (EL §14.4), except M2's measurements
-of the Z80 alone, which §3.2 labels as measured.
+**estimate** and is labelled as one (EL §14.4) until a milestone measures
+it on the board; the measurements are recorded under their milestones and
+labelled as measured where they replace an estimate, as in §3.2.
 
 **Notation.** Guest addresses and values use the Z80 world's `$XXXX`, and host
 values use `0x` (EL §14.1). `T` is a Z80 T-state, one guest clock cycle at
@@ -1475,9 +1476,14 @@ bug (a refused value counted as given) fails five of its checks.
 `settingsio.*` is the read half of pico-atom's; the save is M10's. `card.*`
 holds the jobs (mount, read, unmount, each timed) and the debounced slot.
 `park.*` is pico-atom's park in its own file: core 0 parks between two
-fields and feeds the queue silence, core 1 serves the job a step a loop, so
-it still presents, polls the keyboard and drains the log, and on resume
-core 0 starts the held keys and its measuring windows again. M9's one
+fields and feeds the queue silence, and on resume starts the held keys and
+its measuring windows again. Core 1 checks on the park once a loop, so
+between jobs it still presents, polls the keyboard and drains the log; a
+job itself is synchronous and holds core 1 for its length. Every wait in
+the SD driver is bounded, the longest being 1 s for a card that stays
+`ACMD41` busy, inside the southbridge's 2.5 s watchdog (HW §6.1); the jobs
+measured took 7–221 ms. A transfer that fails marks the drive
+uninitialised, so the next mount runs `sd_init` again. M9's one
 reason to park is the UART's hold (`tools/uart-hold.sh`), which runs the
 card job on entry and again on each card change. Core 1's own log lines
 wait for a line of core 0's that is half sent (`log_core1`).

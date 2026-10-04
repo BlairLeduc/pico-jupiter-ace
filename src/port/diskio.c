@@ -12,6 +12,14 @@
 
 static DSTATUS s_status = STA_NOINIT;
 
+/* A transfer that failed may be a card pulled mid-job: the drive is
+ * uninitialised until disk_initialize runs sd_init again, so FatFs never
+ * reuses a mount across it. Each job mounts afresh anyway (storage.h). */
+static DRESULT failed(void) {
+    s_status |= STA_NOINIT;
+    return RES_ERROR;
+}
+
 DSTATUS disk_status(BYTE pdrv) {
     if (pdrv != 0) return STA_NOINIT;
     if (!sd_present()) s_status |= STA_NODISK | STA_NOINIT;
@@ -29,7 +37,7 @@ DRESULT disk_read(BYTE pdrv, BYTE *buff, LBA_t sector, UINT count) {
     if (pdrv != 0 || count == 0) return RES_PARERR;
     if (s_status & STA_NOINIT) return RES_NOTRDY;
     for (UINT i = 0; i < count; i++) {
-        if (sd_read((uint32_t)sector + i, buff + i * SD_BLOCK) != SD_OK) return RES_ERROR;
+        if (sd_read((uint32_t)sector + i, buff + i * SD_BLOCK) != SD_OK) return failed();
     }
     return RES_OK;
 }
@@ -38,7 +46,7 @@ DRESULT disk_write(BYTE pdrv, const BYTE *buff, LBA_t sector, UINT count) {
     if (pdrv != 0 || count == 0) return RES_PARERR;
     if (s_status & STA_NOINIT) return RES_NOTRDY;
     for (UINT i = 0; i < count; i++) {
-        if (sd_write((uint32_t)sector + i, buff + i * SD_BLOCK) != SD_OK) return RES_ERROR;
+        if (sd_write((uint32_t)sector + i, buff + i * SD_BLOCK) != SD_OK) return failed();
     }
     return RES_OK;
 }

@@ -96,6 +96,7 @@
 
 #define ACE_PATH_MAX          128u  /* a path on the card, with its NUL    */
 #define ACE_SETTINGS_FILE_MAX 2048u /* /ace/pico-ace.cfg, read whole       */
+#define ACE_SETTINGS_LINE_MAX (ACE_PATH_MAX + 32u)  /* "boot_tape = " and a path */
 #define ACE_KEYMAP_NAME_LEN    16u  /* a layout's name (§9.4)              */
 
 /* ---- Timing (design.md §2.1, §11) ------------------------------------ */

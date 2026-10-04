@@ -5,9 +5,6 @@
 #include <ctype.h>
 #include <string.h>
 
-/* Room for "boot_tape = " and the longest path. */
-#define LINE_MAX_LEN (ACE_PATH_MAX + 32u)
-
 void settings_default(settings_t *s) {
     memset(s, 0, sizeof *s);
     ace_config_t cfg;
@@ -136,9 +133,9 @@ static settings_status_t parse_line(settings_t *s, char *line, unsigned *seen, u
  * parsed over *s. */
 static settings_status_t classify(settings_t *s, const char *text, size_t n, unsigned *seen,
                                   unsigned *key) {
-    char buf[LINE_MAX_LEN + 1];
+    char buf[ACE_SETTINGS_LINE_MAX + 1];
     *key = K_COUNT;
-    if (n > LINE_MAX_LEN) return SET_TOO_LONG;
+    if (n > ACE_SETTINGS_LINE_MAX) return SET_TOO_LONG;
     memcpy(buf, text, n);
     buf[n] = 0;
     /* A NUL inside the line is not text. */

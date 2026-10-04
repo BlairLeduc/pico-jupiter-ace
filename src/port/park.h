@@ -39,9 +39,12 @@ extern volatile park_stats_t g_park_stats;
  * held set again. */
 uint32_t park(uint32_t why);
 
-/* Core 1, from its loop: the parked job, a step at a time, so the loop
- * still presents, polls the keyboard and drains the log while the guest
- * is parked. True while parked. */
+/* Core 1, once a loop: the parked job, run when the park begins and again
+ * on each card change, and the machine handed back once released. Between
+ * jobs the loop still presents, polls the keyboard and drains the log; a
+ * job itself is synchronous (card.h) and holds core 1 for its length, at
+ * most the SD driver's bounds, inside the southbridge's 2.5 s watchdog
+ * (hardware-notes.md §6.1). True while parked. */
 bool park_serve(void);
 
 #endif /* PICO_ACE_PARK_H */
