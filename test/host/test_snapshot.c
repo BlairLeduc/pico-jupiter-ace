@@ -282,6 +282,27 @@ int main(void) {
         }
     }
 
+    /* A load that fails after it has changed the machine is followed by
+     * a power-on (snapio.h): the machine comes up as ace_init's, at the
+     * sample rate the port set and with the DC blocker as it was. */
+    {
+        static guest_t p;
+        CHECK(guest_boot(&p, ACE_RAM_51K, 400), "boot 51K");
+        ace_audio_set_rate(&p.m, 150000000u, 4000u);
+        p.m.beeper.dc_block = false;
+        uint32_t num = p.m.beeper.num, den = p.m.beeper.den;
+        memset(p.m.xram, 0x5A, sizeof p.m.xram);
+        ace_power_on(&p.m);
+        CHECK(p.m.beeper.num == num && p.m.beeper.den == den && !p.m.beeper.dc_block,
+              "the rate is kept: %u/%u, want %u/%u", p.m.beeper.num, p.m.beeper.den, num, den);
+        CHECK(p.m.cfg.ram == ACE_RAM_51K && p.m.cpu.pc == 0 && p.m.xram[100] == 0,
+              "a 51K machine at power-on, RAM zeroed");
+        keymatrix_init(&p.k);
+        guest_fields(&p, 100);
+        guest_type(&p, "6 7 * .\n");
+        CHECK(guest_screen_has(&p.m, "6 7 * . 42  OK"), "and it boots and runs");
+    }
+
     /* A write that fails part-way reports it. */
     snap.fail_at = 5000;
     CHECK(save(&g.m) == SNAP_IO, "a failed write is reported");

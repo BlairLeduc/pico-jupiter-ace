@@ -1,5 +1,5 @@
 -- ace-dump.lua — MAME's jupace with a .ace loaded, dumped for
--- tools/ace-reference.sh (design.md §13.4, M11).
+-- tools/ace-reference.py (design.md §13.4, M11).
 --
 -- MAME loads the snapshot a second after power-on. This waits
 -- ACE_DUMP_FIELDS frames from then, so both machines have run the same

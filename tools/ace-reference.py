@@ -47,9 +47,13 @@ def decode_header(path):
         b = data[i]
         i += 1
         if b == 0xED:
+            if i >= len(data):
+                return None, None          # cut off inside a marker
             n = data[i]
             if n == 0:
                 break
+            if i + 1 >= len(data):
+                return None, None
             out += bytes([data[i + 1]]) * n
             i += 2
         else:
@@ -147,7 +151,9 @@ def main():
                 say(f"  same {name}: PC {rm['PC']:04X} SP {rm['SP']:04X}")
     say(f"{same} the same, {differ} different, {running} saved running (not judged), "
         f"{skipped} not 19K (not compared)")
-    return 1 if differ else 0
+    if not same:
+        say("nothing was compared: no 19K file saved in the key wait")
+    return 1 if differ or not same else 0
 
 
 if __name__ == "__main__":

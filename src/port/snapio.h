@@ -27,9 +27,13 @@
 #define SNAPIO_ACE_DIR   "/ace/snaps"
 
 /* The card must be mounted (storage.h) for all of these. *us is the wall
- * time the call took. */
+ * time the call took. A load sets *changed when a file passed its check
+ * but the second pass then failed, the card going or the file changing
+ * between them: the machine is then part old, part new, and must be
+ * powered on again rather than resumed. */
 snap_status_t snapio_save(const ace_t *m, unsigned slot, uint32_t *us);
-snap_status_t snapio_load(ace_t *m, unsigned slot, bool *recovered, uint32_t *us);
+snap_status_t snapio_load(ace_t *m, unsigned slot, bool *recovered, bool *changed,
+                          uint32_t *us);
 bool          snapio_exists(unsigned slot);
 bool          snapio_delete(unsigned slot);
 
@@ -38,11 +42,12 @@ typedef struct {
     uint32_t size;
 } snapio_entry_t;
 
-/* Up to max .ace files in SNAPIO_ACE_DIR, in directory order. */
+/* Up to max .ace files in SNAPIO_ACE_DIR, in directory order; one whose
+ * path does not fit ACE_PATH_MAX is left out. */
 unsigned snapio_list_ace(snapio_entry_t *out, unsigned max);
 
 /* An .ace into m, checked first; info says what it needs. */
 snap_ace_status_t snapio_load_ace(ace_t *m, const char *path, snap_ace_info_t *info,
-                                  uint32_t *us);
+                                  bool *changed, uint32_t *us);
 
 #endif /* PICO_ACE_SNAPIO_H */

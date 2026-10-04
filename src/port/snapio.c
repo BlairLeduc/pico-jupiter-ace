@@ -38,6 +38,12 @@ snap_status_t snapio_save(const ace_t *m, unsigned slot, uint32_t *us) {
     (void)f_mkdir("/ace");
     (void)f_mkdir(SNAPIO_STATE_DIR);
 
+    /* A save cut off between the unlink and the rename left only the .new,
+     * which snapio_load takes as the slot: make it the slot before it is
+     * overwritten, as tapeio does. */
+    static FILINFO fi;
+    if (f_stat(dst, &fi) == FR_NO_FILE && f_stat(tmp, &fi) == FR_OK) (void)f_rename(tmp, dst);
+
     snap_status_t st = SNAP_IO;
     if (f_open(&s_file, tmp, FA_WRITE | FA_CREATE_ALWAYS) == FR_OK) {
         st = snapshot_save(m, fwrite_cb, &s_file);
@@ -71,16 +77,19 @@ static snap_status_t load_file(ace_t *m, const char *p) {
     return st;
 }
 
-snap_status_t snapio_load(ace_t *m, unsigned slot, bool *recovered, uint32_t *us) {
+snap_status_t snapio_load(ace_t *m, unsigned slot, bool *recovered, bool *changed,
+                          uint32_t *us) {
     uint32_t t0 = time_us_32();
     char main_path[40], tmp[40];
     path(main_path, sizeof main_path, slot, "sav");
     path(tmp, sizeof tmp, slot, "new");
     *recovered = false;
+    *changed = false;
 
     snap_status_t st = check_file(m, main_path);
     if (st == SNAP_OK) {
         st = load_file(m, main_path);
+        *changed = st != SNAP_OK;
     } else if (st == SNAP_IO || st == SNAP_CORRUPT || st == SNAP_NOT_SNAPSHOT) {
         /* Missing or damaged: an interrupted publish leaves a whole .new.
          * A state that is whole but for another machine is not damage,
@@ -88,6 +97,7 @@ snap_status_t snapio_load(ace_t *m, unsigned slot, bool *recovered, uint32_t *us
         if (check_file(m, tmp) == SNAP_OK) {
             *recovered = true;
             st = load_file(m, tmp);
+            *changed = st != SNAP_OK;
         }
     }
     *us = time_us_32() - t0;
@@ -125,6 +135,7 @@ unsigned snapio_list_ace(snapio_entry_t *out, unsigned max) {
         if ((fi.fattrib & (AM_DIR | AM_HID)) || strncmp(fi.fname, "._", 2) == 0) continue;
         size_t len = strlen(fi.fname);
         if (len < 5 || strcasecmp(fi.fname + len - 4, ".ace") != 0) continue;
+        if (sizeof SNAPIO_ACE_DIR + 1u + len > ACE_PATH_MAX) continue;
         snprintf(out[n].path, sizeof out[n].path, "%s/%s", SNAPIO_ACE_DIR, fi.fname);
         out[n].size = (uint32_t)fi.fsize;
         n++;
@@ -134,8 +145,9 @@ unsigned snapio_list_ace(snapio_entry_t *out, unsigned max) {
 }
 
 snap_ace_status_t snapio_load_ace(ace_t *m, const char *p, snap_ace_info_t *info,
-                                  uint32_t *us) {
+                                  bool *changed, uint32_t *us) {
     uint32_t t0 = time_us_32();
+    *changed = false;
     snap_ace_status_t st = SNAP_ACE_IO;
     if (f_open(&s_file, p, FA_READ) == FR_OK) {
         st = snap_ace_check(m, fread_some, &s_file, info);
@@ -147,6 +159,7 @@ snap_ace_status_t snapio_load_ace(ace_t *m, const char *p, snap_ace_info_t *info
             st = snap_ace_load(m, fread_some, &s_file, info);
             f_close(&s_file);
         }
+        *changed = st != SNAP_ACE_OK;
     }
     *us = time_us_32() - t0;
     return st;

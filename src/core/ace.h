@@ -125,6 +125,12 @@ static inline uint32_t ace_field_t(const ace_t *m) {
  * (the budget is signed). */
 bool ace_init(ace_t *m, const ace_config_t *cfg);
 
+/* Power on again with the machine's own configuration, as ace_init with
+ * m->cfg, keeping the sample rate the port set and the DC blocker's
+ * setting. For a machine whose state can no longer be trusted: a load
+ * that failed after it had started to change it (design.md §10.5). */
+void ace_power_on(ace_t *m);
+
 /* The CPU's reset line: RAM and the page table are kept, and a tape
  * request the CPU was stalled on is dropped. */
 void ace_reset(ace_t *m);

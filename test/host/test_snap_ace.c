@@ -14,7 +14,7 @@
  * PICO_ACE_ACE_FILE and PICO_ACE_ACE_DUMP set, that one file is loaded
  * into the machine it needs, run ACE_DUMP_FIELDS fields (default 100),
  * and dumped in tools/mame/ace-dump.lua's form, for
- * tools/ace-reference.sh to compare with MAME.
+ * tools/ace-reference.py to compare with MAME.
  */
 
 #include <dirent.h>

@@ -205,13 +205,24 @@ static void open_snap(void) {
 
 /* The state in the slot, or the .ace chosen: on success the menu closes,
  * and the guest resumes from what was loaded. */
+/* A load whose second pass failed has left a machine part old and part
+ * new: it is not resumed, but powered on again (snapio.h). */
+static bool load_failed_midway(bool changed) {
+    if (!changed) return false;
+    log_core1("  snapshot     : failed after the machine had changed; powering on again\n");
+    g_ui.power_on = true;
+    s.done = true;
+    return true;
+}
+
 static void snap_load_state(void) {
-    bool recovered;
+    bool recovered, changed;
     uint32_t us;
-    snap_status_t st = snapio_load(s.m, s.slot, &recovered, &us);
+    snap_status_t st = snapio_load(s.m, s.slot, &recovered, &changed, &us);
     log_core1("  snapshot     : load slot %u: %s%s, %lu us\n", s.slot + 1u, snapshot_status_str(st),
               recovered ? " (from the unpublished .new)" : "", (unsigned long)us);
     if (st == SNAP_OK) { s.done = true; return; }
+    if (load_failed_midway(changed)) return;
     if (st == SNAP_IO && !s.used[s.slot])
         snprintf(s.status, sizeof s.status, " Slot %u is empty", s.slot + 1u);
     else
@@ -220,12 +231,14 @@ static void snap_load_state(void) {
 
 static void snap_load_ace(const char *path) {
     snap_ace_info_t in;
+    bool changed;
     uint32_t us;
-    snap_ace_status_t st = snapio_load_ace(s.m, path, &in, &us);
+    snap_ace_status_t st = snapio_load_ace(s.m, path, &in, &changed, &us);
     log_core1("  snapshot     : %s: %s, taken on %s, end $%05lX, PC %04X SP %04X%s, %lu us\n",
               path, snap_ace_status_str(st), snap_ace_taken_on(&in), (unsigned long)in.end, in.pc,
               in.sp, in.repaired ? ", key wait's stack written back" : "", (unsigned long)us);
     if (st == SNAP_ACE_OK) { s.done = true; return; }
+    if (load_failed_midway(changed)) return;
     if (st == SNAP_ACE_OTHER_RAM) {
         snprintf(s.status, sizeof s.status, " Needs the %s machine", ace_ram_name(in.needs));
         if (in.ramtop == 0xC000u)
