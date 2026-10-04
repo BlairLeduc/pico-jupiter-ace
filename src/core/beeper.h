@@ -63,6 +63,11 @@ typedef struct {
 void beeper_init(beeper_t *b, uint32_t now, bool level, uint32_t cpu_hz,
                  uint32_t rate_num, uint32_t rate_den);
 
+/* The guest's clock jumped (a state restored, design.md §10.5): the next
+ * sample starts at T `now` with the speaker at `level`. The rate, the DC
+ * blocker's state and the samples not yet drained are kept. */
+void beeper_restart(beeper_t *b, uint32_t now, bool level);
+
 /* The speaker moved to `level` at T `now`. */
 void beeper_set_level(beeper_t *b, uint32_t now, bool level);
 

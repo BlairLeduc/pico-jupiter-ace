@@ -56,6 +56,14 @@ void beeper_init(beeper_t *b, uint32_t now, bool level, uint32_t cpu_hz,
     b->dc_block = true;
 }
 
+void beeper_restart(beeper_t *b, uint32_t now, bool level) {
+    b->start = now;
+    b->start_frac = 0;
+    b->pos = 0;
+    b->high = 0;
+    b->level = level;
+}
+
 static void ACE_HOT1(emit)(beeper_t *b, uint32_t high) {
     int32_t x = (int32_t)(((uint64_t)high * b->scale + 0x80000000u) >> 32);
     int32_t y = x;

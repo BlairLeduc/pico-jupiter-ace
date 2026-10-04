@@ -176,6 +176,14 @@ void ace_reset(ace_t *m) {
     m->tape.pass = false;
 }
 
+void ace_restored(ace_t *m) {
+    m->tape.op = TAPE_NONE;
+    m->tape.pass = false;
+    m->tape.begun = false;
+    memset(m->keys, 0, sizeof m->keys);
+    beeper_restart(&m->beeper, m->cpu.t, m->speaker);
+}
+
 /* The page table is a function of cfg, so the copy's is rebuilt over its
  * own buffers rather than relocated from the original's pointers. */
 void ace_copy(ace_t *dst, const ace_t *src) {

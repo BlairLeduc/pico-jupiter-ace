@@ -20,7 +20,10 @@ set(PICO_ACE_CORE_SOURCES
     src/core/render.c
     src/core/romfont.c
     src/core/settings.c
+    src/core/sha1.c
+    src/core/snap_ace.c
     src/core/snappool.c
+    src/core/snapshot.c
     src/core/tape.c
     src/core/z80.c
 )
@@ -223,6 +226,7 @@ else()
         src/port/settingsio.c
         src/port/southbridge.c
         src/port/storage.c
+        src/port/snapio.c
         src/port/tapeio.c
         src/port/textpage.c
     )

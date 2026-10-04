@@ -143,6 +143,12 @@ uint32_t ace_run_field(ace_t *m);
 /* Copy a machine. Never '=': the page table points into the struct. */
 void ace_copy(ace_t *dst, const ace_t *src);
 
+/* After a snapshot has replaced the CPU and RAM (design.md §10.5): a
+ * tape request is dropped, the keys are let go (the keyboard's state is
+ * now, not then; the port lets go of its held set too), and the beeper
+ * carries on from the CPU's clock and the speaker's level. */
+void ace_restored(ace_t *m);
+
 /* A key in the matrix, by half-row (0-7, A8-A15) and bit (0-4). Anything
  * outside ACE_KEY_ROWS x ACE_KEY_COLS is ignored. */
 void ace_key_set(ace_t *m, int row, int col, bool down);

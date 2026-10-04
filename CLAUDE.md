@@ -9,8 +9,26 @@ Raspberry Pi Pico SDK. The guest is a Z80A at 3.25 MHz with an 8 KiB Forth
 ROM, a 32×24 character display from 768 bytes of screen RAM and 1 KiB of
 character RAM, a 40-key matrix, and a one-bit speaker and tape port.
 
-**Implementation status, 2026-10-04: M10 done.** Next is M11,
-snapshots (`docs/design.md` §15).
+**Implementation status, 2026-10-04: M11 built and checked on the host;
+`.ace` loads on the board are outstanding.** Then M12, the performance
+pass (`docs/design.md` §15).
+
+**M11, snapshots** (`src/core/snap_ace.c`, `snapshot.c`, `sha1.c`;
+`src/port/snapio.c`, `menu.c`), 2026-10-04. The `.ace` format was settled
+from the archive's FAQ, MAME's loader and 199 archive files (design.md
+§10.5, §16): no file dumps past `$7FFF`, so 35K and 51K files lack their
+stack, which in the ROM's key wait is the one word `$04F7` at RAMTOP − 2
+(135 files). The owner chose **MAME, run headless, as the reference**, and
+**35K files into the 51K machine** with that word written back (§18 items
+6 and 7). On the host 198 of the 199 load and Ace Invaders is refused;
+MAME agrees on all 102 19K files saved in the key wait
+(`tools/ace-reference.py`). `.sav` is pico-atom's format with the Z80's
+fields; a restored machine meets the original 150 fields on. On the Plus
+2 W (id `7458DC82A89AAC12`): a word saved to slot 1, forgotten, and loaded
+back ran; save 132.0 ms, load 47.1 ms, 0 underruns. **Not checked:** `.ace`
+on the board, the Snapshot page on the panel, the shipping build. After
+the first flash the Debug Probe dropped off USB until replugged, as once in
+M10.
 
 **M10, the menu and fast tape** (`src/core/tape.c`, `romfont.c`;
 `src/port/tapeio.c`, `menu.c`, `textpage.c`, `park.c`), on the Plus 2 W
@@ -255,7 +273,7 @@ core were verified on a Plus 2 W, and `design.md` §4.6 says which files to
 
 ## Build and test
 
-As of M10 these all work, and `tools/uart-type.sh` types at the guest.
+As of M11 these all work, and `tools/uart-type.sh` types at the guest.
 
 ```sh
 # host: src/core/ with the system compiler, no Pico SDK, under CTest
@@ -284,6 +302,11 @@ tools/uart-hold.sh                   # park the guest and check the card; again 
 tools/uart-type.sh '\x1e'             # RS opens the menu (US pauses); then the UART's bytes
 tools/uart-type.sh '\x0e\r'           #   are its keys, ^P ^N ^B ^F the arrows, ESC closes
 PICO_ACE_TAP=game.tap build/host/test/host/test_tape  # an archive .tap through the trap
+PICO_ACE_ACE_DIR=dir build/host/test/host/test_snap_ace  # every archive .ace in dir
+
+# .ace against MAME (design.md §13.4): brew install mame, then
+tools/mame/romset.sh                 # out/mame/roms; needs roms/JA-DOSROM/
+tools/ace-reference.py dir --log out/m11-mame.log
 
 # trace diff against xAce (design.md §13.4); CI runs the second line too
 tools/trace/build-xace.sh            # clones xAce at a pinned commit into out/trace

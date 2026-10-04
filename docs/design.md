@@ -892,7 +892,7 @@ commonly use 5–8, Q/A/O/P and Z/X, so the built-ins are "cursor keys as
   pico-ace.cfg          settings (§10.6)
   tapes/*.tap           tape images; the recorder writes here too
   snaps/*.ace           snapshots from the archive (§10.5)
-  states/*.sav          our own save states (§10.5)
+  states/slotN.sav      our own save states, four slots (§10.5)
   keymaps/*.map         game layouts (§9.4)
 ```
 
@@ -991,17 +991,61 @@ half-cycles never drift. Recording decodes the output bit back into blocks.
 
 ### 10.5 Snapshots
 
-**`.ace` (import only; export is deferred, §18 item 4).** This is the archive's common format,
-written by xAce and EightyOne: as we understand it, a run-length-encoded image
-of memory from `$2000` with the Z80 registers stored in the undisplayed
-workspace. Settle the encoding, the register layout and the RAM size it
-implies from those emulators' documentation and from sample files (§16). It
-is **refused** if the implied RAM size differs from the running machine's,
-naming the size it needs.
+**`.ace` (import only; export is deferred, §18 item 4).** This is the
+archive's common format, ACE32's, also written by EightyOne and read by MAME.
+Settled 2026-10-04 (§16) from the Jupiter Ace Archive's description of it
+(`faq_ace_snapshot_format.html`, from Edwin Blink's study of ACE32's files),
+MAME's loader (`jupace.cpp`, `snapshot_cb`, at `774a180`) and 199 files:
+the archive's four (Dreamsoft, in `ace-pack-2-tzx-047-050.zip`) and the 195
+in TOSEC's Jupiter Ace set (2012-04-23, on archive.org). `snap_ace.h` has
+the format:
 
-**`.sav` (our save states).** EL §8.5 exactly: explicit little-endian fields,
-magic, version, lengths, CRC, every field zero at reset, ROM hash not ROM
-bytes, RAM size and guest clock recorded and checked, and a two-pass load.
+- The address space from `$2000` up, run-length encoded: `ED 00` ends it,
+  `ED n b` is n copies of b, any other byte is itself. All 199 files end
+  with `ED 00` and nothing after it.
+- In the screen's undisplayed mirror at `$2000–$23FF`, ACE32's state as
+  32-bit words: at `$2080` the machine's RAMTOP (`$4000` 3K, `$8000` 19K,
+  `$C000` 35K, `$0000` 51K), and from `$2100` AF BC DE HL IX IY SP PC AF'
+  BC' DE' HL' IM IFF1 IFF2 I R. Only the low 16 bits of a pair's word and
+  the low byte of the others mean anything: the files hold noise above
+  them (one IM word reads `120FE701`).
+- **No file dumps past `$7FFF`.** They decode to 8 KiB or 24 KiB whatever
+  their RAMTOP, six 3K files ending at `$8001` with `$07` padding. So the
+  TOSEC tag (`[3K]`) is the RAM the program needs, not the machine it was
+  saved on: 76 of its 3K programs were saved from 19K machines.
+- By RAMTOP the files were taken on 3K (42), 19K (118), 35K (36) and 51K
+  (3) machines. A file from a 35K or 51K machine lacks that machine's top
+  of RAM, which holds the Z80's stack.
+- **The key wait's stack is one word.** Of the 135 files saved in the
+  ROM's key wait (`$059B: BIT 5,(HL)` with HL = FLAGS, `$059D: JR Z`) whose
+  stack is in the file, every one has SP = RAMTOP − 2 and `$04F7` there,
+  and the host ROM's prompt has the same (`test_snap_ace`).
+
+The import writes the screen, character set, user RAM and pack from their
+own addresses and not from the mirrors, sets the registers, and restarts
+the field. **The machine a file needs is its RAMTOP's**, and any other
+refuses it, naming the one it needs. **A 35K file loads into the 51K
+machine** (§18 item 7), there being no 35K one. When a file's stack top is
+not in it, the key wait's `$04F7` is written back at RAMTOP − 2 if the file
+is in the key wait with HL = FLAGS and SP = RAMTOP − 2; otherwise the file
+is refused. Of the 199 files, 198 load (35 with the word written back) and
+one, Ace Invaders (1982, Hi-Tech), is refused: it was saved running, from a
+51K machine, with its stack top at `$FFF8`. Turbo and Valkyr, also saved
+running from 35K and 51K machines, have their stack top in the file and only
+the older frames outside it: they load, and would meet the missing frames
+only on returning to Forth, as they do in MAME.
+
+**`.sav` (our save states).** EL §8.5 exactly, as pico-atom's `snapshot.c`
+with the Z80's and the Ace's fields (`snapshot.h`): explicit little-endian
+fields, magic `PACESNAP`, version, lengths, CRC-32, reserved bytes zero,
+the ROM's SHA-1 and not its bytes, the RAM size, field shape and bus values
+recorded and checked, and a two-pass load. States are taken between fields,
+where the guest is parked, so the field resumes from its first active line
+and the budget carries the overshoot. The beeper's sample grid is not
+state: audio restarts from the restored T counter, so the speaker's edges
+are the same and the samples within one of them (`test_snapshot`). Four
+slots on the card, written through `.new` and a rename, a whole `.new`
+taken when the slot's file is missing or damaged (EL §8.6).
 
 ### 10.6 Settings
 
@@ -1091,6 +1135,11 @@ key ring to it. Its pages are the main page (Tape, Settings, Save settings,
 Reset), Tape (empty the deck, rewind, the files in `/ace/tapes/` with each
 one's first header name) and Settings (volume, perf line). F2-F5 open the
 main page saying the page is not in this firmware yet; Snapshot is M11's.
+**M11** added the Snapshot page (F2, and from the main page): a slot chosen
+with < >, then Save, Load and Delete for `/ace/states/slotN.sav`, and the
+`.ace` files in `/ace/snaps/`. A load that succeeds closes the menu and
+the guest resumes from it; a refusal is named on the status row, an `.ace`
+for another machine as the machine it needs.
 The pages are in mixed case, in the Ace's own character set (§7.5).
 What the menu changes for core 0, the volume and a reset, goes through
 `g_ui` and is applied by core 0 when it has the machine back (EL §2.5).
@@ -1190,8 +1239,22 @@ from the Ace archive) through this ROM: `LOAD TUTTUT` gave
 `Dict: TUTTUT     OK` (`out/m3-xace-tape.log`).
 
 **xAce has no `.ace` loader**, so it cannot be the reference for snapshots.
-MAME's `jupace` has one (`snapshot_cb`), but MAME is read here, not run.
-Which reference checks `.ace` is M11's to choose (§18 item 6).
+**MAME is the reference for `.ace`** (§18 item 6), run headless:
+`tools/ace-reference.py` has MAME 0.289's `jupace` (16K fitted) load each
+19K archive file and run 100 fields, has `test_snap_ace` do the same, and
+compares the registers, the screen and `$3C00–$7FFF`
+(`tools/mame/ace-dump.lua`). MAME loads part-way through a field and this
+emulator between two, so for a file saved in the key wait three things are
+left out: where in the wait loop each PC is, the per-field counters (FRAMES
+and the key scan's `$3C27`) and the 32 bytes below SP, where each interrupt
+leaves its pushes. MAME needs the disc ROM, which is in
+`roms/JA-DOSROM/` and matches its hash, and the SP0256's, which is not to
+hand: a zero-filled stand-in lets it start (`tools/mame/romset.sh`, all in
+the ignored `out/`). Run 2026-10-04: the 102 files saved in the key wait
+are the same in all of it; the 17 saved running differ by a few bytes and
+registers, as a field's phase would make them, and are reported, not
+judged; the 80 from 3K, 35K and 51K machines are not compared, MAME
+refusing under 16K and reading nothing past `$8000` (`out/m11-mame.log`).
 
 ### 13.5 Soak
 
@@ -1647,8 +1710,43 @@ host `.sav` round trip (150 fields identical) passes; a torn or foreign
 `.sav` leaves the running machine unchanged.
 *Measured:* snapshot load time.
 *Leaves out:* `.ace` export (§18).
-*Open:* the reference emulator that checks `.ace` import. xAce has no
-loader (§13.4); MAME's `jupace` has one but is not run here (§18 item 6).
+*Reference:* MAME, run headless (§13.4, §18 item 6).
+*Built, 2026-10-04; `.ace` on the board not yet checked.* The format is
+§10.5's, settled from the archive's description, MAME's loader and 199
+files (§16). `snap_ace.c` imports, `snapshot.c` is pico-atom's `.sav` with
+the Z80's fields, `sha1.c` is pico-atom's, and the Snapshot page is §12's.
+**On the host** (Apple M1 Pro, Apple clang 21): `test_snap_ace` makes
+files with an encoder written to the archive's description, from machines
+the real ROM ran, and judges each by typing at the loaded machine: a word
+defined before the save runs in the 3K, 19K and 51K, a file padded to
+`$8001` loads in the 3K, a 19K file is refused by the 3K and the 51K naming
+19K and leaves them untouched, a 35K file is refused by the 19K naming 51K
+and loads in the 51K with `$04F7` written back; without that word the ROM
+does not return to the prompt (the control). Files with no end mark, short
+of `$4000`, too long, with a RAMTOP or IM no `.ace` has, or unreadable are
+refused by the check with the machine untouched. All 199 archive files:
+198 load (35 with the word written back), Ace Invaders is refused, and
+every file saved in the key wait is still in it 100 fields on with its
+screen. Against MAME, the 102 19K files saved in the key wait are the
+same (§13.4, `out/m11-mame.log`). `test_snapshot`: a state saved 37 fields
+into a program that scrolls and beeps, restored into a machine that has
+been doing something else, meets the original 150 fields on in RAM, CPU,
+T counter, speaker and budget, with the same speaker edges (a budget one T
+out does not meet); 3K and 51K states round-trip and their words run; a
+flipped bit, a short file, wrong magic, a newer version, an impossible
+length, another ROM, field or RAM size are refused with the machine
+untouched; the ROM's SHA-1 is §10.2's.
+**On the board** (Plus 2 W, id `7458DC82A89AAC12`, 150 MHz, gcc 15.2):
+`: sq dup * ;`, saved to slot 1 from the menu over the UART; after
+`FORGET SQ`, `3 sq .` stopped at `sq`; slot 1 loaded, the saved screen came
+back, and `3 sq .` printed `9  OK` (`out/m11-sav.log`). Underrun samples 0
+and late refills 0 throughout, at 36,621 Hz consumed.
+*Measured:* a 19K state (19,604 bytes) saves in 132.0 ms and loads, both
+passes, in 47.1 ms on the board.
+*Not verified:* `.ace` loads on the board (no files on the card yet; the
+staged set is `out/m11-card/`); the Snapshot page looked at on the panel;
+the shipping build; a card pulled mid-save. After the first flash the
+Debug Probe dropped off USB and needed a replug, as once in M10.
 
 #### M12. Performance pass and soak
 
@@ -1734,7 +1832,7 @@ runtime configuration (EL §14.2).
 | RNG seed location | none | ROM | **settled** 2026-10-03: the ROM has no random-number word (its dictionary names were listed). The manual's `RND` keeps its own seed and seeds it from FRAMES (`$3C2B`), which the interrupt counts, so zeroed RAM leaves nothing stuck (§6.3) |
 | Key minimum hold, in fields | 3 scans | **ROM, executed** | **settled** 2026-10-03: the interrupt's scan (`$0310`) counts a held key down from `$20` in `$3C27` and takes it on the third consecutive field; the next key needs one field with every key up; a key held 33 fields repeats, and then every 4. Typing a line at 2 fields held or with no gap loses keys (`test_keyboard`'s controls). The replay uses 4 and 2 (§9.1) |
 | `.tap` block layout | §10.3 | ROM tape routines; archive files | **settled** 2026-10-04: on tape a block is the flag byte (`$00` header, `$FF` data), the bytes, and their XOR; the `.tap` keeps a 2-byte little-endian length (bytes + 1), the bytes and the XOR, with no flag, and the ROM writes a 25-byte header then its data. The archive's `tut-tut.tap` (jupiter-ace.co.uk, fetched 2026-10-04) is exactly that: a 26-byte block naming `TUTTUT`, then 11,998 bytes, both XORing to zero. A block's flag is therefore taken from its place, even blocks headers (`tape.h`) |
-| `.ace` snapshot encoding | §10.5 | xAce/EightyOne docs; sample files | low |
+| `.ace` snapshot encoding | §10.5 | the archive's FAQ; MAME's loader; sample files | **settled** 2026-10-04 from the Jupiter Ace Archive's FAQ, MAME's `snapshot_cb` and 199 files (the archive's 4, TOSEC's 195): RLE with `ED`, RAMTOP at `$2080`, registers from `$2100` in 32-bit words with noise above the value, no dump past `$7FFF`. The key wait's stack is `$04F7` at RAMTOP − 2 in all 135 files that hold it. `test_snap_ace` loads all 199 (198 load, 1 refused for its stack); MAME agrees on the 102 19K files saved in the key wait (§13.4) |
 | Tape signal timings | — | ROM tape routines | unknown |
 | Tape block routines | load `$18A7`, save `$1820` | ROM | **settled** 2026-10-04 by reading them (`tape.c` names every address used) and by execution: `test_tape` records the ROM's own SAVE off D3, plays it into the ROM's LOAD and VERIFY, and the trapped calls leave the same machine in every byte of RAM and every register but R. The tape input is D5; the loader keeps the last level it saw in C. The signal must be played inverted against D3 for the line to rest at the input's idle level (D5 high) between blocks |
 
@@ -1800,6 +1898,13 @@ The owner's decisions, each with its date. None is open as of 2026-10-03.
    Snapshots are not a critical feature, so the check that a reference
    emulator loads an archive `.ace` leaves M3's done-when, and choosing a
    reference for `.ace` is left to M11 (§15.2), which builds the import.
+   *Chosen 2026-10-04:* **MAME, run headless**, which changes "MAME is read
+   here, not run" for this check only (§13.4).
+7. **A 35K `.ace` loads into the 51K machine.** *Decided 2026-10-04.* There
+   is no 35K machine (§6.2), and 36 of the archive's 199 files were saved on
+   one (§10.5). They load into the 51K with their bytes as they are and only
+   the key wait's missing stack word, `$04F7` at `$BFFE`, written back,
+   rather than being moved down into the 19K or refused.
 
 ---
 
