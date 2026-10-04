@@ -1429,8 +1429,11 @@ underrun samples, 0 late refills**, no core overflow, no late fields, no
 dropped snapshots, no I²C errors and no lost log lines. The queue's low
 water was 641 of 1,024. The board's speaker edges for `100 2000 BEEP`,
 `300 2000 BEEP` and `50 1000 BEEP` were 5,000, 1,666 and 5,000, the host's
-counts exactly. The prompt does not click (§8). Core 0 with audio: §3.2's
-M8 table. *Not verified:* the pitch by ear on the PicoCalc's speaker; the
+counts exactly. The prompt does not click (§8). The late path, which the
+soak never took, was forced with a scratch build that masked core 0's
+interrupts for 9 ms every 250 fields (`out/m8-late.log`): each stall counted
+3 late refills and cost 3 halves of consumed samples, with no IRQ storm and
+no underrun, and playback carried on. Core 0 with audio: §3.2's M8 table. *Not verified:* the pitch by ear on the PicoCalc's speaker; the
 shipping build (`PICO_ACE_UART=OFF`), which was only built.
 
 #### M9. The card

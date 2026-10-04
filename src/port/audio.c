@@ -86,7 +86,7 @@ static void __not_in_flash_func(fill_half)(uint32_t *dst) {
 }
 
 static void __not_in_flash_func(refill)(unsigned which) {
-    int ch = s_ch[which];
+    int ch = s_ch[which], other = s_ch[which ^ 1u];
     uint32_t *half = &s_ring[which * ACE_DMA_SLOTS_PER_HALF];
 
     /* This channel finished and chained to the other. If it is running
@@ -97,8 +97,18 @@ static void __not_in_flash_func(refill)(unsigned which) {
      * until its next completion re-arms it. Nothing is taken off the
      * queue either: that completion refills this half, so samples put
      * here now would be overwritten before they played. Left queued,
-     * they are only late. */
-    if (dma_channel_is_busy(ch)) {
+     * they are only late.
+     *
+     * Missed by both completions, the other channel can be the one
+     * replaying, through the wrap, inside this half: writing it would
+     * tear what it is playing. So this half is written only when no
+     * running channel's read address is in it. An address at the half's
+     * very start counts as in it, which is conservative: skipping only
+     * ever costs a replay. In time, the other channel is in its own
+     * half, and this never trips. */
+    uintptr_t off = (uintptr_t)dma_hw->ch[other].read_addr - (uintptr_t)half;
+    if (dma_channel_is_busy(ch) ||
+        (dma_channel_is_busy(other) && off < ACE_DMA_SLOTS_PER_HALF * sizeof(uint32_t))) {
         s_late++;
         return;
     }
@@ -213,6 +223,9 @@ size_t audio_room(void) {
 }
 
 void audio_stats(audio_stats_t *st, bool reset_low_water) {
+    /* The refill IRQ writes all of these; masked for these few loads, a
+     * minimum it records cannot fall between the read and the reset. */
+    uint32_t irq = save_and_disable_interrupts();
     st->underrun_samples = s_underruns;
     st->late_refills = s_late;
     st->consumed = s_consumed;
@@ -220,4 +233,5 @@ void audio_stats(audio_stats_t *st, bool reset_low_water) {
     st->low_water = s_low_water;
     st->started = s_started;
     if (reset_low_water) s_low_water = st->level;
+    restore_interrupts(irq);
 }
