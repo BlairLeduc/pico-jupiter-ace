@@ -1748,10 +1748,13 @@ late refills 0 throughout, at 36,621 Hz consumed.
 and 82.2 ms to another, and loads, both passes, in 47.0–47.1 ms on the
 board.
 The owner ran the shipping build (`PICO_ACE_UART=OFF`) on a Pico 2 W,
-2026-10-04, and loaded `.ace` files from the Snapshot page successfully
-(no UART, so no timings, board id or file names).
-*Not verified:* which `.ace` files were loaded on the device, and a refusal
-by the wrong machine there (host only); `.ace` load time on the device;
+2026-10-04, with the staged set (`out/m11-card/`) on the card: in the 19K
+machine Pacman and Othello, the set's 19K files, loaded from the Snapshot
+page, and the rest, for 3K and 51K (35K) machines, were refused (no UART,
+so no timings or board id). The menu cannot change the RAM size until the
+Machine page (M15); `ram` in the settings file does (§10.6).
+*Not verified:* the 3K and 51K files loading on the device, in machines
+booted with `ram = 3k` and `ram = 51k`; `.ace` load time on the device;
 a card pulled mid-save. After the first flash the
 Debug Probe dropped off USB and needed a replug, as once in M10.
 

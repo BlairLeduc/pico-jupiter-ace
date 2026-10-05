@@ -25,9 +25,11 @@ MAME agrees on all 102 19K files saved in the key wait
 fields; a restored machine meets the original 150 fields on. On the Plus
 2 W (id `7458DC82A89AAC12`): a word saved to slot 1, forgotten, and loaded
 back ran; save 132.0 ms, load 47.1 ms, 0 underruns. The owner ran the
-shipping build on a Pico 2 W, 2026-10-04, and loaded `.ace` files from
-the Snapshot page (no UART, so no timings or file names). **Not
-checked:** a wrong-machine refusal on the device; `.ace` load time. After
+shipping build on a Pico 2 W, 2026-10-04: Pacman and Othello (19K) loaded
+and the 3K and 35K/51K files were refused by the 19K machine. **Not
+checked:** 3K and 51K files loading on the device (the menu cannot change
+RAM until M15's Machine page; `ram =` in the settings file can); `.ace`
+load time. After
 the first flash the Debug Probe dropped off USB until replugged, as once in
 M10.
 
