@@ -1361,8 +1361,10 @@ run with no irregular step; rt never below 0.995 and a mean of at least
 0.999; late fields, slips, dropped snapshots, keys lost, I²C errors, `ED`
 holes, log lines dropped, underrun samples, late refills and the
 beeper's overflow all zero; presents, keyboard polls and speaker edges
-growing; and the screen dumps showing the program reading both typed
-keys. UART keys enter the matrix without passing the southbridge, so
+growing; the speaker moving in every heartbeat after the program
+started, and the program's count rising from each screen dump to the
+next, so a workload that stopped early fails; and the screen dumps
+showing the program reading both typed keys. UART keys enter the matrix without passing the southbridge, so
 they are not its key events; keys pressed on the PicoCalc are reported,
 not required. A gauge showing charging fails the run.
 

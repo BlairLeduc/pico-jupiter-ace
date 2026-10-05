@@ -68,6 +68,9 @@ for line in "${program[@]}"; do
     "$here/uart-type.sh" "$line\r"
     sleep 1
 done
+# Where the program started, for soak-check.py: heartbeats before this
+# are boot and typing.
+grep -ac 'heartbeat' "$log" >"$outdir/soak-$stamp.start" || true
 start=$(date +%s)
 echo "soak.sh: running $minutes minutes from $(date +%H:%M:%S) -> $log"
 

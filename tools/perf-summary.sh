@@ -9,7 +9,8 @@
 # straddles the start. Core 0 busy is the share that counts: the guest,
 # the keys and the snapshot, without the wait on the audio queue. The
 # consumed rate is the control: it is the PWM wrap, and it must read the
-# same in every row. Underruns and late refills are the run's growth.
+# same in every row. Underruns and late refills are their growth over the
+# averaged windows, from the last audio line before them.
 set -euo pipefail
 
 # The capture opens with line noise from the reset, which is not UTF-8.
@@ -38,12 +39,15 @@ for dir in "$@"; do
                 if (k == 1 || b < bmin) bmin = b
                 if (k == 1 || b > bmax) bmax = b
             }
-            / audio / && n > start + 1 {
-                r = num("[0-9]+ Hz consumed", 0, 12)
+            / audio / {
                 u = num("underrun samples [0-9]+", 17, 0)
                 l = num("late refills [0-9]+", 13, 0)
-                if (kr == 0) { u0 = u; l0 = l }
-                sr += r; kr++; u1 = u; l1 = l
+                if (u == "") next
+                # The counters are cumulative: the baseline is the last
+                # line before the averaged windows, so a failure in the
+                # first of them still counts.
+                if (n <= start + 1) { u0 = u; l0 = l; next }
+                sr += num("[0-9]+ Hz consumed", 0, 12); kr++; u1 = u; l1 = l
             }
             END {
                 if (!k) { printf "%-22s %-8s no steady heartbeats\n", dir, w; exit }

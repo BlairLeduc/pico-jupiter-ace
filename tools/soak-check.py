@@ -20,7 +20,10 @@ guest is paced by the audio queue (design.md §8), so it reads 1.000 or
 run of lower figures, which the floor catches.
 
 Presents, keyboard polls and speaker edges must grow: a soak that
-exercised nothing proves nothing. Keys typed over the UART go to the
+exercised nothing proves nothing. The workload must also run to the end:
+after the program starts (soak.sh writes how many heartbeats came before,
+beside the log), the speaker must move in every heartbeat, and the count
+the program prints must rise from each screen dump to the next. Keys typed over the UART go to the
 guest's matrix without passing the southbridge, so they are not key
 events; the screen dumps soak.sh asks for must show the program reading
 both of them instead (the column after the count: 16 for H, 8 for J).
@@ -68,8 +71,8 @@ def main():
     boots = len(re.findall(r"firmware\s*:", text))
     if boots != 1:
         fails.append("%d boots in the log, not 1 (a reset during the run?)" % boots)
-    if not hbs or not aus:
-        print("FAIL: no heartbeats in %s" % a.log)
+    if len(hbs) < 2 or not aus:
+        print("FAIL: %d heartbeats in %s, too few to check" % (len(hbs), a.log))
         return 1
     last_hb = list(HB.finditer(text))[-1].start()
     if list(AU.finditer(text))[-1].start() < last_hb:
@@ -131,6 +134,35 @@ def main():
         if final <= first:
             fails.append("%s did not grow (%d to %d): not exercised" % (name, first, final))
 
+    # The workload must run for the whole soak, not only at its start:
+    # from the heartbeat after the program was started (soak.sh records
+    # how many came before; without the record, the first with an edge),
+    # the speaker must move in every heartbeat's window, and each screen
+    # dump must show the program's count higher than the last one did.
+    hb_pos = [m.start() for m in HB.finditer(text)]
+    au_pos = [(m.start(), int(m.group(6))) for m in AU.finditer(text)]
+    try:
+        start = int(open(re.sub(r"\.log$", "", a.log) + ".start").read())
+    except (OSError, ValueError):
+        start = next((i for i, (_, e) in enumerate(au_pos) if e), len(au_pos))
+        start = sum(1 for p in hb_pos if p < au_pos[min(start, len(au_pos) - 1)][0])
+    begin = hb_pos[min(start + 1, len(hb_pos) - 1)]
+    edges = [e for p, e in au_pos if p > begin]
+    still = sum(1 for x, y in zip(edges, edges[1:]) if y <= x)
+    if len(edges) < 2:
+        fails.append("no audio lines after the program started")
+    elif still:
+        fails.append("the speaker was silent through %d of %d heartbeats after the "
+                     "program started: it stopped" % (still, len(edges) - 1))
+    dumps = [d for d in re.split(r"screen\s*:", text[begin:])[1:]]
+    counts = [max((int(m.group(1)) for m in SCREEN_ROW.finditer(d)), default=0) for d in dumps]
+    stalls = sum(1 for x, y in zip(counts, counts[1:]) if y <= x)
+    if len(counts) < 2:
+        fails.append("fewer than two screen dumps after the program started")
+    elif stalls or not counts[0]:
+        fails.append("the program's count did not rise between %d of %d screen dumps"
+                     % (stalls, len(counts) - 1))
+
     charging = sum(1 for b in hbs if b[16])
     levels = [int(b[15]) for b in hbs if b[15]]
     if charging:
@@ -168,6 +200,11 @@ def main():
     if keys:
         print("  keys read on screen    %d rows dumped: %d H, %d J"
               % (len(keys), keys.count(16), keys.count(8)))
+    if counts:
+        print("  program count          %d screen dumps after the start, %d to %d"
+              % (len(counts), counts[0], counts[-1]))
+    print("  speaker moving         %d of %d heartbeats after the start"
+          % (len(edges) - 1 - still if len(edges) > 1 else 0, max(len(edges) - 1, 0)))
     print("  PicoCalc key events    %d during the run (pressed by hand; not required)" % pressed)
     print("  power                  %s" % power)
     if dies:
