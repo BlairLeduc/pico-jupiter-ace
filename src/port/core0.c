@@ -101,10 +101,11 @@ static bool turbo_now(const ace_t *m) {
     return PICO_ACE_TURBO && ace_cassette_running(m);
 }
 
-/* The recorder took a block that is not on the card yet (tapeio.h). */
+/* The recorder took a block that is not on the card yet, and the card
+ * has not been found missing since (tapeio.h). */
 static bool unsaved(const ace_t *m) {
     uint32_t from, to;
-    return ace_cassette_unsaved(m, &from, &to);
+    return ace_cassette_unsaved(m, &from, &to) && !tapeio_flush_waiting();
 }
 
 /* What the card gave the boot, for the heartbeat: the slot now, the

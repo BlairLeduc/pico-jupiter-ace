@@ -16,8 +16,8 @@
  *
  * The recorder is the other half: D3 of every even-port OUT, the line
  * the save routine drives (§16), read back as half-cycles and decoded as
- * the ROM's load routine would, into .tap blocks appended to the image,
- * which is whole after every byte.
+ * the ROM's load routine would, into .tap blocks appended to the image.
+ * A block is kept only once it is whole: one cut short is taken back out.
  *
  * The deck has no motor control, as the Ace has none. It follows the
  * ROM's cues instead (tape.c): the load routine's entry starts the
@@ -53,11 +53,12 @@ typedef struct {
     bool     open;         /* a block is being written                         */
     uint32_t at;           /* its length field's offset in the image           */
     uint32_t n;            /* its bytes written, the flag not among them       */
+    uint32_t want;         /* its bytes whole: DE at the save cue, and the sum */
     uint32_t place;        /* blocks in the image before it: its flag (tape.h) */
     uint32_t mark;         /* the image's length when last written out          */
     bool     full;         /* ran out of room, and records nothing more        */
     uint32_t blocks;       /* blocks recorded                                  */
-    uint32_t errors;       /* blocks dropped: a flag out of its place          */
+    uint32_t errors;       /* blocks dropped: a flag out of its place, or cut short */
 } cassette_rec_t;
 
 typedef struct {
@@ -118,7 +119,8 @@ void ace_cassette_record(struct ace_s *m, bool armed);
 bool ace_cassette_running(const struct ace_s *m);
 
 /* The recorded bytes not yet written out, [*from, *to) of the image; false
- * when there are none or a block is still being recorded. */
+ * when there are none or a block is still being recorded. They stay
+ * until ace_cassette_saved says what became of them. */
 bool ace_cassette_unsaved(const struct ace_s *m, uint32_t *from, uint32_t *to);
 
 /* They are on the card: or, with keep false, drop them from the image,

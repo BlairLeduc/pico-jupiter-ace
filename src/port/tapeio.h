@@ -59,6 +59,11 @@ const char *tapeio_play(ace_t *m, bool on);
 /* fast_tape changed: on, the cassette is emptied. */
 void        tapeio_mode(ace_t *m);
 
+/* A recording found no card to be written to and is kept; core 0 asks
+ * for no park for it until the card changes, which core 1 reports. */
+bool        tapeio_flush_waiting(void);
+void        tapeio_card_changed(void);
+
 /* The last thing a load or save did that the user should hear about,
  * for the menu's status row; "" for nothing. Cleared by reading. */
 const char *tapeio_said(void);

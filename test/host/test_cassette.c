@@ -355,6 +355,40 @@ static int test_declined(void) {
     return test_failures ? 1 : 0;
 }
 
+/* A block is kept only whole. With room for the header but not the
+ * data, the data is taken back out; a reset part-way through a block
+ * leaves the image as it was before the block. */
+static int test_cut_short(void) {
+    static uint8_t img[65536];
+    CHECK(guest_boot(&g, ACE_RAM_19K, 400), "boot");
+    traps_off(&g.m);
+    ace_cassette_insert(&g.m, img, 0, 28u + 10u);
+    ace_cassette_record(&g.m, true);
+    guest_type(&g, ": SQ DUP * ;\n");
+    guest_type(&g, "SAVE SQ\n");
+    guest_fields(&g, 600);
+    CHECK(g.m.cas.len == 28u && g.m.cas.rec.blocks == 1u && g.m.cas.rec.errors == 1u,
+          "no room for the data: the header alone kept (%u bytes, %u blocks, %u dropped)",
+          g.m.cas.len, g.m.cas.rec.blocks, g.m.cas.rec.errors);
+
+    CHECK(guest_boot(&g, ACE_RAM_19K, 400), "boot");
+    traps_off(&g.m);
+    ace_cassette_insert(&g.m, img, 0, sizeof img);
+    ace_cassette_record(&g.m, true);
+    guest_type(&g, ": SQ DUP * ;\n");
+    guest_type(&g, "SAVE SQ\n");
+    /* In small slices, through the CPU's trap hook as a field would. */
+    for (long k = 0; k < 2000000 && !(g.m.cas.rec.blocks == 1u && g.m.cas.rec.open &&
+                                      g.m.cas.rec.n >= 4u); k++)
+        ace_run(&g.m, 100);
+    CHECK(g.m.cas.rec.open && g.m.cas.rec.n >= 4u, "the data block part-way (%u bytes)",
+          g.m.cas.rec.n);
+    ace_reset(&g.m);
+    CHECK(g.m.cas.len == 28u && !g.m.cas.rec.on && g.m.cas.rec.errors == 1u,
+          "a reset part-way: the image as it was (%u bytes)", g.m.cas.len);
+    return test_failures ? 1 : 0;
+}
+
 /* Played by hand, with no load running: the key scan's INs read the
  * deck along, a stop keeps the place, and the tape plays to its end with
  * every edge of the walk. */
@@ -433,6 +467,7 @@ int main(void) {
     test_damaged();
     test_declined();
     test_by_hand();
+    test_cut_short();
     test_archive();
     TEST_DONE();
 }

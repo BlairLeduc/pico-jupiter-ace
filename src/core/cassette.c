@@ -175,14 +175,18 @@ void ACE_HOT1(cassette_advance)(cassette_t *c, uint32_t now) {
 
 enum { RS_SEEK, RS_SYNC2, RS_BITS };
 
+/* A block is kept only whole: the bytes the save routine was asked for
+ * and the checksum. One cut short, by BREAK, a reset or a full image,
+ * leaves the image as it was before it, and is counted. */
 static void rec_close(cassette_t *c) {
     cassette_rec_t *r = &c->rec;
     if (r->open) {
-        if (r->n == 0) {
-            c->len = r->at;                 /* a flag and nothing after it */
-        } else {
+        if (r->n == r->want) {
             r->blocks++;
             r->place++;
+        } else {
+            c->len = r->at;
+            r->errors++;
         }
         r->open = false;
     }
@@ -209,7 +213,7 @@ static void rec_byte(cassette_t *c, uint8_t b) {
         c->img[c->len++] = 0;
         return;
     }
-    if (c->len + 1u > c->cap || r->n == 0xFFFFu) { r->full = true; return; }
+    if (c->len + 1u > c->cap || r->n >= r->want) { r->full = c->len + 1u > c->cap; return; }
     c->img[c->len++] = b;
     r->n++;
     c->img[r->at] = (uint8_t)r->n;
@@ -393,6 +397,7 @@ void cassette_cue_save(ace_t *m) {
     r->level = m->tape_out;
     r->last = m->cpu.t;
     r->place = blocks_in(c);
+    r->want = (uint32_t)m->cpu.de.w + 1u;   /* DE bytes, then the checksum */
     r->state = RS_SEEK;
     r->lead = 0;
     r->open = false;

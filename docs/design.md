@@ -1104,9 +1104,11 @@ not in the checksum. The player is played inverted against D3 (§16) and
 brought up to date only when an even port is read: before the next edge,
 one subtract and a branch. The recorder takes D3 from every even `OUT` and
 reads half-cycles as the load routine does, a bit by its whole cycle
-against 2,400 T, into `.tap` blocks appended to the image, which is whole
-after every byte. A block whose flag is not the one its place in the file
-gives is dropped and counted (§10.3).
+against 2,400 T, into `.tap` blocks appended to the image. A block is
+kept only whole, the DE bytes the save cue found and the checksum; one cut
+short by BREAK, a reset or a full image is taken back out, and so is one
+whose flag is not the one its place in the file gives (§10.3). Each is
+counted.
 
 The deck follows the ROM's cues, as the trap does: the load routine's
 entry starts it, the save routine's starts the recorder when the deck is
@@ -1122,7 +1124,11 @@ trap, by name, by its first header, or in the deck, but then reads the
 file whole into a 64 KiB image (§3.3), puts it in the cassette and
 declines, so the ROM's own routine reads the signal. A save is recorded
 the same way and appended to the file the trap would have written, at the
-next park (§4.5). The cassette plays from where it stands, as a deck does,
+next park (§4.5). A block the image has no room for whole is saved by the
+trap instead. A save with no deck the user chose records into a scratch
+image, emptied at each header once what it held is on the card. With no
+card at that park the recording is kept, not dropped, and written when
+the card changes. The cassette plays from where it stands, as a deck does,
 and a `LOAD` at its end rewinds it once, as the trap's does.
 
 ### 10.5 Snapshots
@@ -2044,7 +2050,13 @@ compute 23.3 % and 23.3 %, glyphs 23.3 and 23.2, idle 20.9 and 21.2,
 scrolling 3.4 and 3.4, sound 17.9 and 18.0, every consumed rate
 36,620–36,621 Hz with no underruns (`out/m13/perf-m13`, `perf-main`).
 
-*Not verified:* Play by hand on the board (on the host only);
+After review (PR #12), the recorder keeps only whole blocks
+(`test_cassette` holds it, with no room for the data and with a reset
+part-way, and fails with the old rule planted), and the port saves by the
+trap when the image is full, recycles the scratch and keeps a recording
+the card was missing for. *Not verified:* those three port changes on the
+board (the probe's SWD wedged before they could be flashed); Play by hand
+on the board (on the host only);
 a card pulled while a recording waits for its park; recording onto a tape
 the user put in the deck (the board's went to a new file); a loader of a
 program's own (none to hand).
