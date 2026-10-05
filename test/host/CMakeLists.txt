@@ -32,6 +32,8 @@ set(PICO_ACE_GUEST_TESTS
     test_keyboard
     test_render
     test_snappool
+    test_snap_ace
+    test_snapshot
     test_tape
 )
 foreach(t ${PICO_ACE_GUEST_TESTS})

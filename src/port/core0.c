@@ -135,6 +135,11 @@ static void apply_ui(ace_t *m) {
         ace_reset(m);
         log_printf("  menu         : reset\n");
     }
+    if (g_ui.power_on) {
+        g_ui.power_on = false;
+        ace_power_on(m);
+        log_printf("  menu         : powered on again after a failed load\n");
+    }
 }
 
 static void tenths(char *out, size_t n, uint32_t v10) {

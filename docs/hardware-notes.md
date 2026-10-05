@@ -260,6 +260,14 @@ The driver reaches the chip over a **PIO SPI whose divider is fixed against
   GP4 and RX GP5, was verified in both directions through the Debug Probe.
   Cross TX/RX and share ground. Discover the serial endpoint rather than
   hardcoding a workstation path.
+- **Keep a Mac's display awake while the probe is in use.** On a Mac, when
+  the display sleeps the Debug Probe wedges: its serial port goes away
+  ("Device not configured") or the UART goes silent, and it does not
+  enumerate again until it is unplugged and plugged back in. `caffeinate -s`
+  is not enough, since it prevents only system sleep and lets the display
+  sleep; `caffeinate -d` (or `-dims`) keeps the display up. Found by the
+  owner of the PicoCalc emulators, 2026-10-04, after two unexplained
+  drop-outs: both cores were still running their normal loops each time.
 - **Configure stdio explicitly.** Select UART, USB CDC or a custom LCD
   `stdio_driver_t` in the application. Keep CMake's UART definitions consistent
   with the pin header. Multiple enabled stdio drivers can receive output;

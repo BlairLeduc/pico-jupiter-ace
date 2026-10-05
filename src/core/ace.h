@@ -125,6 +125,12 @@ static inline uint32_t ace_field_t(const ace_t *m) {
  * (the budget is signed). */
 bool ace_init(ace_t *m, const ace_config_t *cfg);
 
+/* Power on again with the machine's own configuration, as ace_init with
+ * m->cfg, keeping the sample rate the port set and the DC blocker's
+ * setting. For a machine whose state can no longer be trusted: a load
+ * that failed after it had started to change it (design.md §10.5). */
+void ace_power_on(ace_t *m);
+
 /* The CPU's reset line: RAM and the page table are kept, and a tape
  * request the CPU was stalled on is dropped. */
 void ace_reset(ace_t *m);
@@ -142,6 +148,12 @@ uint32_t ace_run_field(ace_t *m);
 
 /* Copy a machine. Never '=': the page table points into the struct. */
 void ace_copy(ace_t *dst, const ace_t *src);
+
+/* After a snapshot has replaced the CPU and RAM (design.md §10.5): a
+ * tape request is dropped, the keys are let go (the keyboard's state is
+ * now, not then; the port lets go of its held set too), and the beeper
+ * carries on from the CPU's clock and the speaker's level. */
+void ace_restored(ace_t *m);
 
 /* A key in the matrix, by half-row (0-7, A8-A15) and bit (0-4). Anything
  * outside ACE_KEY_ROWS x ACE_KEY_COLS is ignored. */

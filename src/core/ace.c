@@ -169,11 +169,30 @@ bool ace_init(ace_t *m, const ace_config_t *cfg) {
     return true;
 }
 
+void ace_power_on(ace_t *m) {
+    ace_config_t cfg = m->cfg;
+    uint32_t num = m->beeper.num, den = m->beeper.den;
+    bool dc_block = m->beeper.dc_block;
+    if (!ace_init(m, &cfg)) return;      /* it was running with this cfg */
+    /* T-states a sample = num / den, so a clock of num and a rate of den
+     * over 1 gives the same fraction (beeper_init). */
+    beeper_init(&m->beeper, m->cpu.t, m->speaker, num, den, 1u);
+    m->beeper.dc_block = dc_block;
+}
+
 void ace_reset(ace_t *m) {
     z80_reset(&m->cpu);
     /* A request goes with the program that made it. */
     m->tape.op = TAPE_NONE;
     m->tape.pass = false;
+}
+
+void ace_restored(ace_t *m) {
+    m->tape.op = TAPE_NONE;
+    m->tape.pass = false;
+    m->tape.begun = false;
+    memset(m->keys, 0, sizeof m->keys);
+    beeper_restart(&m->beeper, m->cpu.t, m->speaker);
 }
 
 /* The page table is a function of cfg, so the copy's is rebuilt over its
