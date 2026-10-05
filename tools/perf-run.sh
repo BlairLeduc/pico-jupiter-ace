@@ -30,6 +30,8 @@ dwell="${PERF_DWELL:-45}"   # seconds each program runs: ~9 heartbeats
 # keys that arrive while it handles the line before (found on the host).
 # glyphs rewrites the space's eight rows ($2D00, character RAM at $2C00)
 # 256 times over, so every blank cell changes glyph (design.md §7.3).
+# print prints and scrolls without a HALT, all through the waiting mirror
+# $2400: the wait-state model's worst case (§6.4, §15.2 M14).
 program() {
     case "$1" in
         idle)    ;;
@@ -37,6 +39,7 @@ program() {
         scroll)  printf '%s\n' ': v begin vlist 0 until ;' v ;;
         sound)   printf '%s\n' ': b begin 100 200 beep 0 until ;' b ;;
         glyphs)  printf '%s\n' ': g begin 256 0 do 8 0 do j 11520 i + c! loop loop 0 until ;' g ;;
+        print)   printf '%s\n' ': p begin cr ." ABCDEFGHIJKLMNOPQRSTUVWXYZ0123" 0 until ;' p ;;
         *) echo "perf-run.sh: unknown workload $1" >&2; exit 2 ;;
     esac
 }

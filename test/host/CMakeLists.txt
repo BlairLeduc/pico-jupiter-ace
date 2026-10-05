@@ -37,6 +37,7 @@ set(PICO_ACE_GUEST_TESTS
     test_snap_ace
     test_snapshot
     test_tape
+    test_wait
 )
 foreach(t ${PICO_ACE_GUEST_TESTS})
     add_executable(${t} ${t}.c guest.c)

@@ -164,8 +164,10 @@ int main(void) {
         for (size_t i = 0; i + 64u <= snap.len && !rom; i++)
             rom = memcmp(snap.buf + i, ace_rom + 0x1820u, 64u) == 0;
         CHECK(!rom, "ROM bytes must not be in a state");
+        CHECK(snap.buf[SNAP_HEADER_LEN + 80u] == (g.m.cfg.wait_states ? 1u : 0u),
+              "the wait states are byte 80 of the state");
         bool reserved = true;
-        for (unsigned i = 80; i < SNAP_STATE_LEN; i++)
+        for (unsigned i = 81; i < SNAP_STATE_LEN; i++)
             reserved = reserved && snap.buf[SNAP_HEADER_LEN + i] == 0;
         CHECK(reserved, "reserved state bytes are written zero");
     }
@@ -251,6 +253,18 @@ int main(void) {
         CHECK(check(&other) == SNAP_OTHER_FIELD, "another field: %s",
               snapshot_status_str(check(&other)));
         CHECK(load(&other) == SNAP_OTHER_FIELD, "load refuses another field");
+
+        /* The wait states the other way (design.md §6.4); and the same
+         * machine, the control, takes it. */
+        guest_config(&cfg, ACE_RAM_19K);
+        cfg.wait_states = !cfg.wait_states;
+        CHECK(ace_init(&other, &cfg), "init with the wait states the other way");
+        CHECK(check(&other) == SNAP_OTHER_FIELD, "other wait states: %s",
+              snapshot_status_str(check(&other)));
+        CHECK(load(&other) == SNAP_OTHER_FIELD, "load refuses other wait states");
+        guest_config(&cfg, ACE_RAM_19K);
+        CHECK(ace_init(&other, &cfg), "init the same machine");
+        CHECK(check(&other) == SNAP_OK, "the same machine: %s", snapshot_status_str(check(&other)));
 
         /* Other RAM sizes, which also round-trip their own states. */
         static const ace_ram_t sizes[] = { ACE_RAM_3K, ACE_RAM_51K };

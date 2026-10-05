@@ -26,10 +26,11 @@ typedef enum {
     ACE_RAM_51K,      /* + 48 KiB at $4000-$FFFF                          */
 } ace_ram_t;
 
-/* What the machine is built from. Everything below `rom` is a guest fact
- * that §16 has not settled from a primary source, so it is configuration
- * rather than a #define (EL §14.2); ace_config_default gives the values
- * and says where each came from. */
+/* What the machine is built from. ace_config_default gives the values
+ * and says where each came from. The field's shape is settled, and its
+ * #defines are in config.h; it stays here so that a test can run a field
+ * of another shape as its control. The bus values below it are not
+ * settled (§16), so they are configuration (EL §14.2). */
 typedef struct {
     ace_ram_t ram;
 
@@ -61,6 +62,10 @@ typedef struct {
     /* Skip a HALT's repeats rather than run them (z80_t.halt_skip,
      * §5.3). On by default; off is M12's control. */
     bool halt_skip;
+
+    /* Hold the CPU on the waiting mirrors, $2400 and $2C00, while the
+     * video circuit fetches (§6.4). Those pages then take the slow path. */
+    bool wait_states;
 } ace_config_t;
 
 typedef struct ace_s {
@@ -106,6 +111,14 @@ typedef struct ace_s {
      * display up to INT, INT held, and INT released up to the next
      * active line. */
     uint32_t field_t[3];
+
+    /* cpu.t at the start of this field's first active line, where its
+     * nominal time began: the wait states are placed from it (§6.4). */
+    uint32_t field_start;
+
+    /* T-states the CPU has been held by the video circuit, since
+     * ace_init. A counter, not machine state. */
+    uint32_t wait_t;
 
     /* T-states owed between ace_run calls: the overshoot of the last
      * instruction, paid off from the next slice (§4.2). */
@@ -157,6 +170,10 @@ uint32_t ace_run(ace_t *m, uint32_t t_states);
  * program that redraws after it has finished by the end (§11.1). Debt
  * carries across the parts and across fields. Returns the T-states run. */
 uint32_t ace_run_field(ace_t *m);
+
+/* Model the waiting mirrors' hold, or not, from the next access on
+ * (§6.4): cfg.wait_states, and the page table to match. */
+void ace_set_wait_states(ace_t *m, bool on);
 
 /* Copy a machine. Never '=': the page table points into the struct. */
 void ace_copy(ace_t *dst, const ace_t *src);

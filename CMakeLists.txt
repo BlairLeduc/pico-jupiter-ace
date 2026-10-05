@@ -138,6 +138,16 @@ else()
         set(PICO_ACE_TURBO_ON 0)
     endif()
 
+    # PICO_ACE_WAIT=OFF leaves the waiting mirrors on the fast path and
+    # holds nothing, the control for the wait-state model (design.md §6.4,
+    # §15.2 M14).
+    option(PICO_ACE_WAIT "Hold the CPU on the waiting mirrors during the display" ON)
+    if (PICO_ACE_WAIT)
+        set(PICO_ACE_WAIT_ON 1)
+    else()
+        set(PICO_ACE_WAIT_ON 0)
+    endif()
+
     # How much of the core's hot path runs from SRAM (src/core/hot.h).
     # Tier 2 ships: M12 measured it against 0 and 1 (design.md §3.2). The
     # core library needs it too: that is where the marked functions are.
@@ -174,6 +184,7 @@ else()
             PICO_ACE_RAM_TIER=${PICO_ACE_RAM_TIER}
             PICO_ACE_HALT_SKIP=${PICO_ACE_HALT_SKIP_ON}
             PICO_ACE_TURBO=${PICO_ACE_TURBO_ON}
+            PICO_ACE_WAIT=${PICO_ACE_WAIT_ON}
             PICO_CLOCK_ADJUST_PERI_CLOCK_WITH_SYS_CLOCK=1
             # UART1 at 115200 8-N-1, TX GP4 / RX GP5 (hardware-notes.md §2.7).
             PICO_DEFAULT_UART=1

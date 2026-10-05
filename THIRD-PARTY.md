@@ -21,6 +21,18 @@ The firmware embeds the ROM unmodified, and the build refuses any other file
 (`docs/design.md` §10.2). If you hold rights in the ROM and object to its
 distribution here, please open an issue and it will be removed.
 
+## Jupiter Ace schematic — Bodo Wenzel, commented by nocash
+
+`docs/ace-sch-nocash.gif` is a schematic of the Jupiter Ace's original
+board (2114 RAMs), drawn by Bodo Wenzel (dated March 16, 2006 on the
+drawing) and commented and rearranged by Martin Korth (nocash) in July
+2010, as its title block says. It is **not covered by this project's GPL**
+and is kept unmodified, as a reference: `docs/design.md` §6.4 and §16
+settle the wait logic, the field's timing, the port and the memory
+decode from it. No licence is stated on the drawing. If you hold rights
+in it and object to its distribution here, please open an issue and it
+will be removed.
+
 ## font8x8
 
 `third_party/font8x8/` holds `font8x8_basic.h` and `README`, unmodified, from

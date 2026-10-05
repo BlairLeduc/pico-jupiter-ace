@@ -153,13 +153,32 @@ int main(void) {
     in_port(0xFEFE);
     CHECK(!m.speaker && m.beeper.edges == e + 2, "IN $FE did not lower the speaker");
 
+    /* An interrupt acknowledge asserts /IORQ with A0 low, but not /RD,
+     * which the port's read strobe needs (schematic, §2.3): taking INT in
+     * any mode leaves the speaker where it was. Only the acceptance is
+     * stepped, not the handler, whose key scan is all INs. */
+    for (uint8_t im = 0; im <= 2; im++) {
+        out_port(0x00FE, 0);
+        uint32_t e0 = m.beeper.edges;
+        m.cpu.sp = 0x3F00;
+        m.cpu.i = 0x3C;
+        m.cpu.pc = 0x4000;
+        m.cpu.im = im;
+        m.cpu.iff1 = m.cpu.iff2 = 1;
+        z80_set_int(&m.cpu, true);
+        z80_step(&m.cpu);
+        z80_set_int(&m.cpu, false);
+        CHECK(m.cpu.iff1 == 0, "IM %u: INT was not taken", im);
+        CHECK(m.speaker && m.beeper.edges == e0, "IM %u: the acknowledge moved the speaker", im);
+    }
+
     /* ---- ace_copy: the copy has its own memory, and runs. */
     static ace_t c;
     poke(0x4000, 0x11);
     ace_copy(&c, &m);
     poke(0x4000, 0x22);
     CHECK(ace_peek(&c, 0x4000) == 0x11, "the copy shares the original's RAM");
-    CHECK(c.page[0x40].read == &c.xram[0] && c.page[0x24].write == &c.vram[0],
+    CHECK(c.page[0x40].read == &c.xram[0] && c.page[0x20].write == &c.vram[0],
           "the copy's page table points outside it");
     CHECK(c.page[0x00].read == ace_rom, "the copy lost the ROM");
     CHECK(c.cpu.bus.ctx == &c && c.cpu.bus.page == c.page, "the copy's CPU is on the original's bus");

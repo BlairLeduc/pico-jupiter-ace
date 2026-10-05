@@ -196,6 +196,7 @@ void core0_run(ace_t *m, keymatrix_t *k) {
     /* The heartbeat's window and the perf line's (§14). */
     uint64_t hb_us = time_us_64(), sec_us = hb_us;
     uint32_t hb_t = m->cpu.t, hb_insns = m->cpu.insns, hb_halts = m->cpu.halts, hb_late = 0;
+    uint32_t hb_wait = m->wait_t;
     uint32_t sec_insns = m->cpu.insns;
     uint64_t hb_run_us = 0, hb_busy_us = 0, sec_run_us = 0, sec_busy_us = 0;
     bool prompt = false;
@@ -246,6 +247,7 @@ void core0_run(ace_t *m, keymatrix_t *k) {
             hb_t = m->cpu.t;
             hb_insns = sec_insns = m->cpu.insns;
             hb_halts = m->cpu.halts;
+            hb_wait = m->wait_t;
             hb_late = late;
             hb_run_us = hb_busy_us = sec_run_us = sec_busy_us = 0;
 #if PICO_ACE_AUDIO
@@ -349,6 +351,8 @@ void core0_run(ace_t *m, keymatrix_t *k) {
             uint64_t wall = now - hb_us;
             uint32_t t = m->cpu.t - hb_t, insns = m->cpu.insns - hb_insns;
             uint32_t halts = m->cpu.halts - hb_halts;
+            /* Guest T the video circuit held the CPU for (design.md §6.4). */
+            uint32_t held1000 = (uint32_t)((uint64_t)(m->wait_t - hb_wait) * 1000u / (t + 1u));
             /* Guest T over wall time at 3.25 MHz: 1.000 is real time. */
             uint32_t rt1000 = (uint32_t)((uint64_t)t * 1000000u / ACE_CPU_HZ * 1000u / wall);
             uint32_t busy1000 = (uint32_t)(hb_busy_us * 1000u / wall);
@@ -358,7 +362,8 @@ void core0_run(ace_t *m, keymatrix_t *k) {
                                           (hb_run_us + 1u));
             uint32_t hpi10 = (uint32_t)(hb_run_us * clk_mhz * 10u / (insns + 1u));
             uint32_t tpi100 = (uint32_t)((uint64_t)t * 100u / (insns + 1u));
-            char busy_s[12], guest_s[12], hpi_s[12];
+            char busy_s[12], guest_s[12], hpi_s[12], held_s[12];
+            tenths(held_s, sizeof held_s, held1000);
             tenths(busy_s, sizeof busy_s, busy1000);
             tenths(guest_s, sizeof guest_s, guest1000);
             tenths(hpi_s, sizeof hpi_s, hpi10);
@@ -382,12 +387,12 @@ void core0_run(ace_t *m, keymatrix_t *k) {
                        (unsigned long)g_park_stats.parks, (unsigned long)g_park_stats.max_us);
             log_printf("  perf         : tier %u, %lu MHz, core 0 busy %s%%, guest %s%% of wall, "
                        "headroom %lu.%02lux, %s host cycles/insn, %lu.%02lu T/insn, "
-                       "%lu insns, %lu halts skipped | turbo %lu fields, cassette %s, "
+                       "%lu insns, %lu halts skipped, held %s%% | turbo %lu fields, cassette %s, "
                        "%lu edges played, %lu blocks recorded (%lu dropped)\n",
                        (unsigned)PICO_ACE_RAM_TIER, (unsigned long)clk_mhz, busy_s, guest_s,
                        (unsigned long)(head100 / 100u), (unsigned long)(head100 % 100u),
                        hpi_s, (unsigned long)(tpi100 / 100u), (unsigned long)(tpi100 % 100u),
-                       (unsigned long)insns, (unsigned long)halts,
+                       (unsigned long)insns, (unsigned long)halts, held_s,
                        (unsigned long)turbo_fields,
                        m->cas.playing ? "playing" : m->cas.rec.on ? "recording"
                        : m->cas.loaded ? "stopped" : "empty",
@@ -397,6 +402,7 @@ void core0_run(ace_t *m, keymatrix_t *k) {
             hb_t = m->cpu.t;
             hb_insns = m->cpu.insns;
             hb_halts = m->cpu.halts;
+            hb_wait = m->wait_t;
             hb_late = late;
             hb_run_us = hb_busy_us = 0;
 #if PICO_ACE_AUDIO

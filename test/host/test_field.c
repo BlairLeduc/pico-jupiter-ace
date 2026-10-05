@@ -10,9 +10,13 @@
 
 static ace_t m;
 
-/* A guest that waits for INT with HALT, then redraws the whole screen
+#define REDRAW_BYTES 512u
+
+/* A guest that waits for INT with HALT, then redraws the top 16 rows
  * with the interrupt count, kept at $5000, so a snapshot shows one value
- * everywhere only if the redraw had finished (§11.1). IM 2, since the
+ * there only if the redraw had finished (§11.1). The rows are what fits
+ * between INT and the display, 64 lines or 13,312 T; the whole screen,
+ * 16,107 T, would tear on an Ace too. IM 2, since the
  * ROM's own handler is at $0038: with I = $3C and $FF on the bus the
  * vector is read from $3CFF and $3D00. */
 static const uint8_t redraw_main[] = {          /* at $4100 */
@@ -24,10 +28,10 @@ static const uint8_t redraw_main[] = {          /* at $4100 */
     0x76,                   /* HALT                               */
     0x21, 0x00, 0x24,       /* LD HL,$2400                        */
     0x11, 0x01, 0x24,       /* LD DE,$2401                        */
-    0x01, 0xFF, 0x02,       /* LD BC,767                          */
+    0x01, 0xFF, 0x01,       /* LD BC,511                          */
     0x3A, 0x00, 0x50,       /* LD A,($5000)                       */
     0x77,                   /* LD (HL),A                          */
-    0xED, 0xB0,             /* LDIR: 16,107 T                     */
+    0xED, 0xB0,             /* LDIR: 10,726 T                     */
     0x18, 0xED,             /* JR loop                            */
 };
 /* Returns with interrupts off: an EI here would take INT again while it
@@ -58,7 +62,7 @@ static int torn_fields(void) {
     for (int f = 0; f < 100; f++) {
         ace_run_field(&m);
         const uint8_t *s = ace_screen(&m);
-        for (unsigned i = 1; i < ACE_SCREEN_BYTES; i++) {
+        for (unsigned i = 1; i < REDRAW_BYTES; i++) {
             if (s[i] != s[0]) { torn++; break; }
         }
     }
@@ -72,7 +76,7 @@ int main(void) {
 
     /* ---- The shape: 312 lines of 208 T, split at INT's edges. */
     CHECK(ace_init(&m, &cfg), "ace_init refused the defaults");
-    CHECK(m.field_t[0] == (248u - 56u) * 208u, "active display to INT: %u T", m.field_t[0]);
+    CHECK(m.field_t[0] == 248u * 208u, "active display to INT: %u T", m.field_t[0]);
     CHECK(m.field_t[1] == 8u * 208u, "INT held %u T", m.field_t[1]);
     CHECK(ace_field_t(&m) == 64896u, "field %u T", ace_field_t(&m));
 

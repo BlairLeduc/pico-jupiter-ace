@@ -42,7 +42,8 @@ enum {
     S_FIELD = 46,                 /* field_t[0..2], 12 bytes             */
     S_CRAM_READ = 58, S_OPEN_BUS = 59,
     S_ROM = 60,                   /* SHA-1 of the ROM, 20 bytes          */
-    S_END = 80,                   /* the rest is reserved, written zero  */
+    S_MACHINE = 80,               /* bits below; zero before M14         */
+    S_END = 81,                   /* the rest is reserved, written zero  */
 };
 
 _Static_assert(S_END <= SNAP_STATE_LEN, "the state section has outgrown its length");
@@ -52,6 +53,10 @@ _Static_assert(S_END <= SNAP_STATE_LEN, "the state section has outgrown its leng
 #define F_LD_A_IR     0x04u
 #define F_INT_LINE    0x08u
 #define F_NMI_PENDING 0x10u
+
+/* S_MACHINE: the wait states were held (design.md §6.4). A state from
+ * before M14 reads zero, and was made without them. */
+#define M_WAIT_STATES 0x01u
 
 static void rom_hash(const ace_t *m, uint8_t digest[SHA1_DIGEST_LEN]) {
     sha1(m->cfg.rom, ACE_ROM_SIZE, digest);
@@ -83,6 +88,7 @@ static void state_encode(const ace_t *m, uint8_t st[SNAP_STATE_LEN]) {
     st[S_CRAM_READ] = m->cfg.cram_read;
     st[S_OPEN_BUS] = m->cfg.open_bus;
     rom_hash(m, st + S_ROM);
+    st[S_MACHINE] = m->cfg.wait_states ? M_WAIT_STATES : 0u;
 }
 
 /* ---- the stream -------------------------------------------------------- */
@@ -150,6 +156,8 @@ static snap_status_t compatible(const ace_t *m, const uint8_t st[SNAP_STATE_LEN]
         if (get32(st + S_FIELD + 4u * i) != m->field_t[i]) return SNAP_OTHER_FIELD;
     if (st[S_CRAM_READ] != m->cfg.cram_read || st[S_OPEN_BUS] != m->cfg.open_bus)
         return SNAP_OTHER_FIELD;
+    /* The hold changes every count in the state as the field does. */
+    if (((st[S_MACHINE] & M_WAIT_STATES) != 0) != m->cfg.wait_states) return SNAP_OTHER_FIELD;
     if (st[S_IM] > 2u) return SNAP_NOT_SNAPSHOT;
     uint8_t rom[SHA1_DIGEST_LEN];
     rom_hash(m, rom);
