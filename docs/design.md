@@ -1236,8 +1236,10 @@ only on returning to Forth, as they do in MAME.
 **`.sav` (our save states).** EL §8.5 exactly, as pico-atom's `snapshot.c`
 with the Z80's and the Ace's fields (`snapshot.h`): explicit little-endian
 fields, magic `PACESNAP`, version, lengths, CRC-32, reserved bytes zero,
-the ROM's SHA-1 and not its bytes, the RAM size, field shape and bus values
-recorded and checked, and a two-pass load. States are taken between fields,
+the ROM's SHA-1 and not its bytes, the RAM size, field shape, bus values
+and wait states (state byte 80, from M14; zero is none, as every earlier
+state was made) recorded and checked, and a two-pass load. A state saved
+before M14 is refused as another field: it ran under MAME's line 56 (§6.4). States are taken between fields,
 where the guest is parked, so the field resumes from its first active line
 and the budget carries the overshoot. The beeper's sample grid is not
 state: audio restarts from the restored T counter, so the speaker's edges
@@ -2177,6 +2179,12 @@ that nothing pulls the data bus up. An undriven read, D6 and D7 of an
 through two 1 kΩ arrays, not `$FF`. That is recorded in §16 and not
 modelled: the ROM does not depend on it, and the value needs a real Ace
 to settle.
+
+After Codex's review, a `.sav` records whether the waits were held, in
+state byte 80, and a machine of the other kind refuses it as another
+field (`test_snapshot`, with the same machine as the control). A state
+from before M14 reads zero there, but is refused already: the field it
+records is the old one, display from line 56 (§10.5).
 
 #### M15. Finish
 

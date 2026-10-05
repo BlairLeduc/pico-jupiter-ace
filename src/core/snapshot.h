@@ -12,9 +12,9 @@
  *           machine has (none, 16 KiB or 48 KiB)
  *
  * The ROM is not in a state: what is, is its SHA-1, and a state loads
- * only into a machine whose ROM hashes the same and whose RAM size and
- * field are the same, since every count in it is in that machine's
- * T-states. Unused state bytes are written zero and read as reserved, so
+ * only into a machine whose ROM hashes the same and whose RAM size,
+ * field and wait states are the same, since every count in it is in that
+ * machine's T-states. Unused state bytes are written zero and read as reserved, so
  * a later version can add fields whose zero is their reset value.
  *
  * States are saved between fields, where the port parks the guest, so the
@@ -55,7 +55,7 @@ typedef enum {
     SNAP_NEWER,           /* a version this build does not know          */
     SNAP_CORRUPT,         /* the CRC does not match                      */
     SNAP_OTHER_RAM,       /* another RAM size                            */
-    SNAP_OTHER_FIELD,     /* another field shape or bus values           */
+    SNAP_OTHER_FIELD,     /* another field shape, bus values or wait states */
     SNAP_OTHER_ROM,       /* the ROM is not the one it ran on            */
     SNAP_BUSY,            /* the CPU is stalled on a tape call           */
 } snap_status_t;
