@@ -1923,10 +1923,13 @@ lines dropped, underrun samples, late refills and beeper overflow all 0;
 36,621 Hz consumed; core 0 at 20.8–21.4 %; the program read H on 15
 dumped rows and J on 14. The gauge read 90 % to 89 %, never charging, and
 the owner confirmed on 2026-10-05 that the PicoCalc ran on its battery
-throughout.
-A first soak an hour earlier had the same counters, all 0, but its
+throughout. A first soak an hour earlier had the same counters, all 0, but its
 screen dumps fell only after `j`, so the check was tightened and the
 soak run again.
+
+The owner ran the shipping build (`PICO_ACE_UART=OFF`, tier 2) on a Pico 2
+W, 2026-10-05: it boots, types, scrolls `VLIST` and beeps, and loaded a
+snapshot (no UART, so no board id or figures).
 
 *Not verified:* keys pressed on the PicoCalc during a soak (none were;
 the UART's go round the southbridge). The

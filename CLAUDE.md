@@ -28,7 +28,9 @@ points between builds; tier 2 repeats to 0.1. The 30-minute soak passed
 (`out/m12/soak/soak-20261004-231251.log`): one boot, rt ≥ 0.999, every
 failure counter 0, both typed keys read by the program; on battery
 throughout, by the owner's word, 2026-10-05 (gauge 90 % to 89 %, never
-charging). **Not checked:** keys pressed on the PicoCalc during the
+charging). The owner ran the shipping build (`PICO_ACE_UART=OFF`, tier
+2) on a Pico 2 W, 2026-10-05: it boots, types, scrolls, beeps and loaded
+a snapshot. **Not checked:** keys pressed on the PicoCalc during the
 soak; the shipping build's figures, which it does not log. A build
 directory from before M12 keeps its cached tier 0; pass
 `-DPICO_ACE_RAM_TIER=2` once.
