@@ -47,6 +47,10 @@ uint32_t settingsio_bytes(void);
 /* "" when there was no problem; else, e.g., "line 3: no such setting". */
 const char *settingsio_error(void);
 
+/* A problem found with a value after the file was read, such as a
+ * layout the card does not have: logged, and kept if it is the first. */
+void settingsio_fail(const char *what, const char *why);
+
 /* *s into the file, edited in place (settings_rewrite) and written
  * through SETTINGSIO_TEMP and a rename. The card must be mounted. NULL,
  * or why not, for the menu's status row. */

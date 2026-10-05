@@ -7,11 +7,15 @@
 
 #include "pico/stdlib.h"
 
+#include "ace_rom.h"
+#include "board.h"
 #include "display.h"
 #include "handoff.h"
 #include "kbd.h"
+#include "keymapio.h"
 #include "keymatrix.h"
 #include "log.h"
+#include "pico_ace_version.h"
 #include "settingsio.h"
 #include "snapio.h"
 #include "southbridge.h"
@@ -33,7 +37,7 @@
 #define ROW_STATUS (TEXT_ROWS - 2)
 #define ROW_KEYS   (TEXT_ROWS - 1)
 
-enum { I_TAPE, I_SNAP, I_SETTINGS, I_SAVE, I_RESET, I_COUNT };
+enum { I_TAPE, I_SNAP, I_MACHINE, I_LAYOUT, I_SETTINGS, I_SAVE, I_RESET, I_ABOUT, I_COUNT };
 
 /* The Tape page: the deck's controls, then the files. Play is the
  * signal's (design.md §10.4), for a loader that never calls the ROM. */
@@ -47,6 +51,15 @@ enum { N_SLOT, N_SAVE, N_LOAD, N_DELETE, N_FIRST };
 
 enum { S_VOLUME, S_PERF, S_FAST, S_COUNT };
 
+/* The Machine page (§12): the RAM size staged, and the power-on that
+ * applies it. */
+enum { M_RAM, M_APPLY, M_COUNT };
+
+/* The Layout page (§9.4): the standard map, then keymapio's list, with
+ * the bindings of the one under the cursor below. */
+#define LAYOUT_ROWS ((int)ACE_KEYMAP_LAYOUTS + 1)
+#define LAYOUT_KEYS (ROW_TOP + LAYOUT_ROWS + 1)
+
 static settings_t s_file;     /* what the file says, for the save */
 static unsigned   s_slot;     /* the Snapshot page's slot, kept between openings */
 
@@ -57,7 +70,7 @@ static struct {
     bool     done;
     bool     direct;          /* opened at a page: closing it resumes */
     int      item;
-    enum { P_MAIN, P_TAPE, P_SNAP, P_SETTINGS } page;
+    enum { P_MAIN, P_TAPE, P_SNAP, P_SETTINGS, P_MACHINE, P_LAYOUT, P_ABOUT } page;
     char     status[TEXT_COLS + 1];
 
     unsigned n_tapes;
@@ -68,6 +81,14 @@ static struct {
     bool     used[SNAPIO_SLOTS];
     unsigned n_aces;
     int      snap_sel, snap_top;
+
+    int       machine_sel;
+    ace_ram_t st_ram;         /* staged: applied only by a power-on */
+
+    int      layout_sel;      /* 0 the standard map, then keymapio's */
+
+    int      sb_ver;          /* the About page's, read as it opens */
+    int      temp_c;
 } s;
 
 static tapeio_entry_t s_list[ACE_TAPE_LIST_MAX];
@@ -91,9 +112,10 @@ static const char *base(const char *path) {
 
 static void draw_main(void) {
     static const char *const items[I_COUNT] = {
-        " Tape...                  F1", " Snapshot...              F2", " Settings...",
-        " Save settings",
-        " Reset                 Alt+R",
+        " Tape...                  F1", " Snapshot...              F2",
+        " Machine...               F3", " Layout...                F4",
+        " Settings...",                 " Save settings",
+        " Reset                 Alt+R", " About...                 F5",
     };
     for (int i = 0; i < I_COUNT; i++)
         textpage_line(s_scr, ROW_TOP + i, items[i], i == s.item);
@@ -104,6 +126,8 @@ static void draw_main(void) {
     textpage_line(s_scr, ROW_TOP + I_COUNT + 1, line, false);
     snprintf(line, sizeof line, " Machine: %s", ace_ram_name(s.m->cfg.ram));
     textpage_line(s_scr, ROW_TOP + I_COUNT + 2, line, false);
+    snprintf(line, sizeof line, " Layout: %s", g_ui.layout ? g_ui.layout->name : "standard");
+    textpage_line(s_scr, ROW_TOP + I_COUNT + 3, line, false);
 }
 
 static void draw_tape(void) {
@@ -171,22 +195,122 @@ static void draw_settings(void) {
     textpage_line(s_scr, ROW_TOP + S_COUNT + 1, " Save settings keeps them", false);
 }
 
+static void draw_machine(void) {
+    char line[TEXT_COLS + 1];
+    bool changed = s.st_ram != s.m->cfg.ram;
+    snprintf(line, sizeof line, "%cRAM            < %s >", changed ? '*' : ' ',
+             ace_ram_name(s.st_ram));
+    textpage_line(s_scr, ROW_TOP + M_RAM, line, s.machine_sel == M_RAM);
+    textpage_line(s_scr, ROW_TOP + M_APPLY, " (Apply and power on)", s.machine_sel == M_APPLY);
+    snprintf(line, sizeof line, " Running: the %s", ace_ram_name(s.m->cfg.ram));
+    textpage_line(s_scr, ROW_TOP + M_COUNT + 1, line, false);
+    textpage_line(s_scr, ROW_TOP + M_COUNT + 2, " The 3K is the Ace as sold; the", false);
+    textpage_line(s_scr, ROW_TOP + M_COUNT + 3, " 19K and 51K have a RAM pack.", false);
+    textpage_line(s_scr, ROW_TOP + M_COUNT + 5, " A power-on loses the program", false);
+    textpage_line(s_scr, ROW_TOP + M_COUNT + 6, " in memory. Save it first.", false);
+}
+
+static const keylayout_t *layout_at(int i) {
+    return i > 0 ? keymapio_get((unsigned)(i - 1)) : NULL;
+}
+
+static void draw_layout(void) {
+    char line[TEXT_COLS + 1];
+    int n = (int)keymapio_count() + 1;
+    for (int i = 0; i < LAYOUT_ROWS; i++) {
+        line[0] = 0;
+        if (i < n) {
+            const keylayout_t *l = layout_at(i);
+            snprintf(line, sizeof line, "%c%-20.20s%s", l == g_ui.layout ? '*' : ' ',
+                     l ? l->name : "Standard",
+                     !l ? "" : i <= (int)keylayout_builtin_len ? "built in" : "card");
+        }
+        textpage_line(s_scr, ROW_TOP + i, line, i == s.layout_sel);
+    }
+
+    /* The keys of the one under the cursor, two to a row. */
+    const keylayout_t *l = layout_at(s.layout_sel);
+    if (!l) {
+        textpage_line(s_scr, LAYOUT_KEYS, " Every key as the Ace types it", false);
+    } else {
+        for (unsigned i = 0; i < l->n; i += 2) {
+            char a[16] = "", b[16] = "";
+            keymap_binding_str(&l->bind[i], a, sizeof a);
+            if (i + 1 < l->n) keymap_binding_str(&l->bind[i + 1], b, sizeof b);
+            snprintf(line, sizeof line, " %-15.15s %-14.14s", a, b);
+            textpage_line(s_scr, LAYOUT_KEYS + (int)(i / 2u), line, false);
+        }
+    }
+    const char *by = keymapio_chosen_by();
+    if (by[0]) {
+        snprintf(line, sizeof line, " Chosen by %.21s", by);
+        textpage_line(s_scr, ROW_STATUS - 1, line, false);
+    }
+}
+
+static void draw_about(void) {
+    char line[TEXT_COLS + 1];
+    const board_info_t *b = &g_board;
+    int r = ROW_TOP;
+    snprintf(line, sizeof line, " Pico-Ace %.22s", PICO_ACE_VERSION);
+    textpage_line(s_scr, r++, line, false);
+    snprintf(line, sizeof line, " %s rev %u, %lu MHz", b->chip ? b->chip : "?",
+             (unsigned)b->chip_version, (unsigned long)(b->clk_sys_hz / 1000000u));
+    textpage_line(s_scr, r++, line, false);
+    snprintf(line, sizeof line, " Id %.16s", b->unique_id);
+    textpage_line(s_scr, r++, line, false);
+    snprintf(line, sizeof line, " Built for %.21s", b->sdk_board);
+    textpage_line(s_scr, r++, line, false);
+    char sb[12] = "unread";
+    if (s.sb_ver >= 0) snprintf(sb, sizeof sb, "%d", s.sb_ver);
+    /* Whole degrees and uncalibrated (hardware-notes.md §8.1). */
+    int t = s.temp_c < -99 ? -99 : s.temp_c > 999 ? 999 : s.temp_c;
+    snprintf(line, sizeof line, " Southbridge %s, die %d C", sb, t);
+    textpage_line(s_scr, r++, line, false);
+    r++;
+    textpage_line(s_scr, r++, " ROM SHA-1", false);
+    snprintf(line, sizeof line, "  %.20s", ACE_ROM_SHA1);
+    textpage_line(s_scr, r++, line, false);
+    snprintf(line, sizeof line, "  %.20s", ACE_ROM_SHA1 + 20);
+    textpage_line(s_scr, r++, line, false);
+    snprintf(line, sizeof line, " Machine %s, layout %.12s", ace_ram_name(s.m->cfg.ram),
+             g_ui.layout ? g_ui.layout->name : "standard");
+    textpage_line(s_scr, r++, line, false);
+    const char *err = settingsio_error();
+    snprintf(line, sizeof line, " Settings %.22s",
+             err[0] ? err : settingsio_state_str(settingsio_state()));
+    textpage_line(s_scr, r++, line, false);
+    r++;
+    textpage_line(s_scr, r++, " The ROM is Jupiter Cantab's,", false);
+    textpage_line(s_scr, r++, " shipped by permission (README).", false);
+}
+
 static void draw(void) {
     textpage_clear(s_scr);
-    textpage_line(s_scr, 0, s.page == P_TAPE ? " Pico-Ace: Tape"
-                          : s.page == P_SNAP ? " Pico-Ace: Snapshot"
-                          : s.page == P_SETTINGS ? " Pico-Ace: Settings" : " Pico-Ace", true);
+    static const char *const title[] = {
+        [P_MAIN] = " Pico-Ace",           [P_TAPE] = " Pico-Ace: Tape",
+        [P_SNAP] = " Pico-Ace: Snapshot", [P_SETTINGS] = " Pico-Ace: Settings",
+        [P_MACHINE] = " Pico-Ace: Machine", [P_LAYOUT] = " Pico-Ace: Layout",
+        [P_ABOUT] = " Pico-Ace: About",
+    };
+    static const char *const keys[] = {
+        [P_MAIN] = " Arrows  Enter  Esc resumes",  [P_TAPE] = " Enter inserts  Esc back",
+        [P_SNAP] = " < > slot  Enter  Esc back",   [P_SETTINGS] = " < > changes  Esc back",
+        [P_MACHINE] = " < > stages  Enter  Esc back", [P_LAYOUT] = " Enter chooses  Esc back",
+        [P_ABOUT] = " Esc back",
+    };
+    textpage_line(s_scr, 0, title[s.page], true);
     switch (s.page) {
     case P_TAPE:     draw_tape(); break;
     case P_SNAP:     draw_snap(); break;
     case P_SETTINGS: draw_settings(); break;
+    case P_MACHINE:  draw_machine(); break;
+    case P_LAYOUT:   draw_layout(); break;
+    case P_ABOUT:    draw_about(); break;
     default:         draw_main(); break;
     }
     textpage_line(s_scr, ROW_STATUS, s.status, false);
-    textpage_line(s_scr, ROW_KEYS, s.page == P_TAPE ? " Enter inserts  Esc back"
-                                 : s.page == P_SNAP ? " < > slot  Enter  Esc back"
-                                 : s.page == P_SETTINGS ? " < > changes  Esc back"
-                                 : " Arrows  Enter  Esc resumes", true);
+    textpage_line(s_scr, ROW_KEYS, keys[s.page], true);
     display_present(s_scr, display_font(), NULL);
 }
 
@@ -247,7 +371,11 @@ static void snap_load_ace(const char *path) {
     log_core1("  snapshot     : %s: %s, taken on %s, end $%05lX, PC %04X SP %04X%s, %lu us\n",
               path, snap_ace_status_str(st), snap_ace_taken_on(&in), (unsigned long)in.end, in.pc,
               in.sp, in.repaired ? ", key wait's stack written back" : "", (unsigned long)us);
-    if (st == SNAP_ACE_OK) { s.done = true; return; }
+    if (st == SNAP_ACE_OK) {
+        keymapio_file_loaded(path);   /* a layout may name it (§9.4) */
+        s.done = true;
+        return;
+    }
     if (load_failed_midway(changed)) return;
     if (st == SNAP_ACE_OTHER_RAM) {
         snprintf(s.status, sizeof s.status, " Needs the %s machine", ace_ram_name(in.needs));
@@ -256,6 +384,32 @@ static void snap_load_ace(const char *path) {
     } else {
         say(" Not loaded: %.19s", snap_ace_status_str(st));
     }
+}
+
+static void open_machine(void) {
+    s.page = P_MACHINE;
+    s.machine_sel = M_RAM;
+    s.st_ram = s.m->cfg.ram;
+}
+
+static void open_layout(void) {
+    s.page = P_LAYOUT;
+    s.layout_sel = 0;
+    for (unsigned i = 0; i < keymapio_count(); i++)
+        if (keymapio_get(i) == g_ui.layout) s.layout_sel = (int)i + 1;
+}
+
+static void open_about(void) {
+    uint8_t r[2];
+    s.page = P_ABOUT;
+    s.sb_ver = sb_read(SB_REG_VER, r) == SB_OK ? r[1] : -1;
+    s.temp_c = board_temp_c();
+    log_core1("  about        : %s, %s rev %u, id %s, %lu MHz, southbridge %d, die %d C, "
+              "ROM %s, %s, settings %s\n", PICO_ACE_VERSION, g_board.chip,
+              (unsigned)g_board.chip_version, g_board.unique_id,
+              (unsigned long)(g_board.clk_sys_hz / 1000000u), s.sb_ver, s.temp_c, ACE_ROM_SHA1,
+              ace_ram_name(s.m->cfg.ram),
+              settingsio_error()[0] ? settingsio_error() : settingsio_state_str(settingsio_state()));
 }
 
 static void save_settings(void) {
@@ -268,6 +422,10 @@ static void save_settings(void) {
     out.fast_tape = g_ui.fast_tape;
     settings_card_name(SETTINGS_TAPE_DIR, tapeio_chosen() ? tapeio_inserted() : "",
                        out.boot_tape);
+    /* A layout a loaded file chose is not the user's choice, so the file
+     * keeps what it had (§9.4). */
+    if (!keymapio_chosen_by()[0])
+        snprintf(out.layout, sizeof out.layout, "%s", g_ui.layout ? g_ui.layout->name : "");
     const char *err = settingsio_save(&out);
     if (!err) s_file = out;
     say(err ? " Not saved: %.20s" : " Settings saved", err);
@@ -282,9 +440,12 @@ static void key_main(uint8_t c) {
         switch (s.item) {
         case I_TAPE:     open_tape(); break;
         case I_SNAP:     open_snap(); break;
+        case I_MACHINE:  open_machine(); break;
+        case I_LAYOUT:   open_layout(); break;
         case I_SETTINGS: s.page = P_SETTINGS; s.set_sel = S_VOLUME; break;
         case I_SAVE:     save_settings(); break;
         case I_RESET:    g_ui.reset = true; s.done = true; break;
+        case I_ABOUT:    open_about(); break;
         }
         break;
     case PICOCALC_KEY_ESC:
@@ -399,6 +560,69 @@ static void key_settings(uint8_t c) {
     }
 }
 
+/* Apply (§12): the staged machine powered on, with the deck, the layout
+ * and the settings as they are. A recording not on the card yet would be
+ * lost, so it is refused until the recording has been written. */
+static void apply_machine(void) {
+    uint32_t from, to;
+    if (ace_cassette_unsaved(s.m, &from, &to)) {
+        say(" A recording is not saved yet", "");
+        return;
+    }
+    ace_ram_t was = s.m->cfg.ram;
+    s.m->cfg.ram = s.st_ram;
+    ace_power_on(s.m);
+    log_core1("  machine      : %s powered on as the %s\n", ace_ram_name(was),
+              ace_ram_name(s.m->cfg.ram));
+    s.done = true;
+}
+
+static void key_machine(uint8_t c) {
+    switch (c) {
+    case PICOCALC_KEY_UP:
+    case PICOCALC_KEY_DOWN: s.machine_sel = (s.machine_sel + 1) % M_COUNT; break;
+    case PICOCALC_KEY_LEFT:
+    case PICOCALC_KEY_RIGHT:
+        if (s.machine_sel == M_RAM) {
+            const int n = (int)ACE_RAM_51K + 1;
+            s.st_ram = (ace_ram_t)(((int)s.st_ram + (c == PICOCALC_KEY_RIGHT ? 1 : n - 1)) % n);
+            say(s.st_ram != s.m->cfg.ram ? " Apply powers on: program lost" : "", "");
+        }
+        break;
+    case PICOCALC_KEY_ENTER:
+        if (s.machine_sel == M_APPLY) {
+            if (s.st_ram != s.m->cfg.ram) apply_machine();
+            else say(" Nothing to apply", "");
+        } else {
+            s.machine_sel = M_APPLY;
+        }
+        break;
+    case PICOCALC_KEY_ESC:
+        /* Nothing changes until Apply. */
+        say(s.st_ram != s.m->cfg.ram ? " Not applied" : "", "");
+        s.page = P_MAIN;
+        break;
+    }
+}
+
+static void key_layout(uint8_t c) {
+    int last = (int)keymapio_count();
+    switch (c) {
+    case PICOCALC_KEY_UP:   if (s.layout_sel > 0) s.layout_sel--; break;
+    case PICOCALC_KEY_DOWN: if (s.layout_sel < last) s.layout_sel++; break;
+    case PICOCALC_KEY_ENTER: {
+        const keylayout_t *l = layout_at(s.layout_sel);
+        keymapio_choose(l);
+        say(" Layout: %.22s", l ? l->name : "standard");
+        s.page = P_MAIN;
+        break;
+    }
+    case PICOCALC_KEY_ESC:
+        s.page = P_MAIN;
+        break;
+    }
+}
+
 /* Presses only: releases and the MCU's held reports move nothing. Alt is
  * tracked so that Alt+M closes the menu as it opened it. */
 static void keys(void) {
@@ -411,6 +635,11 @@ static void keys(void) {
         case P_TAPE:     key_tape(c); break;
         case P_SNAP:     key_snap(c); break;
         case P_SETTINGS: key_settings(c); break;
+        case P_MACHINE:  key_machine(c); break;
+        case P_LAYOUT:   key_layout(c); break;
+        case P_ABOUT:
+            if (c == PICOCALC_KEY_ESC || c == PICOCALC_KEY_ENTER) s.page = P_MAIN;
+            break;
         default:         key_main(c); break;
         }
         /* A page an F-key opened goes back to the guest, not the main
@@ -427,9 +656,13 @@ void menu_run(ace_t *m, unsigned page, bool alt) {
 
     s.card = storage_mount() == 0;
     if (!s.card) say(" No card: no tapes or snapshots", "");
+    /* The card's layouts afresh: a file may have been added or edited
+     * on a computer since (keymapio.h). */
+    if (s.card) keymapio_scan();
     const char *t = tapeio_said();
     if (!s.status[0] && t[0]) say("%s", t);
     if (!s.status[0] && settingsio_error()[0]) say(" %.30s", settingsio_error());
+    if (!s.status[0] && keymapio_error()[0]) say(" %.30s", keymapio_error());
 
     if (page == KM_PAGE_TAPE) {
         s.direct = true;
@@ -437,9 +670,15 @@ void menu_run(ace_t *m, unsigned page, bool alt) {
     } else if (page == KM_PAGE_SNAPSHOT) {
         s.direct = true;
         open_snap();
-    } else if (page != KM_PAGE_MAIN) {
-        /* Machine, Layout and About come with later work. */
-        say(" Not in this firmware yet", "");
+    } else if (page == KM_PAGE_MACHINE) {
+        s.direct = true;
+        open_machine();
+    } else if (page == KM_PAGE_LAYOUT) {
+        s.direct = true;
+        open_layout();
+    } else if (page == KM_PAGE_ABOUT) {
+        s.direct = true;
+        open_about();
     }
 
     display_perf("");

@@ -1029,6 +1029,32 @@ changed (§4.6). Ace games
 commonly use 5–8, Q/A/O/P and Z/X, so the built-ins are "cursor keys as
 5–8" and "arrows as Q/A/O/P", with fire on a key the arrows can chord with.
 
+**As built (M15).** `keylayout.c` is pico-atom's parser with the Ace's
+targets: `A`–`Z`, `0`–`9`, `SPACE`, `ENTER`, and `SHIFT` and `SYMBOL` as
+the cells they are (§2.4). A target carries no flags, so a game sees the
+key without the SHIFT the standard map would add, and takes the host's
+Shift as it finds it. `lookup()` in `keymatrix.c` consults the layout by
+canonical code, then the standard map, and with Alt down the Alt layer
+only, so no layout takes the menu, pause or reset; the binding is copied
+at press, so a release undoes what its press did across a change. The
+built-ins are **CURSOR** (Left, Up, Down, Right as 5, 6, 7, 8, the Ace's
+own arrow keys, and `]` as 0) and **QAOP** (O, Q, A, P, and `]` as
+SPACE). Fire is `]` for pico-atom's reason: chosen there after play on
+the device, and a Shift cannot be fire, since the MCU sends nothing for
+Left or Right under it (HW §6.3). `test_keyboard` types each built-in's
+keys through the ROM (`56780`, `oqap `), with the standard map's arrows,
+which type nothing, as the control; `test_keymap` brings pico-atom's
+held-set and parser tests across. Card layouts are `.map` files in
+`/ace/keymaps/`, read at boot and each time the menu opens
+(`keymapio.c`). The **tapes line names files**, not tape headers: a
+`.tap` or `.ace` without its extension, since an `.ace` has no name in
+it. Putting a named tape in the deck (the menu, `boot_tape`, or a LOAD
+that finds the file by name) or loading a named `.ace` chooses the
+layout; the Layout page says which file did, and Save settings keeps the
+file's own `layout` while one is in force. Core 1 writes the choice to
+`g_ui.layout` only with core 0 parked or not started, and core 0 takes it
+after every park.
+
 ---
 
 ## 10. Media and settings
@@ -1266,7 +1292,9 @@ that key a good value, and made a comment when one does, so that saving
 clears the problem the status row names. Core 1 reads the
 file at boot, before core 0 powers the machine on, because `ram` is the
 machine. As of M9 only `ram` is applied; the other keys are read and
-checked, so a mistake in them is named, and M10 applies them.
+checked, so a mistake in them is named, and M10 applies them. M15
+applies `layout`: the card's layouts are read before `boot_tape` goes in,
+and a name no layout has is the file's problem, `layout: no such layout`.
 
 ---
 
@@ -1360,6 +1388,20 @@ machine's RAM size, the volume, the perf line and the tape in the deck, if
 the user put it there, as `boot_tape`. Over the UART, RS opens the menu
 and US pauses, and while either is up the UART's bytes are its keys, with
 ^P ^N ^B ^F for the arrows (`park.c`).
+**M15** completed the pages. The main page lists Tape, Snapshot,
+Machine, Layout, Settings, Save settings, Reset and About, with the
+deck, the machine and the layout in force below. **Machine** (F3) stages
+the RAM size, marked `*` while it differs from the running machine, and
+*Apply and power on* sets it in `m->cfg` and calls `ace_power_on` on
+core 1, which owns the machine while it is parked, as a snapshot load
+does; a recording not yet on the card refuses it. **Layout** (F4) lists
+the standard map, the built-ins and the card's, with the keys of the one
+under the cursor. **About** (F5) shows the firmware version, the chip
+(RP2350A or B, read from the package) and its revision, the board's
+unique id, `clk_sys`, the southbridge's version and the die, read as the
+page opens, the ROM's SHA-1, the machine and layout, and the settings
+file's state or first problem; it logs the same line. Save settings now
+writes `layout` too.
 
 ---
 
@@ -1491,6 +1533,18 @@ next, so a workload that stopped early fails; and the screen dumps
 showing the program reading both typed keys. UART keys enter the matrix without passing the southbridge, so
 they are not its key events; keys pressed on the PicoCalc are reported,
 not required. A gauge showing charging fails the run.
+
+**The release build (M15).** With `PICO_ACE_UART=OFF` there is no log
+and no UART to type at, so core 0 copies its counters once a second
+into `g_swd` (`handoff.h`): a magic word and layout number, then the
+fields run, the board's clock in milliseconds, and the same failure and
+growth counters, with the battery, the die and the guest screen's
+address. `tools/swd-counters.py` reads the block over SWD with OpenOCD's
+`read_memory` and no halt (HW §2.7); `soak` samples it every 10 s with
+the screen, and `check` holds the samples to `soak-check.py`'s rules, rt
+taken from the fields over the board's own clock. The owner types the
+program on the PicoCalc and holds H and J by hand, so the release soak
+exercises the real keyboard, which M12's did not.
 
 ---
 

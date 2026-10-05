@@ -170,6 +170,38 @@ int main(void) {
               out_len == again_len && memcmp(out, again, out_len) == 0, "a second save is the same");
     }
 
+    /* The layout the menu chose (§9.4), in place beside its comment, or
+     * added to a file that had none; a second save is the same. */
+    {
+        const char *file = "layout = cursor   # the arrows as 5-8\nram = 19k\n";
+        settings_default(&s);
+        CHECK(settings_parse(&s, file, strlen(file), &line) == SET_OK, "layout setup");
+        CHECK(strcmp(s.layout, "CURSOR") == 0, "layout read as %s", s.layout);
+        strcpy(s.layout, "QAOP");
+        CHECK(REWRITE(file, &s) == SET_OK &&
+                  IS("layout = QAOP     # the arrows as 5-8\nram = 19k\n"),
+              "a new layout in place:\n%.*s", (int)out_len, out);
+        static char again[ACE_SETTINGS_FILE_MAX];
+        memcpy(again, out, out_len);
+        size_t again_len = out_len;
+        CHECK(settings_rewrite(again, again_len, &s, &out, &out_len) == SET_OK &&
+                  out_len == again_len && memcmp(out, again, out_len) == 0,
+              "a second save of the layout is the same");
+
+        s.layout[0] = 0;
+        CHECK(REWRITE(file, &s) == SET_OK &&
+                  IS("layout = standard # the arrows as 5-8\nram = 19k\n"),
+              "the standard map in place:\n%.*s", (int)out_len, out);
+
+        const char *none = "ram = 19k # mine\n";
+        settings_default(&s);
+        strcpy(s.layout, "CURSOR");
+        CHECK(REWRITE(none, &s) == SET_OK && out_len > strlen(none) &&
+                  memcmp(out, none, strlen(none)) == 0 && strstr(out, "layout = CURSOR\n"),
+              "a layout the file lacked is added after the user's lines:\n%.*s", (int)out_len,
+              out);
+    }
+
     /* A refused value is replaced where it stands, even by the default,
      * so a save clears the problem; when another line gives the key a
      * good value, which writing it would make given twice, the refused

@@ -5,6 +5,7 @@
 #include <stdio.h>
 
 #include "hardware/clocks.h"
+#include "hardware/sync.h"
 #include "pico/stdlib.h"
 
 #include "audio.h"
@@ -171,6 +172,39 @@ static const char *power_text(void) {
     return text;
 }
 
+/* The counters, where a debugger can read them (handoff.h). The
+ * updates count is written last, so a reader that sees it move knows
+ * the words before it are from this second or the next. */
+static void swd_update(const ace_t *m, const keymatrix_t *k, uint32_t late, uint32_t slips) {
+    volatile swd_counters_t *c = &g_swd;
+    c->uptime_ms = to_ms_since_boot(get_absolute_time());
+    c->fields = m->fields;
+    c->late = late;
+    c->slips = slips;
+    c->presents = g_c1.presents;
+    c->snapshots_dropped = g_pool.dropped;
+    c->key_events = g_c1.key_events;
+    c->keys_lost = kbd_overflows() + k->dropped;
+    c->polls = g_c1.polls;
+    c->i2c_errors = sb_error_count();
+    c->ed_holes = m->cpu.ed_holes;
+#if PICO_ACE_AUDIO
+    audio_stats_t au;
+    audio_stats(&au, false);
+    c->underrun_samples = au.underrun_samples;
+    c->late_refills = au.late_refills;
+    c->consumed = au.consumed;
+#endif
+    c->beeper_overflow = m->beeper.overflow;
+    c->speaker_edges = m->beeper.edges;
+    c->busy1000 = g_c0.busy1000;
+    c->battery = g_c1.battery;
+    c->temp_c = g_c1.temp_c;
+    c->screen = (uint32_t)(uintptr_t)ace_screen(m);
+    __dmb();
+    c->updates++;
+}
+
 static void tenths(char *out, size_t n, uint32_t v10) {
     snprintf(out, n, "%lu.%lu", (unsigned long)(v10 / 10u), (unsigned long)(v10 % 10u));
 }
@@ -204,6 +238,7 @@ void core0_run(ace_t *m, keymatrix_t *k) {
     unsigned page = 0;
     bool alt = false;
     apply_ui(m);
+    keymatrix_set_layout(k, g_ui.layout);
 
     for (;;) {
         uint64_t now;
@@ -243,6 +278,9 @@ void core0_run(ace_t *m, keymatrix_t *k) {
                 why = PARK_NONE;
             }
             apply_ui(m);
+            /* The menu, or a tape a layout names, may have changed it;
+             * a key down keeps its binding (§9.4). */
+            keymatrix_set_layout(k, g_ui.layout);
             hb_us = sec_us = time_us_64();
             hb_t = m->cpu.t;
             hb_insns = sec_insns = m->cpu.insns;
@@ -342,6 +380,7 @@ void core0_run(ace_t *m, keymatrix_t *k) {
             g_c0.hpi10 = (uint32_t)(sec_run_us * clk_mhz * 10u / (insns + 1u));
             g_c0.late = late;
             g_c0.seconds++;
+            swd_update(m, k, late, slips);
             sec_us = now;
             sec_insns = m->cpu.insns;
             sec_run_us = sec_busy_us = 0;

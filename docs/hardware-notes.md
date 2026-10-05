@@ -310,6 +310,17 @@ key events can be driven with no one at the keyboard, which is how scripted
 performance runs and soaks are done. Pace the characters to what the
 application can absorb.
 
+**A build with no UART can still be read over SWD**, with both cores
+running. OpenOCD started with `init` and no `reset` or `halt` reads memory
+through the debug port's memory access (`read_memory addr 32 n`), and the
+target never stops. Keep the counters in one block at a fixed symbol, with a
+magic word and a layout number, and find its address with `nm`; a debugger
+that attaches as gdb does halts the cores, and a halted audio producer
+underruns. **Measured** on a Plus 2 W, 2026-10-05: 30 such reads over 44 s,
+each a fresh OpenOCD, left the audio's underrun and late-refill counts at 0
+and dropped no video frames. Each read takes about a second, most of it
+OpenOCD starting.
+
 ---
 
 ## 3. Clocks, voltage and overclocking

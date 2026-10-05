@@ -236,6 +236,32 @@ static int editing_keys(void) {
     return 0;
 }
 
+/* The built-in game layouts (§9.4), through the ROM: each one's keys
+ * type the cells it names, unshifted, and every other key keeps its
+ * standard binding. The same keys under the standard map are the
+ * cursor and type nothing: the control. */
+static int game_layouts(void) {
+    static const uint8_t keys[] = { PICOCALC_KEY_LEFT, PICOCALC_KEY_UP, PICOCALC_KEY_DOWN,
+                                    PICOCALC_KEY_RIGHT, ']' };
+    static const char *const want[] = { "56780", "oqap " };
+    CHECK(keylayout_builtin_len == 2, "%u built-in layouts, want 2",
+          (unsigned)keylayout_builtin_len);
+    for (size_t l = 0; l < keylayout_builtin_len; l++) {
+        fresh();
+        keymatrix_set_layout(&g.k, &keylayout_builtin[l]);
+        for (unsigned i = 0; i < sizeof keys; i++) guest_press(&g, keys[i], false);
+        CHECK(strcmp(input(), want[l]) == 0, "%s: the arrows and ] type \"%s\", want \"%s\"",
+              keylayout_builtin[l].name, input(), want[l]);
+        guest_type(&g, "Vlist");
+        CHECK(strncmp(input() + strlen(want[l]), "Vlist", 5) == 0,
+              "%s: typing past the layout gives \"%s\"", keylayout_builtin[l].name, input());
+    }
+    fresh();
+    for (unsigned i = 0; i < sizeof keys - 1u; i++) guest_press(&g, keys[i], false);
+    CHECK(strcmp(input(), "") == 0, "the standard map's arrows typed \"%s\"", input());
+    return 0;
+}
+
 /* ---- 3. the hold and gap the ROM needs ---------------------------------- */
 
 /* Type "aabbab112" straight into the matrix, each key held `hold` fields
@@ -326,7 +352,8 @@ int main(void) {
     CHECK(guest_boot(&g, ACE_RAM_19K, 500), "no cursor in 500 fields");
     ace_copy(&booted, &g.m);
 
-    if (run_sweep() || every_printable_entry() || editing_keys() || hold_and_gap()) return 1;
+    if (run_sweep() || every_printable_entry() || editing_keys() || game_layouts() ||
+        hold_and_gap()) return 1;
 
     TEST_DONE();
 }

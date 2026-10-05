@@ -41,13 +41,12 @@ int main(void) {
      * clock that stays. */
     bool clocks_ok = board_init_clocks();
     stdio_init_all();
-    board_info_t board;
-    board_identify(&board);
+    board_identify(&g_board);
 
     /* A startup banner plus consecutive heartbeats is more useful boot
      * evidence than a single line (hardware-notes.md §2.7). Core 1 is not
      * running yet, so printf may block. */
-    board_log_banner(&board);
+    board_log_banner(&g_board);
     printf("  firmware     : %s\n", PICO_ACE_VERSION);
     if (!clocks_ok) {
         printf("  WARNING: clk_sys is not at 150 MHz; SPI and audio rates will "
@@ -72,12 +71,12 @@ int main(void) {
                g_boot.cfg_error[0] ? ", first problem " : "", g_boot.cfg_error,
                ace_ram_name(g_boot.settings.ram), g_boot.settings.volume,
                g_boot.settings.perf_line ? "on" : "off",
-               g_boot.settings.layout[0] ? g_boot.settings.layout : "standard",
+               g_ui.layout ? g_ui.layout->name : "standard",
                g_boot.settings.boot_tape[0] ? g_boot.settings.boot_tape : "none",
                g_boot.settings.fast_tape ? "on" : "off");
     /* ram is the machine; volume and perf_line go to the menu's state,
-     * which core 0 applies; boot_tape went into the deck as core 1 read
-     * the card. layout waits for game layouts (§9.4, M15). */
+     * which core 0 applies; layout and boot_tape were taken as core 1
+     * read the card (§9.4). */
     g_ui.volume = g_boot.settings.volume;
     g_ui.perf_line = g_boot.settings.perf_line;
     g_ui.fast_tape = g_boot.settings.fast_tape;
