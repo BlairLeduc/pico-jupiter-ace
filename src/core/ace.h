@@ -14,6 +14,7 @@
 #include <stdint.h>
 
 #include "beeper.h"
+#include "cassette.h"
 #include "config.h"
 #include "tape.h"
 #include "z80.h"
@@ -79,8 +80,13 @@ typedef struct ace_s {
      * Dn is down. Row r is the one A(8+r) low selects (§2.4). */
     uint8_t keys[ACE_KEY_ROWS];
 
-    /* The tape input as D5 reads it: true is the idle level, a 1. */
+    /* The tape input as D5 reads it: true is the idle level, a 1. While
+     * the deck plays, the read brings it up to date (cassette.h). */
     bool tape_in;
+
+    /* The tape output: D3 of the last even-port OUT, the line the ROM's
+     * save routine drives (§16). The speaker is the access, not D3. */
+    bool tape_out;
 
     /* The speaker and tape output: an IN from an even port drives it
      * low, an OUT high (§2.3, §8). The beeper turns its edges into PCM,
@@ -89,8 +95,10 @@ typedef struct ace_s {
     bool     speaker;
     beeper_t beeper;
 
-    /* The tape request the CPU may be stalled on (tape.h). */
-    tape_t tape;
+    /* The tape request the CPU may be stalled on (tape.h), and the deck
+     * at signal level (cassette.h). */
+    tape_t     tape;
+    cassette_t cas;
 
     ace_config_t cfg;
 
@@ -135,8 +143,8 @@ bool ace_init(ace_t *m, const ace_config_t *cfg);
  * that failed after it had started to change it (design.md §10.5). */
 void ace_power_on(ace_t *m);
 
-/* The CPU's reset line: RAM and the page table are kept, and a tape
- * request the CPU was stalled on is dropped. */
+/* The CPU's reset line: RAM and the page table are kept, a tape request
+ * the CPU was stalled on is dropped, and the deck stops where it is. */
 void ace_reset(ace_t *m);
 
 /* Run whole instructions until at least t_states have passed, and return
@@ -154,7 +162,7 @@ uint32_t ace_run_field(ace_t *m);
 void ace_copy(ace_t *dst, const ace_t *src);
 
 /* After a snapshot has replaced the CPU and RAM (design.md §10.5): a
- * tape request is dropped, the keys are let go (the keyboard's state is
+ * tape request is dropped, the deck stops where it is, the keys are let go (the keyboard's state is
  * now, not then; the port lets go of its held set too), and the beeper
  * carries on from the CPU's clock and the speaker's level. */
 void ace_restored(ace_t *m);

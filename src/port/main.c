@@ -67,18 +67,20 @@ int main(void) {
                (unsigned long)g_c1.i2c_hz, (long)g_c1.sb_version);
     log_printf("  lcd          : spi %lu Hz\n", (unsigned long)g_c1.spi_hz);
     log_printf("  settings     : card %s, file %s%s%s; ram %s, volume %u, perf_line %s, "
-               "layout %s, boot_tape %s\n",
+               "layout %s, boot_tape %s, fast_tape %s\n",
                card_state_str(g_boot.job.state), settingsio_state_str(g_boot.cfg),
                g_boot.cfg_error[0] ? ", first problem " : "", g_boot.cfg_error,
                ace_ram_name(g_boot.settings.ram), g_boot.settings.volume,
                g_boot.settings.perf_line ? "on" : "off",
                g_boot.settings.layout[0] ? g_boot.settings.layout : "standard",
-               g_boot.settings.boot_tape[0] ? g_boot.settings.boot_tape : "none");
+               g_boot.settings.boot_tape[0] ? g_boot.settings.boot_tape : "none",
+               g_boot.settings.fast_tape ? "on" : "off");
     /* ram is the machine; volume and perf_line go to the menu's state,
      * which core 0 applies; boot_tape went into the deck as core 1 read
      * the card. layout waits for game layouts (§9.4, M15). */
     g_ui.volume = g_boot.settings.volume;
     g_ui.perf_line = g_boot.settings.perf_line;
+    g_ui.fast_tape = g_boot.settings.fast_tape;
 
     ace_config_t cfg;
     ace_config_default(&cfg);

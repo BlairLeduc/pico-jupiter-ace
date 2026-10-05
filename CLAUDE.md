@@ -9,8 +9,45 @@ Raspberry Pi Pico SDK. The guest is a Z80A at 3.25 MHz with an 8 KiB Forth
 ROM, a 32×24 character display from 768 bytes of screen RAM and 1 KiB of
 character RAM, a 40-key matrix, and a one-bit speaker and tape port.
 
-**Implementation status, 2026-10-04: M12 done.** Next is M13,
-signal-level tape (`docs/design.md` §15).
+**Implementation status, 2026-10-05: M13 done.** Next is M14, wait
+states (`docs/design.md` §15).
+
+**M13, signal-level tape** (`src/core/cassette.c`, `tape.c`, `ace.c`;
+`src/port/tapeio.c`, `menu.c`, `core0.c`), on the Plus 2 W (id
+`7458DC82A89AAC12`) at 150 MHz, gcc 15.2, 2026-10-05. The player gives
+the half-cycles the ROM's save routine counts (design.md §10.4's table),
+and `test_cassette` holds it to the ROM's recorded `SAVE` edge for edge,
+9,924 edges and the gap between header and data. The ROM's `LOAD` and
+`VERIFY` read it with the trap off; the recorder and an independent
+decoder in the test both turn D3 into the `.tap` the trap writes; the
+access line decodes to nothing, which settled §16: the tape output is
+D3. Six planted bugs each fail the test. `tut-tut.tap` loads off the
+signal on the host in 67.0 s of guest time. `fast_tape = off` (Settings
+page, or the file) keeps the trap's stall as the port's cue, loads the
+`.tap` whole into a 64 KiB image and declines, so the ROM reads the
+signal. On the board, in the 51K machine: a word `SAVE`d at signal level
+went to `/ace/tapes/M13CU.tap`, loaded in xAce (`3 M13CU . 27  OK`, from
+the bytes the log dumps), and loaded back on the board off the signal.
+`LOAD TUTTUT` off the signal: turbo held 3.18–3.19× real time, 3,356
+fields in 23.1 s of wall time against 69.9 s paced; 0 underruns and 0
+late refills either way. Core 0 while a tape plays, paced
+(`PICO_ACE_TURBO=OFF`): 30.7–31.6 %, against 20.9 % at the prompt
+(`out/m13/device2.log`). With no tape playing, §14's five workloads
+read within 0.3 points of M12's build in the same sitting (compute
+23.3 % both). Unpaced, core 1 cannot present every field, and
+dropped 12 snapshots across a save. Found on the way: with the deck
+empty, a LOAD of a name the card lacks logged the last file the header
+search had looked at (M10's; only the message was wrong). After Codex's review the recorder keeps only whole
+blocks (`test_cassette`, with a control), and the port saves by the trap
+when the 64 KiB image is full, empties the scratch at each header, and
+keeps a recording when the card is missing until the card changes. On
+the board: two signal-level SAVEs to separate files with the scratch
+emptied between them, and a 65,534-byte BSAVE whose data the trap saved
+for want of room (`out/m13/device3.log`); the card-missing case was not
+checked on the board. **Not
+checked:** Play by hand from the menu on the board (host only); a card
+pulled while a recording waits to be written; a recording onto a tape the
+user put in the deck (the save went to a new file).
 
 **M12, the performance pass and soak** (`src/core/z80.c`, `hot.h`;
 `tools/perf-run.sh`, `perf-summary.sh`, `soak.sh`, `soak-check.py`), on
@@ -302,7 +339,7 @@ core were verified on a Plus 2 W, and `design.md` §4.6 says which files to
 
 ## Build and test
 
-As of M12 these all work, and `tools/uart-type.sh` types at the guest.
+As of M13 these all work, and `tools/uart-type.sh` types at the guest.
 
 ```sh
 # host: src/core/ with the system compiler, no Pico SDK, under CTest
@@ -319,6 +356,7 @@ tools/build.sh -DPICO_ACE_RAM_TIER=0 build/pico-t0      # another SRAM tier (2 s
 tools/build.sh -DPICO_ACE_HALT_SKIP=OFF build/pico-nohs # every HALT interpreted, a control
 tools/build.sh -DPICO_ACE_UART=OFF build/pico-release   # the build that ships
 tools/build.sh -DPICO_ACE_AUDIO=OFF build/pico-noaudio  # paced on the timer, a control
+tools/build.sh -DPICO_ACE_TURBO=OFF build/pico-noturbo  # paced while a tape plays, a control
 tools/build.sh -DPICO_ACE_BOOT_RAM=3k build/pico-3k     # this machine over the card's
 tools/build.sh -DPICO_ACE_BOOT_TAPE=SQ.tap build/pico-t # this tape in the deck at boot
 
@@ -337,6 +375,8 @@ tools/perf-run.sh build/pico/pico-ace.elf out/perf    # design.md §14's workloa
 tools/perf-summary.sh out/perf                          #   one line per workload
 tools/soak.sh build/pico/pico-ace.elf 30 out/soak       # §13.5's soak, on battery, then its check
 PICO_ACE_TAP=game.tap build/host/test/host/test_tape  # an archive .tap through the trap
+PICO_ACE_TAP=game.tap build/host/test/host/test_cassette  # ... and off the signal
+PICO_ACE_TAP_OUT=sq.tap build/host/test/host/test_cassette  # the recorder's .tap, for xAce
 PICO_ACE_ACE_DIR=dir build/host/test/host/test_snap_ace  # every archive .ace in dir
 
 # .ace against MAME (design.md §13.4): brew install mame, then
@@ -346,6 +386,8 @@ tools/ace-reference.py dir --log out/m11-mame.log
 # trace diff against xAce (design.md §13.4); CI runs the second line too
 tools/trace/build-xace.sh            # clones xAce at a pinned commit into out/trace
 tools/trace-diff.py run --keys '2 2 + .\n'
+tools/trace-diff.py keys 'LOAD SQ\n7 SQ .\n' keys.txt   # a .tap through xAce's loader:
+out/trace/xace-trace roms/ace.rom -f 1200 -k keys.txt -t sq.tap -s -q
 
 # golden images (design.md §7.6): write them somewhere, look, then copy
 mkdir -p out/golden && build/host/test/host/test_golden --write out/golden

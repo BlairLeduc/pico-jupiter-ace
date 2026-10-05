@@ -20,6 +20,12 @@
  * A save is appended to the tape in the deck, or to the named file,
  * through <file>.new and a rename (EL §8.6); a load that finds only the
  * .new, a save cut off between the two, takes it.
+ *
+ * With fast_tape off (design.md §10.4) the files are found the same way,
+ * but the request is declined once the tape is in the cassette whole,
+ * so the ROM's own routine reads the signal, or writes it for the
+ * recorder; what was recorded is appended to its file at the next park.
+ * The cassette plays the tape from where it stands, as a deck would.
  */
 #ifndef PICO_ACE_TAPEIO_H
 #define PICO_ACE_TAPEIO_H
@@ -32,17 +38,31 @@
 
 #define TAPEIO_DIR "/ace/tapes"
 
-/* Serve the request the CPU is stalled on, or decline it: mounts the
- * card, does the job and unmounts. The time taken is in *us. */
+/* Serve the request the CPU is stalled on, or decline it, and write out
+ * what the recorder took: mounts the card, does the job and unmounts.
+ * The time taken is in *us. */
 void tapeio_serve(ace_t *m, uint32_t *us);
 
 /* The deck, with the card mounted. Insert puts a tape in at its start;
- * NULL or "" empties the deck. NULL, or why not. */
-const char *tapeio_insert(const char *path);
+ * NULL or "" empties the deck. NULL, or why not. `m` is NULL before the
+ * machine exists (boot_tape). */
+const char *tapeio_insert(ace_t *m, const char *path);
 const char *tapeio_inserted(void);     /* "" when the deck is empty   */
 bool        tapeio_chosen(void);       /* put in by the menu or boot_tape, not found by name */
-void        tapeio_rewind(void);
-uint32_t    tapeio_position(void);     /* the next block, from 0       */
+void        tapeio_rewind(ace_t *m);
+uint32_t    tapeio_position(const ace_t *m);  /* the next block, from 0 */
+
+/* With fast_tape off: the cassette started or stopped by hand, for a
+ * loader that never calls the ROM. NULL, or why not. */
+const char *tapeio_play(ace_t *m, bool on);
+
+/* fast_tape changed: on, the cassette is emptied. */
+void        tapeio_mode(ace_t *m);
+
+/* A recording found no card to be written to and is kept; core 0 asks
+ * for no park for it until the card changes, which core 1 reports. */
+bool        tapeio_flush_waiting(void);
+void        tapeio_card_changed(void);
 
 /* The last thing a load or save did that the user should hear about,
  * for the menu's status row; "" for nothing. Cleared by reading. */

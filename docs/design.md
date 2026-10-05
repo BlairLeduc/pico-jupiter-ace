@@ -19,10 +19,10 @@ This document applies the lessons. It does not repeat them. Where a decision
 just follows a lesson, it cites the lesson and moves on, and the space goes
 to what is different about the Ace.
 
-**Status, 2026-10-04.** M0 to M9 are done (§15.2): the Z80 and the Ace
-on the host and on the board, video, the keyboard, audio and the card's
-settings file, each with what was checked on the device recorded under its
-milestone. Every number about the Ace below comes from secondary knowledge
+**Status, 2026-10-05.** M0 to M13 are done (§15.2): the Z80 and the Ace
+on the host and on the board, video, the keyboard, audio, the card, the
+menu, tape by trap and by signal, snapshots and the performance pass, each
+with what was checked on the device recorded under its milestone. Every number about the Ace below comes from secondary knowledge
 until §16's table says otherwise. Every performance figure is an
 **estimate** and is labelled as one (EL §14.4) until a milestone measures
 it on the board; the measurements are recorded under their milestones and
@@ -137,14 +137,16 @@ port. It is conventionally written `$FE`. The documented behaviour:
 
 - **`IN` from an even port**: reads the keyboard half-rows selected by **low
   bits of A8–A15**, with keys on D0–D4, active low. It reads the tape input bit
-  as well. As a side effect it **drives the speaker/tape output one way**.
-- **`OUT` to an even port**: drives the speaker/tape output the other way. The
-  data byte is ignored (to be confirmed).
+  as well. As a side effect it **drives the speaker one way**.
+- **`OUT` to an even port**: drives the speaker the other way, and sets the
+  **tape output to D3** of the data byte.
 - **Odd ports**: nothing on the stock machine; add-ons live here (§17).
 
-The `IN`/`OUT` pairing is how the ROM's `BEEP` and tape writer make a
-waveform. The polarity does not matter to audio, because the DC blocker
-removes it (§8), but the recorder needs the edges (§10.4).
+The `IN`/`OUT` pairing is how the ROM's `BEEP` makes a waveform. The
+polarity does not matter to audio, because the DC blocker removes it (§8).
+The tape writer moves D3 instead: its loops are all `OUT`s, with one `IN`
+a byte for BREAK, so the access alone carries no tape (settled in M13,
+§16).
 
 ### 2.4 Keyboard matrix
 
@@ -419,7 +421,8 @@ in SRAM. Keep every fixed capacity in `src/core/config.h` and print `arm-none-ea
 
 As built at M12, the shipping image (tier 2, UART on) links 36,524 B of
 `.data` (the code in SRAM with it), 110,408 B of `.bss`, a 2 KiB heap and
-two 2 KiB stacks: about 153 KiB, 29 %.
+two 2 KiB stacks: about 153 KiB, 29 %. M13 adds the 64 KiB tape image:
+37,404 B of `.data` and 176,312 B of `.bss`, about 215 KiB, 41 %.
 
 SRAM is not this project's constraint, unlike the previous one's (EL §1). Spend
 the slack on SRAM code placement if §3.2 needs it, not on features.
@@ -753,7 +756,9 @@ waiting mirror's fast path, so measure it against a control build (EL §12).
 The Z80's `IN`/`OUT` go to one function, `ace_io_read`/`ace_io_write`, which
 tests A0. Even port reads build D0–D4 from the matrix rows selected by A8–A15
 (several rows ANDed), add the tape bit, set the remaining bits to the
-settled value (§16), and drive the speaker (§8). Odd ports return open bus.
+settled value (§16), and drive the speaker (§8). Even port writes drive
+the speaker too, and keep D3 as the tape output (§10.4). Odd ports return
+open bus.
 Decode **by mask**, never by equality with `$FE` (EL §4.1).
 
 ---
@@ -1077,6 +1082,55 @@ ROM's routines first for leader, sync and bit timing, and carry remainders so
 half-cycles never drift. Recording decodes the output bit back into blocks.
 `.wav` is out of scope (§17).
 
+**As built (M13).** `cassette.c` plays a `.tap` as the half-cycles the
+ROM's own save routine at `$1820` would write for it, counted from its
+instructions (the file names each one) and held to the ROM's recorded
+signal edge for edge by `test_cassette`, the gap between a header and its
+data included. Every half-cycle is a whole number of T-states, so there is
+no remainder to carry:
+
+| Part | T-states | Where |
+|---|---:|---|
+| leader half | 2,011, or 2,010 when `INC H` runs | `$1837`–`$1843`; 8,192 `OUT`s for a header (HL from `$E000`), 1,024 for data (`$FC00`), the first writing the level the line has |
+| sync | 601, then 791 | to `$1849`, then to `$1852` |
+| a bit's first half | 802 for a 0; a byte's first bit: 799 (the flag), 803 (data), 805 (the checksum) | `$1864`, by `$188A`, `$1872` and `$1882` |
+| a bit's second half | 801 for a 0 | `$1864` |
+| a 1 | 790 more in each half | `LD B,$3D` and its `DJNZ` at `$1860` |
+| end | 917 to the exit's `OUT` | `$189A` |
+| between blocks | 4,204 from that `OUT` to the next leader's first edge | measured off `SAVE` |
+
+A bit is the line low and then high, MSB first; the flag byte leads and is
+not in the checksum. The player is played inverted against D3 (§16) and
+brought up to date only when an even port is read: before the next edge,
+one subtract and a branch. The recorder takes D3 from every even `OUT` and
+reads half-cycles as the load routine does, a bit by its whole cycle
+against 2,400 T, into `.tap` blocks appended to the image. A block is
+kept only whole, the DE bytes the save cue found and the checksum; one cut
+short by BREAK, a reset or a full image is taken back out, and so is one
+whose flag is not the one its place in the file gives (§10.3). Each is
+counted.
+
+The deck follows the ROM's cues, as the trap does: the load routine's
+entry starts it, the save routine's starts the recorder when the deck is
+recording, and their shared exit at `$1892` stops both, which every way
+out of either routine passes, BREAK included. The exit's low byte is in
+the CPU's trap table only while the deck runs. The deck can also be
+played by hand from the Tape page, for a loader that never calls the ROM.
+
+**Fast or not.** `fast_tape` (§10.6, on by default) chooses. On, the trap
+serves the blocks (§10.3). Off, the trap still stalls the CPU at each
+block routine and the port finds the tape exactly as it would for the
+trap, by name, by its first header, or in the deck, but then reads the
+file whole into a 64 KiB image (§3.3), puts it in the cassette and
+declines, so the ROM's own routine reads the signal. A save is recorded
+the same way and appended to the file the trap would have written, at the
+next park (§4.5). A block the image has no room for whole is saved by the
+trap instead. A save with no deck the user chose records into a scratch
+image, emptied at each header once what it held is on the card. With no
+card at that park the recording is kept, not dropped, and written when
+the card changes. The cassette plays from where it stands, as a deck does,
+and a `LOAD` at its end rewinds it once, as the trap's does.
+
 ### 10.5 Snapshots
 
 **`.ace` (import only; export is deferred, §18 item 4).** This is the
@@ -1141,8 +1195,9 @@ taken when the slot's file is missing or damaged (EL §8.6).
 saved only by a menu action, no flash writes (EL §8.7). Keys: `ram`
 (`3k`/`19k`/`51k`, default `19k`), `volume` (0–8, default 8), `layout` (a
 layout's name, at most 16 characters, or `standard`, the default),
-`boot_tape` (a path, or a bare name in `/ace/tapes/`; empty is none) and
-`perf_line` (`on`/`off`, default `off`). Names and values are read in either
+`boot_tape` (a path, or a bare name in `/ace/tapes/`; empty is none),
+`perf_line` (`on`/`off`, default `off`) and `fast_tape` (`on`/`off`,
+default `on`: the trap, or the signal, §10.4; added in M13). Names and values are read in either
 case, and a `#` at the start of a line or after a space begins a comment.
 Build-time `BOOT_*` overrides win (EL §13.1); M9 has `PICO_ACE_BOOT_RAM`.
 
@@ -1182,6 +1237,12 @@ fail**.
 Turbo runs unpaced while a tape plays, as in EL §9.3. There is no faster
 guest-clock option (§17), so EL §9.3's table of clock-following quantities
 does not apply.
+
+**As built (M13).** While the cassette plays or records, core 0 does not
+block on the audio queue: the guest's samples are dropped and the queue
+is kept at its start depth with silence. `PICO_ACE_TURBO=OFF` paces it,
+the control. On the board, turbo held 3.18–3.19× real time through a
+12 KB load (§15.2 M13).
 
 ### 11.3 The host clock
 
@@ -1228,6 +1289,9 @@ with < >, then Save, Load and Delete for `/ace/states/slotN.sav`, and the
 `.ace` files in `/ace/snaps/`. A load that succeeds closes the menu and
 the guest resumes from it; a refusal is named on the status row, an `.ace`
 for another machine as the machine it needs.
+**M13** added Fast tape to the Settings page, and to the Tape page a Play
+row, which starts the cassette by hand and returns to the guest, or
+stops it (§10.4).
 The pages are in mixed case, in the Ace's own character set (§7.5).
 What the menu changes for core 0, the volume and a reset, goes through
 `g_ui` and is applied by core 0 when it has the machine back (EL §2.5).
@@ -1259,7 +1323,7 @@ every test of a timing rule has a control that must fail.
 | Frame pool | randomised interleaving of both cores' transitions |
 | Audio | edge model to 1 LSB; rational sample count after any run; DC blocker settles |
 | Keyboard | every code maps to one binding; no swallowed chords; release undoes press across a layout change |
-| Media | `.tap` parse and write round trip; `.ace` decode of sample files; `.sav` round trip; torn and foreign files leave the machine unchanged |
+| Media | `.tap` parse and write round trip; the signal against the ROM's own `SAVE`, edge for edge, and through its `LOAD` with the trap off (`test_cassette`); `.ace` decode of sample files; `.sav` round trip; torn and foreign files leave the machine unchanged |
 | Settings | in-place edit keeps comments, order and line endings; duplicate key refused; rewrite parses back |
 
 ### 13.3 The real ROM on the host
@@ -1949,6 +2013,60 @@ ROM `LOAD`) passes; a recording made on the device loads in xAce.
 *Measured:* turbo load speed-up; core 0 share while a tape plays.
 *Leaves out:* `.wav`, `.tzx` (§17).
 
+**Done, 2026-10-05**, on the Plus 2 W (id `7458DC82A89AAC12`) at 150 MHz,
+gcc 15.2. As built in §10.4; the timings settled §16's row, and the tape
+output is D3 of an `OUT` (§2.3, §16).
+
+On the host, `test_cassette`: the ROM's `SAVE` with the trap off,
+recorded off D3, is the player's walk of the recorder's `.tap`, every one
+of 9,924 edges and the 4,204 T between header and data. The recorder and
+the test's own decoder each give the `.tap` the trap writes for the same
+word, and the speaker's line, `IN` low and `OUT` high, gives nothing. The
+ROM's `LOAD` and `VERIFY` read that `.tap` with the trap off, the cues
+start and stop the deck, a damaged byte is the ROM's error, and the
+firmware's way (the trap on, every request declined) loads and records
+too, and the deck played by hand stops where it is and plays every edge
+of the walk to the end. Planted one at a time, each of these fails it: a 1 one T short, no
+`INC H` in the leader, the bytes off by one, the recorder's threshold,
+no exit cue, the tape output taken from the access, the input read late.
+The archive's `tut-tut.tap` loads off the signal in 67.0 s of guest time.
+A host recording loads in xAce (`7 SQ . 49  OK`).
+
+On the board, in the 51K machine with `fast_tape` off: `SAVE M13CU` was
+recorded at signal level and written to `/ace/tapes/M13CU.tap`, 53 bytes;
+the bytes the log dumps load in xAce (`3 M13CU . 27  OK`), and the board
+loaded the file back off the signal and ran the word. `LOAD TUTTUT` off
+the signal took 23.1 s of wall time with turbo, at 3.18–3.19× real time
+(3,356 fields, 201,635 edges), and 69.9 s paced (`PICO_ACE_TURBO=OFF`),
+with 0 underruns and 0 late refills either way. Paced, core 0 is
+30.7–31.6 % busy while the tape plays, against 20.9 % at the prompt. While
+turbo runs, core 1 does not present every field (12 snapshots dropped
+across a save), and the consumed rate reads 36,608–36,638 Hz, the windows
+moving as the queue is topped up rather than drained by blocking; it
+returns to 36,621 when the tape stops. `out/m13/device.log`,
+`out/m13/device2.log`. With no tape playing the deck costs nothing measurable:
+§14's five workloads on this build and on M12's, in one sitting, read
+compute 23.3 % and 23.3 %, glyphs 23.3 and 23.2, idle 20.9 and 21.2,
+scrolling 3.4 and 3.4, sound 17.9 and 18.0, every consumed rate
+36,620–36,621 Hz with no underruns (`out/m13/perf-m13`, `perf-main`).
+
+After review (PR #12), the recorder keeps only whole blocks
+(`test_cassette` holds it, with no room for the data and with a reset
+part-way, and fails with the old rule planted), and the port saves by the
+trap when the image is full, recycles the scratch and keeps a recording
+the card was missing for. On the board, 2026-10-05, in the 51K machine:
+`SAVE M13A` and then `SAVE M13B` each went at signal level to its own
+file with nothing dropped, the scratch emptied between them, and
+`0 65534 BSAVE M13BIG` recorded its header at signal level and, with no
+room for the data in the image, had the trap save the 65,534 bytes after
+it in the same file; the ROM said `OK` (`out/m13/device3.log`).
+*Not verified:* a recording kept for a missing card, on the board (the
+card would have to go in the milliseconds between the save and its
+park); Play by hand on the board (on the host only);
+a card pulled while a recording waits for its park; recording onto a tape
+the user put in the deck (the board's went to a new file); a loader of a
+program's own (none to hand).
+
 #### M14. Wait states
 
 *Depends on:* M13, and the trace-diff tool kept working since M3 (§13.4).
@@ -2001,7 +2119,7 @@ runtime configuration (EL §14.2).
 | Port decode | A0 only | schematic; ROM | medium |
 | Keyboard matrix | §2.4 | **ROM, executed** | **settled** 2026-10-03: every cell pressed at the prompt alone, with SHIFT, with SYMBOL SHIFT and with both (`test_keyboard`). The cells agree with MAME's table; the editing set did not agree with this design's earlier belief (up is SHIFT+6, down SHIFT+7, and SHIFT+3 types `3`) |
 | Port read bits D5–D7 | tape on D5, rest high | schematic; ROM's tape loader | low-medium. MAME's `io_r` agrees: `$FF`, D5 cleared by the tape signal |
-| `IN` vs `OUT` speaker direction | `IN` one way, `OUT` the other | schematic; ROM's `BEEP` | medium. MAME: `IN` low, `OUT` high, which `ace.c` follows. MAME also takes the tape output from **D3 of the `OUT`**, not from the access, which contradicts §2.3; settle in M13. The prompt makes no edge: its key scan is all `IN`s (`test_boot`). Executing `BEEP` (2026-10-04, §8) gives the manual's 8m µs only because each access moves the level: its `OUT` writes the counter's high byte, whose bits do not alternate. So the speaker follows the access; the polarity is still MAME's, and inaudible through the DC blocker |
+| `IN` vs `OUT` speaker direction | `IN` one way, `OUT` the other | schematic; ROM's `BEEP` | medium. MAME: `IN` low, `OUT` high, which `ace.c` follows. MAME also takes the tape output from **D3 of the `OUT`**, not from the access. **Settled** 2026-10-05 by execution (`test_cassette`): the ROM's `SAVE` drives D3 and makes only one `IN` a byte, so the access line decodes to nothing and D3 decodes to the `.tap` the trap writes; the tape output is D3 (§2.3). The prompt makes no edge: its key scan is all `IN`s (`test_boot`). Executing `BEEP` (2026-10-04, §8) gives the manual's 8m µs only because each access moves the level: its `OUT` writes the counter's high byte, whose bits do not alternate. So the speaker follows the access; the polarity is still MAME's, and inaudible through the DC blocker |
 | Display polarity | set bits white | ROM, executed, against photographs | high. **Executed** 2026-10-03: with set bits as ink, the character set the ROM writes reads as text on a paper ground that its spaces clear to (`test/host/golden/boot.ppm` and `glyphs.ppm`, looked at). That paper is black and ink white is from photographs |
 | ROM uses IM 1 | yes | ROM | **settled** 2026-10-03: `IM 1` at `$008E`, `EI` at `$009F`; IM is 1 at the prompt in every machine (`test_boot`). The handler is at `$013A` |
 | ROM halts when waiting for a key | no | ROM | **settled** 2026-10-03, by execution: at the prompt it spins on FLAGS (`$3C28`) bit 5 at `$059B`, which the interrupt sets on ENTER, and never halts (`test_boot`). It does `HALT` once a word in `VLIST` (`$0679`), found by the trace diff |
@@ -2009,7 +2127,7 @@ runtime configuration (EL §14.2).
 | Key minimum hold, in fields | 3 scans | **ROM, executed** | **settled** 2026-10-03: the interrupt's scan (`$0310`) counts a held key down from `$20` in `$3C27` and takes it on the third consecutive field; the next key needs one field with every key up; a key held 33 fields repeats, and then every 4. Typing a line at 2 fields held or with no gap loses keys (`test_keyboard`'s controls). The replay uses 4 and 2 (§9.1) |
 | `.tap` block layout | §10.3 | ROM tape routines; archive files | **settled** 2026-10-04: on tape a block is the flag byte (`$00` header, `$FF` data), the bytes, and their XOR; the `.tap` keeps a 2-byte little-endian length (bytes + 1), the bytes and the XOR, with no flag, and the ROM writes a 25-byte header then its data. The archive's `tut-tut.tap` (jupiter-ace.co.uk, fetched 2026-10-04) is exactly that: a 26-byte block naming `TUTTUT`, then 11,998 bytes, both XORing to zero. A block's flag is therefore taken from its place, even blocks headers (`tape.h`) |
 | `.ace` snapshot encoding | §10.5 | the archive's FAQ; MAME's loader; sample files | **settled** 2026-10-04 from the Jupiter Ace Archive's FAQ, MAME's `snapshot_cb` and 199 files (the archive's 4, TOSEC's 195): RLE with `ED`, RAMTOP at `$2080`, registers from `$2100` in 32-bit words with noise above the value, no dump past `$7FFF`. The key wait's stack is `$04F7` at RAMTOP − 2 in all 135 files that hold it. `test_snap_ace` loads all 199 (198 load, 1 refused for its stack); MAME agrees on the 102 19K files saved in the key wait (§13.4) |
-| Tape signal timings | — | ROM tape routines | unknown |
+| Tape signal timings | §10.4 | ROM tape routines | **settled** 2026-10-05: counted off the save routine's instructions, and executed: `test_cassette` records the ROM's `SAVE` and the player's half-cycles are the recording's, every one of 9,924 edges and the gap between header and data; the ROM's `LOAD` and `VERIFY` read the player with the trap off, and planted errors in the counts, the recorder, the cue or the input each fail it |
 | Tape block routines | load `$18A7`, save `$1820` | ROM | **settled** 2026-10-04 by reading them (`tape.c` names every address used) and by execution: `test_tape` records the ROM's own SAVE off D3, plays it into the ROM's LOAD and VERIFY, and the trapped calls leave the same machine in every byte of RAM and every register but R. The tape input is D5; the loader keeps the last level it saw in C. The signal must be played inverted against D3 for the line to rest at the input's idle level (D5 high) between blocks |
 
 Record how each was settled, and the date, in this table when it changes.

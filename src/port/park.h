@@ -24,7 +24,7 @@
 
 #define PARK_NONE 0u
 #define PARK_HOLD  1u  /* GS over the UART, until a second GS (tools/uart-hold.sh) */
-#define PARK_TAPE  2u  /* the CPU stalled on a tape block (tape.h)        */
+#define PARK_TAPE  2u  /* a tape block, or a recording to write (tapeio.h) */
 #define PARK_MENU  3u  /* Alt+M or an F-key (design.md §12)               */
 #define PARK_PAUSE 4u  /* Alt+P                                           */
 

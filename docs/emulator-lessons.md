@@ -730,6 +730,13 @@ and turbo is free.
   byte. Leave out the writer's pause between bytes (a 48-byte save went from a
   748-byte image to 104). Drop and count bytes that do not frame. A gzipped or
   read-only image is write-protected.
+- **When the ROM's writer times bits with its own loops, play its counts.**
+  Count the T-states of each half-cycle off the writer's instructions,
+  every branch that changes one (the first bit of a byte, the checksum,
+  the end of the leader), and have the player give exactly those. A test
+  can then require the player's edges to equal a recording of the ROM's
+  own save, edge for edge, which catches a count one T out in any branch;
+  a tolerance-based check would not.
 - **Settle clock questions by execution.** Our guest's ROM writes a tape
   correctly at 2 MHz (it times bits against a reference that keeps wall time)
   but cannot read one (it times input with its own loops). The deck therefore

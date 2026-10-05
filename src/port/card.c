@@ -35,7 +35,7 @@ static void boot_tape(const settings_t *s) {
     char path[ACE_PATH_MAX + sizeof SETTINGS_TAPE_DIR];
     if (strchr(name, '/')) snprintf(path, sizeof path, "%s", name);
     else snprintf(path, sizeof path, "%s/%s", SETTINGS_TAPE_DIR, name);
-    const char *err = tapeio_insert(path);
+    const char *err = tapeio_insert(NULL, path);
     log_core1("  card         : boot_tape %s%s%s\n", path, err ? ": " : " in the deck",
               err ? err : "");
 }

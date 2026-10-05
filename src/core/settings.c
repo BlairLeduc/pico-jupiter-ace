@@ -12,6 +12,7 @@ void settings_default(settings_t *s) {
     s->ram       = cfg.ram;
     s->volume    = 8u;
     s->perf_line = false;
+    s->fast_tape = true;
 }
 
 /* strcasecmp is POSIX, not C11. */
@@ -75,10 +76,10 @@ static settings_status_t layout(settings_t *s, const char *v) {
 
 /* Every setting the file may give, in §10.6's order. Only the boot tape
  * may be left empty, meaning none. */
-enum { K_RAM, K_VOLUME, K_LAYOUT, K_BOOT_TAPE, K_PERF_LINE, K_COUNT };
+enum { K_RAM, K_VOLUME, K_LAYOUT, K_BOOT_TAPE, K_PERF_LINE, K_FAST_TAPE, K_COUNT };
 
 static const char *const k_names[K_COUNT] = {
-    "ram", "volume", "layout", "boot_tape", "perf_line",
+    "ram", "volume", "layout", "boot_tape", "perf_line", "fast_tape",
 };
 
 static settings_status_t apply(settings_t *s, unsigned k, const char *v) {
@@ -89,6 +90,7 @@ static settings_status_t apply(settings_t *s, unsigned k, const char *v) {
     case K_LAYOUT:    return layout(s, v);
     case K_BOOT_TAPE: return path(v, s->boot_tape);
     case K_PERF_LINE: return on_off(v, &s->perf_line);
+    case K_FAST_TAPE: return on_off(v, &s->fast_tape);
     }
     return SET_UNKNOWN;
 }
@@ -207,6 +209,7 @@ static bool key_equal(unsigned k, const settings_t *a, const settings_t *b) {
     case K_LAYOUT:    return strcmp(a->layout, b->layout) == 0;
     case K_BOOT_TAPE: return same_path(SETTINGS_TAPE_DIR, a->boot_tape, b->boot_tape);
     case K_PERF_LINE: return a->perf_line == b->perf_line;
+    case K_FAST_TAPE: return a->fast_tape == b->fast_tape;
     }
     return true;
 }
@@ -222,6 +225,7 @@ static const char *value_of(unsigned k, const settings_t *s, char num[4]) {
     case K_LAYOUT:    return s->layout[0] ? s->layout : "standard";
     case K_BOOT_TAPE: return s->boot_tape;
     case K_PERF_LINE: return s->perf_line ? "on" : "off";
+    case K_FAST_TAPE: return s->fast_tape ? "on" : "off";
     }
     return "";
 }

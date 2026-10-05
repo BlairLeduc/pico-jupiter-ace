@@ -9,6 +9,7 @@
 #include "ff.h"
 #include "pico/stdlib.h"
 
+#include "handoff.h"
 #include "log.h"
 #include "storage.h"
 
@@ -28,6 +29,17 @@ static char     s_save_path[ACE_PATH_MAX];
 static char     s_said[40];
 static FIL      s_f, s_g;
 static uint8_t  s_buf[ACE_TAPE_CHUNK];
+
+/* The signal (design.md §10.4): the deck's tape whole, which the
+ * cassette plays, and where a recording goes. An image of no path is the
+ * recorder's scratch, for a save to a file that is not the one loaded. */
+static uint8_t  s_img[ACE_TAPE_IMAGE_MAX];
+static char     s_img_path[ACE_PATH_MAX];
+static char     s_rec_path[ACE_PATH_MAX];
+
+/* A recording is waiting for the card: core 0 stops asking for a park
+ * until the card changes (tapeio_card_changed). */
+static volatile bool s_flush_wait;
 
 static void say(const char *fmt, const char *arg) {
     snprintf(s_said, sizeof s_said, fmt, arg);
@@ -54,6 +66,17 @@ static void set_deck(const char *path, bool user) {
     s_wrapped = false;
 }
 
+/* The cassette holds this file's image, or the scratch. A machine
+ * powered on again has an empty cassette whatever was in it. */
+static bool img_in(const ace_t *m) {
+    return m && m->cas.loaded && m->cas.img == s_img;
+}
+
+static void cassette_out(ace_t *m) {
+    if (img_in(m)) ace_cassette_eject(m);
+    s_img_path[0] = 0;
+}
+
 /* The file, or the .new a save left without its rename. */
 static FRESULT open_read(const char *path) {
     FRESULT fr = f_open(&s_f, path, FA_READ);
@@ -65,7 +88,8 @@ static FRESULT open_read(const char *path) {
     return fr;
 }
 
-const char *tapeio_insert(const char *path) {
+const char *tapeio_insert(ace_t *m, const char *path) {
+    cassette_out(m);
     if (!path || !path[0]) {
         set_deck(NULL, false);
         return NULL;
@@ -82,11 +106,57 @@ const char *tapeio_insert(const char *path) {
 
 const char *tapeio_inserted(void) { return s_path; }
 bool tapeio_chosen(void) { return s_user; }
-uint32_t tapeio_position(void) { return s_index; }
 
-void tapeio_rewind(void) {
+uint32_t tapeio_position(const ace_t *m) {
+    if (g_ui.fast_tape) return s_index;
+    return img_in(m) && s_img_path[0] ? m->cas.index : 0;
+}
+
+void tapeio_rewind(ace_t *m) {
     s_pos = s_index = 0;
     s_wrapped = false;
+    if (img_in(m) && s_img_path[0]) ace_cassette_rewind(m);
+}
+
+/* The tape at `path` whole into the cassette, unless it is there. */
+static const char *image_load(ace_t *m, const char *path) {
+    if (img_in(m) && strcmp(s_img_path, path) == 0) return NULL;
+    cassette_out(m);
+    if (open_read(path) != FR_OK) return "cannot open";
+    FSIZE_t size = f_size(&s_f);
+    UINT got = 0;
+    FRESULT fr = size > sizeof s_img ? FR_DENIED : f_read(&s_f, s_img, (UINT)size, &got);
+    f_close(&s_f);
+    if (size > sizeof s_img) return "longer than 64K";
+    if (fr != FR_OK || got != size) return "cannot read";
+    ace_cassette_insert(m, s_img, got, sizeof s_img);
+    snprintf(s_img_path, sizeof s_img_path, "%s", path);
+    log_core1("  tape         : %s, %lu bytes, in the cassette\n", path, (unsigned long)got);
+    return NULL;
+}
+
+const char *tapeio_play(ace_t *m, bool on) {
+    if (!on) {
+        ace_cassette_play(m, false);
+        return NULL;
+    }
+    if (g_ui.fast_tape) return "fast tape is on";
+    if (!s_path[0]) return "the deck is empty";
+    const char *err = image_load(m, s_path);
+    if (err) return err;
+    if (m->cas.ended) return "at the end: rewind";
+    ace_cassette_play(m, true);
+    log_core1("  tape         : playing %s from block %lu by hand\n", s_path,
+              (unsigned long)m->cas.index);
+    return NULL;
+}
+
+bool tapeio_flush_waiting(void) { return s_flush_wait; }
+
+void tapeio_card_changed(void) { s_flush_wait = false; }
+
+void tapeio_mode(ace_t *m) {
+    if (g_ui.fast_tape) cassette_out(m);
 }
 
 /* The ten-character name at addr, as a file in TAPEIO_DIR: trailing
@@ -144,9 +214,17 @@ static void decline(ace_t *m, const char *why) {
     log_core1("  tape         : declined: %s\n", why);
 }
 
-static void serve_load(ace_t *m, const tape_t *t) {
-    /* LOAD's header read names a file: that file, if the card has it. */
-    char named[ACE_PATH_MAX];
+/* LOAD's header read names a file: that file, if the card has it; with
+ * the deck empty, the first tape whose first header has the name. */
+static void find_load(const ace_t *m, const tape_t *t) {
+    /* Two buffers: the search leaves the last file it looked at in its
+     * own, and the log names the file asked for. */
+    char named[ACE_PATH_MAX], found[ACE_PATH_MAX];
+    char hex[2 * 12 + 1];
+    for (unsigned i = 0; i < 12u; i++)
+        snprintf(hex + 2u * i, 3, "%02X", ace_peek(m, (uint16_t)(TAPE_HEADER_ASKED + i)));
+    log_core1("  tape         : asked at $%04X: %s, ret $%04X, block $%04X+%u\n",
+              TAPE_HEADER_ASKED, hex, t->ret, t->addr, (unsigned)t->len);
     if (t->flag == TAPE_FLAG_HEADER && t->ret == TAPE_LOAD_HEADER_RET &&
         name_path(m, TAPE_HEADER_ASKED + 1u, named) && strcmp(named, s_path) != 0) {
         FRESULT fr = open_read(named);
@@ -154,13 +232,17 @@ static void serve_load(ace_t *m, const tape_t *t) {
             f_close(&s_f);
             set_deck(named, false);
             log_core1("  tape         : %s found by name\n", named);
-        } else if (!s_path[0] && find_by_header(m, named)) {
-            set_deck(named, false);
-            log_core1("  tape         : %s found by its header\n", named);
+        } else if (!s_path[0] && find_by_header(m, found)) {
+            set_deck(found, false);
+            log_core1("  tape         : %s found by its header\n", found);
         } else {
             log_core1("  tape         : no %s (FatFs %d)\n", named, (int)fr);
         }
     }
+}
+
+static void serve_load(ace_t *m, const tape_t *t) {
+    find_load(m, t);
     if (!s_path[0]) {
         decline(m, "no tape, and no file by that name");
         return;
@@ -226,10 +308,9 @@ static FRESULT write_all(FIL *f, const void *p, UINT n) {
     return fr == FR_OK && put != n ? FR_DENIED : fr;
 }
 
-/* path's blocks, then this one, into path.new; then the rename. */
-static FRESULT append(const ace_t *m, const tape_t *t, const char *path) {
-    char tmp[ACE_PATH_MAX + 4];
-    snprintf(tmp, sizeof tmp, "%s.new", path);
+/* path's blocks into path.new, open in s_g for what follows. */
+static FRESULT append_begin(const char *path, char tmp[ACE_PATH_MAX + 4]) {
+    snprintf(tmp, ACE_PATH_MAX + 4, "%s.new", path);
     (void)f_mkdir("/ace");
     (void)f_mkdir(TAPEIO_DIR);
 
@@ -252,7 +333,28 @@ static FRESULT append(const ace_t *m, const tape_t *t, const char *path) {
         fr = write_all(&s_g, s_buf, got);
     }
     if (had) f_close(&s_f);
+    if (fr != FR_OK) f_close(&s_g);
+    return fr;
+}
 
+/* Close path.new, and rename it over path if all went well. */
+static FRESULT append_end(const char *path, const char *tmp, FRESULT fr) {
+    FRESULT fc = f_close(&s_g);
+    if (fr == FR_OK) fr = fc;
+    if (fr != FR_OK) {
+        (void)f_unlink(tmp);
+        return fr;
+    }
+    (void)f_unlink(path);
+    return f_rename(tmp, path);
+}
+
+/* path's blocks, then this one from guest memory, into path.new; then
+ * the rename. */
+static FRESULT append(const ace_t *m, const tape_t *t, const char *path) {
+    char tmp[ACE_PATH_MAX + 4];
+    FRESULT fr = append_begin(path, tmp);
+    if (fr != FR_OK) return fr;
     uint32_t n = (uint32_t)t->len + 1u;
     uint8_t len[2] = { (uint8_t)n, (uint8_t)(n >> 8) };
     if (fr == FR_OK) fr = write_all(&s_g, len, 2);
@@ -267,25 +369,29 @@ static FRESULT append(const ace_t *m, const tape_t *t, const char *path) {
         fr = write_all(&s_g, s_buf, k);
     }
     if (fr == FR_OK) fr = write_all(&s_g, &sum, 1);
-    FRESULT fc = f_close(&s_g);
-    if (fr == FR_OK) fr = fc;
-    if (fr != FR_OK) {
-        (void)f_unlink(tmp);
-        return fr;
-    }
-    (void)f_unlink(path);
-    return f_rename(tmp, path);
+    return append_end(path, tmp, fr);
+}
+
+/* The same with blocks already in .tap form: what the recorder took. */
+static FRESULT append_bytes(const char *path, const uint8_t *p, uint32_t n) {
+    char tmp[ACE_PATH_MAX + 4];
+    FRESULT fr = append_begin(path, tmp);
+    if (fr != FR_OK) return fr;
+    return append_end(path, tmp, write_all(&s_g, p, (UINT)n));
+}
+
+/* The deck's tape if the user put it there; otherwise the file SAVE's
+ * header names, for the header and the data block after it. */
+static const char *save_path(const ace_t *m, const tape_t *t) {
+    if (s_user) return s_path;
+    if (t->flag == TAPE_FLAG_HEADER && t->ret == TAPE_SAVE_HEADER_RET &&
+        !name_path(m, (uint16_t)(t->addr + 1u), s_save_path))
+        s_save_path[0] = 0;
+    return s_save_path;
 }
 
 static void serve_save(ace_t *m, const tape_t *t) {
-    const char *path = s_path;
-    if (!s_user) {
-        /* SAVE's header names the file; its data block follows it. */
-        if (t->flag == TAPE_FLAG_HEADER && t->ret == TAPE_SAVE_HEADER_RET &&
-            !name_path(m, (uint16_t)(t->addr + 1u), s_save_path))
-            s_save_path[0] = 0;
-        path = s_save_path;
-    }
+    const char *path = save_path(m, t);
     if (!path[0]) {
         say(" No tape in the deck to save on", "");
         decline(m, "nowhere to save");
@@ -311,17 +417,145 @@ static void serve_save(ace_t *m, const tape_t *t) {
     ace_tape_save_end(m);
 }
 
+/* ---- the signal (design.md §10.4) ------------------------------------------ *
+ * The trap still stalls the CPU at each block routine, and the port
+ * finds the tape as it does for the trap, but then declines: the ROM's
+ * routine runs, and the cassette follows its cue (cassette.h). */
+
+static void signal_load(ace_t *m, const tape_t *t) {
+    find_load(m, t);
+    if (!s_path[0]) {
+        cassette_out(m);
+        decline(m, "no tape, and no file by that name");
+        return;
+    }
+    const char *err = image_load(m, s_path);
+    if (err) {
+        g_tape_stats.errors++;
+        say(" Tape not played: %.18s", err);
+        log_core1("  tape         : %s: %s\n", s_path, err);
+        cassette_out(m);
+        decline(m, "the tape cannot be played");
+        return;
+    }
+    /* At the end of the tape a LOAD rewinds once, as the trap does. */
+    if (t->flag == TAPE_FLAG_HEADER) {
+        if (m->cas.ended && !s_wrapped) {
+            ace_cassette_rewind(m);
+            s_wrapped = true;
+            log_core1("  tape         : end of %s; rewound\n", s_path);
+        }
+    } else {
+        s_wrapped = false;
+    }
+    g_tape_stats.loads++;
+    log_core1("  tape         : %s plays from block %lu for the ROM's %s read\n",
+              base(s_path), (unsigned long)m->cas.index,
+              t->flag == TAPE_FLAG_HEADER ? "header" : "data");
+    ace_tape_decline(m);
+}
+
+static void signal_save(ace_t *m, const tape_t *t) {
+    const char *path = save_path(m, t);
+    if (!path[0]) {
+        say(" No tape in the deck to save on", "");
+        decline(m, "nowhere to save");
+        return;
+    }
+    if (s_user) {
+        /* Recorded onto the deck's own tape, at its end. */
+        const char *err = image_load(m, path);
+        if (err) {
+            g_tape_stats.errors++;
+            say(" Not recorded: %.20s", err);
+            decline(m, "the tape cannot be recorded on");
+            return;
+        }
+    } else if (!img_in(m) || s_img_path[0] || t->flag == TAPE_FLAG_HEADER) {
+        /* The scratch, empty again at each header: what it held before
+         * is on the card already, flushed at the start of this park. */
+        cassette_out(m);
+        ace_cassette_insert(m, s_img, 0, sizeof s_img);
+    }
+    /* A block the image has no room for whole is saved by the trap
+     * instead, so it still reaches the card; a deck's image is then
+     * stale, and is read again when next played. */
+    if (m->cas.len + (uint32_t)t->len + 3u > m->cas.cap) {
+        log_core1("  tape         : no room in the cassette for %u bytes; saved by the trap\n",
+                  (unsigned)t->len);
+        if (s_img_path[0]) cassette_out(m);
+        ace_cassette_record(m, false);
+        serve_save(m, t);
+        return;
+    }
+    snprintf(s_rec_path, sizeof s_rec_path, "%s", path);
+    ace_cassette_record(m, true);
+    log_core1("  tape         : recording the ROM's %s for %s\n",
+              t->flag == TAPE_FLAG_HEADER ? "header" : "data block", path);
+    ace_tape_decline(m);
+}
+
+/* What the recorder took since the last park, appended to its file. */
+static void signal_flush(ace_t *m) {
+    uint32_t from, to;
+    if (!ace_cassette_unsaved(m, &from, &to)) return;
+    bool deck = s_img_path[0] && strcmp(s_img_path, s_rec_path) == 0;
+    FRESULT fr = s_rec_path[0] ? append_bytes(s_rec_path, s_img + from, to - from)
+                               : FR_INVALID_NAME;
+    if (fr == FR_OK) {
+        g_tape_stats.saves++;
+        g_tape_stats.bytes = to - from;
+        say(" Saved to %.22s", base(s_rec_path));
+        log_core1("  tape         : %lu recorded bytes appended to %s\n",
+                  (unsigned long)(to - from), s_rec_path);
+        /* A short recording in the log, so that a run over the UART can
+         * check it off the board (design.md §15.2 M13). */
+        for (uint32_t i = from; i < to && i - from < 256u; i += 32u) {
+            char hex[32 * 2 + 1];
+            uint32_t k = 0;
+            for (; k < 32u && i + k < to; k++)
+                snprintf(hex + 2u * k, 3, "%02X", s_img[i + k]);
+            log_core1("  tape rec     : %s\n", hex);
+        }
+    } else {
+        g_tape_stats.errors++;
+        say(" Not saved: card %s", fr == FR_DENIED ? "full" : "error");
+        log_core1("  tape         : recording not saved to %s: FatFs %d\n", s_rec_path, (int)fr);
+    }
+    /* Kept in the deck's image only if it is on the card too. */
+    ace_cassette_saved(m, fr == FR_OK || !deck);
+    ace_cassette_record(m, false);
+}
+
 void tapeio_serve(ace_t *m, uint32_t *us) {
     uint32_t t0 = time_us_32();
     const tape_t *t = ace_tape_pending(m);
-    if (!t) { *us = 0; return; }
+    uint32_t from, to;
+    bool unsaved = ace_cassette_unsaved(m, &from, &to);
+    if (!t && !unsaved) { *us = 0; return; }
     int err = storage_mount();
     if (err != 0) {
         say(" No card: tape not served", "");
-        decline(m, "no card");
+        if (unsaved) {
+            /* Kept, not dropped: the guest's SAVE is over, and this is
+             * the only copy. Written when the card is back. */
+            say(" Recording kept: put the card in", "");
+            log_core1("  tape         : no card; %lu recorded bytes kept for %s\n",
+                      (unsigned long)(to - from), s_rec_path);
+            s_flush_wait = true;
+            ace_cassette_record(m, false);
+        }
+        if (t) decline(m, "no card");
     } else {
-        if (t->op == TAPE_SAVE) serve_save(m, t);
-        else serve_load(m, t);
+        s_flush_wait = false;
+        if (unsaved) signal_flush(m);
+        if (t && g_ui.fast_tape) {
+            if (t->op == TAPE_SAVE) serve_save(m, t);
+            else serve_load(m, t);
+        } else if (t) {
+            if (t->op == TAPE_SAVE) signal_save(m, t);
+            else signal_load(m, t);
+        }
         storage_unmount();
     }
     *us = time_us_32() - t0;

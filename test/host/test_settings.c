@@ -24,6 +24,7 @@ int main(void) {
         ace_config_default(&cfg);
         CHECK(d.ram == cfg.ram && d.ram == ACE_RAM_19K, "the 19K machine (§18 item 1)");
         CHECK(d.volume == 8u && !d.perf_line, "full volume, no perf line");
+        CHECK(d.fast_tape, "fast tape (§10.3)");
         CHECK(!d.layout[0] && !d.boot_tape[0], "the standard map, no tape");
     }
 
@@ -41,9 +42,11 @@ int main(void) {
             "volume    = 0\r\n"
             "layout    = cursor games\r\n"
             "boot_tape = /ace/tapes/My Tape.tap\r\n"
-            "Perf_Line = On\r\n";
+            "Perf_Line = On\r\n"
+            "fast_tape = off\r\n";
         CHECK(parse(&s, all, &line) == SET_OK && line == 0, "every setting: line %u", line);
         CHECK(s.ram == ACE_RAM_3K && s.volume == 0u && s.perf_line, "ram, volume, perf_line");
+        CHECK(!s.fast_tape, "fast_tape");
         CHECK(strcmp(s.layout, "CURSOR GAMES") == 0, "layout uppercased, spaces kept: %s",
               s.layout);
         CHECK(strcmp(s.boot_tape, "/ace/tapes/My Tape.tap") == 0, "boot_tape: %s", s.boot_tape);
@@ -203,9 +206,11 @@ int main(void) {
         settings_default(&s);
         s.ram = ACE_RAM_3K;
         s.perf_line = true;
+        s.fast_tape = false;
         strcpy(s.layout, "GAMES");
         CHECK(REWRITE("# mine\r\nvolume = 8", &s) == SET_OK &&
-              IS("# mine\r\nvolume = 8\r\nram = 3k\r\nlayout = GAMES\r\nperf_line = on\r\n"),
+              IS("# mine\r\nvolume = 8\r\nram = 3k\r\nlayout = GAMES\r\nperf_line = on\r\n"
+                 "fast_tape = off\r\n"),
               "appended: %.*s", (int)out_len, out);
         s.ram = ACE_RAM_19K;
         CHECK(REWRITE("ram = 3k\n", &s) == SET_OK && strncmp(out, "ram = 19k\n", 10) == 0,

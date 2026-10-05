@@ -18,6 +18,7 @@
 #include "menu.h"
 #include "park.h"
 #include "southbridge.h"
+#include "tapeio.h"
 
 /* Keyboard polls, as hardware-notes.md §6.1 and design.md §9.1 have them;
  * the poll also feeds the MCU's 2.5 s bus watchdog. */
@@ -99,8 +100,10 @@ void core1_main(void) {
 
         /* The guest parked: its job, a step a loop. Otherwise the slot,
          * which only says what changed (card.h). */
-        if (!park_serve() && card_poll())
+        if (!park_serve() && card_poll()) {
             log_core1("  card         : %s\n", card_present() ? "in" : "out");
+            tapeio_card_changed();   /* a kept recording may be written now */
+        }
 
         now = time_us_32();
         if (now - sec_start >= 1000000u) {

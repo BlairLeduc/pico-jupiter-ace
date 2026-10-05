@@ -10,7 +10,7 @@ static spin_lock_t *s_lock;
 boot_report_t g_boot;
 volatile core1_stats_t g_c1 = { .sb_version = -1, .battery = -1, .temp_c = INT32_MIN };
 volatile core0_perf_t  g_c0;
-ui_t g_ui = { .volume = 8 };
+ui_t g_ui = { .volume = 8, .fast_tape = true };
 
 void handoff_init(void) {
     snappool_init(&g_pool);
