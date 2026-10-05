@@ -33,7 +33,8 @@ Plus 2 W the 35K files load into the 51K in 19.8–58.0 ms, and refusals
 take 4.5–7.9 ms (`out/m11-ace.log`). **Not checked:** a card pulled
 mid-save. After
 the first flash the Debug Probe dropped off USB until replugged, as once in
-M10.
+M10: the Mac's display sleeping wedges it (HW §2.7; `caffeinate -d`, not
+`-s`).
 
 **M10, the menu and fast tape** (`src/core/tape.c`, `romfont.c`;
 `src/port/tapeio.c`, `menu.c`, `textpage.c`, `park.c`), on the Plus 2 W
@@ -55,8 +56,8 @@ shipping build on a Pico 2 W. The save had kept the refused line it was
 given; the rewriter now writes over a refused value, or comments it out
 beside a good line for the key (EL §8.7), and on the board a save then
 cleared line 4's problem. **Not checked:** VERIFY on the board; a card
-pulled mid-job. Once the UART went silent and the probe needed a replug, cause
-unknown, not seen again.
+pulled mid-job. Once the UART went silent and the probe needed a replug:
+the Mac's display had slept (found in M11, HW §2.7).
 
 **M9, the card** (`src/port/sd.c`, `diskio.c`, `storage.c`, `card.c`,
 `park.c`, `settingsio.c`; `src/core/settings.c`), on the Plus 2 W (id
@@ -297,7 +298,9 @@ tools/build.sh -DPICO_ACE_AUDIO=OFF build/pico-noaudio  # paced on the timer, a 
 tools/build.sh -DPICO_ACE_BOOT_RAM=3k build/pico-3k     # this machine over the card's
 tools/build.sh -DPICO_ACE_BOOT_TAPE=SQ.tap build/pico-t # this tape in the deck at boot
 
-# hardware, with the Debug Probe's SWD and UART both connected
+# hardware, with the Debug Probe's SWD and UART both connected, and the
+# Mac's display kept awake (caffeinate -d): a sleeping display wedges the
+# probe until it is replugged (hardware-notes.md §2.7)
 tools/uart-log.sh 30 out/run.log &   # capture UART1 first, so the banner is in it
 tools/flash.sh                       # reset halt + resume, never reset run (HW §2.7)
 tools/flash.sh build/pico/pico-ace-bench.elf   # M2's bench; embeds ZEXDOC if fetched

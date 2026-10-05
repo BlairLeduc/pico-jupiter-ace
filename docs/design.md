@@ -1695,8 +1695,8 @@ works (no UART, so no timings or board id).
 *Not verified:* VERIFY and BVERIFY on the board (host only); a card pulled
 during a tape job. Once during the
 session the UART went silent with both cores later found in their normal
-loops, and the Debug Probe stopped enumerating until replugged; it did not
-recur after a reflash, and its cause is not known.
+loops, and the Debug Probe stopped enumerating until replugged. The cause,
+found in M11: the workstation's display sleeping (HW §2.7).
 
 #### M11. Snapshots
 
@@ -1766,7 +1766,9 @@ another machine in 4.5–7.9 ms; underrun samples 0 and late refills 0
 a delete did: an earlier run over the UART with no files on the card had
 found none, stopped on Delete, and removed slot 1 without a word.
 *Not verified:* a card pulled mid-save. After the first flash the
-Debug Probe dropped off USB and needed a replug, as once in M10.
+Debug Probe dropped off USB and needed a replug, as once in M10; the owner
+found the cause, the Mac's display sleeping, which `caffeinate -s` does not
+prevent (HW §2.7).
 
 #### M12. Performance pass and soak
 
