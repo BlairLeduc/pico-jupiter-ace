@@ -201,6 +201,10 @@ static void open_snap(void) {
     s.page = P_SNAP;
     s.snap_sel = N_SAVE;
     s.snap_top = 0;
+    unsigned used = 0;
+    for (unsigned i = 0; i < SNAPIO_SLOTS; i++) used += s.used[i];
+    log_core1("  snapshot     : page open, slot %u, %u of %u slots in use, %u .ace in "
+              SNAPIO_ACE_DIR "\n", s_slot + 1u, used, SNAPIO_SLOTS, s.n_aces);
 }
 
 /* The state in the slot, or the .ace chosen: on success the menu closes,
@@ -339,7 +343,10 @@ static void key_snap(uint8_t c) {
         } else if (s.snap_sel == N_LOAD) {
             snap_load_state();
         } else if (s.snap_sel == N_DELETE) {
-            say(snapio_delete(s_slot) ? " Deleted" : " Nothing to delete", "");
+            bool gone = snapio_delete(s_slot);
+            log_core1("  snapshot     : delete slot %u: %s\n", s_slot + 1u,
+                      gone ? "deleted" : "nothing there");
+            say(gone ? " Deleted" : " Nothing to delete", "");
             s.used[s_slot] = snapio_exists(s_slot);
         } else if (s.snap_sel >= N_FIRST) {
             snap_load_ace(s_aces[s.snap_sel - N_FIRST].path);

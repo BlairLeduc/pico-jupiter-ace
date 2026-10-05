@@ -28,8 +28,10 @@ back ran; save 132.0 ms, load 47.1 ms, 0 underruns. The owner ran the
 shipping build on a Pico 2 W, 2026-10-04: Pacman and Othello loaded in
 the 19K, which refused the rest; booted as 3K and 51K (`ram =` in the
 settings file, as the menu cannot change RAM until M15), every other file
-loaded, the 35K ones into the 51K, and Ace Invaders was refused. **Not
-checked:** `.ace` load time on the device. After
+loaded, the 35K ones into the 51K, and Ace Invaders was refused. On the
+Plus 2 W the 35K files load into the 51K in 19.8–58.0 ms, and refusals
+take 4.5–7.9 ms (`out/m11-ace.log`). **Not checked:** a card pulled
+mid-save. After
 the first flash the Debug Probe dropped off USB until replugged, as once in
 M10.
 

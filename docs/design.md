@@ -1746,7 +1746,7 @@ loaded twice, the second time with the page remembering the slot, and
 late refills 0 throughout, at 36,621 Hz consumed.
 *Measured:* a 19K state (19,604 bytes) saves in 132.0 ms to a new slot
 and 82.2 ms to another, and loads, both passes, in 47.0–47.1 ms on the
-board.
+board; a 35K `.ace` loads into the 51K in 19.8–58.0 ms.
 The owner ran the shipping build (`PICO_ACE_UART=OFF`) on a Pico 2 W,
 2026-10-04, with the staged set (`out/m11-card/`) on the card: in the 19K
 machine Pacman and Othello, the set's 19K files, loaded from the Snapshot
@@ -1757,7 +1757,15 @@ machine booted as 3K and as 51K that way the owner loaded every other file
 in the set (Golfgrid and Hangman in the 3K; Casse Briques, Moon Buggy and
 Dreamsoft Racer, all 35K, in the 51K with the key wait's word written
 back), and Ace Invaders was refused, as on the host.
-*Not verified:* `.ace` load time on the device; a card pulled mid-save. After the first flash the
+On the Plus 2 W, booted as 51K from the settings file, with the same set on
+its card: Casse Briques, Moon Buggy and Dreamsoft Racer loaded with the key
+wait's word written back, in 19.8, 40.3 and 58.0 ms for both passes; Ace
+Invaders was refused for its stack in 6.5 ms, and the 3K and 19K files for
+another machine in 4.5–7.9 ms; underrun samples 0 and late refills 0
+(`out/m11-ace.log`). The page now logs what it found on opening and what
+a delete did: an earlier run over the UART with no files on the card had
+found none, stopped on Delete, and removed slot 1 without a word.
+*Not verified:* a card pulled mid-save. After the first flash the
 Debug Probe dropped off USB and needed a replug, as once in M10.
 
 #### M12. Performance pass and soak
