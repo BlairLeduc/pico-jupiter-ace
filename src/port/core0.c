@@ -94,18 +94,32 @@ static bool cursor_shown(const ace_t *m) {
     return false;
 }
 
+/* While the deck plays or records the guest runs unpaced: the tape is
+ * clocked in T-states, so it cannot tell (design.md §11.2; EL §9.3).
+ * PICO_ACE_TURBO=OFF paces it, the control for M13's measurement. */
+static bool turbo_now(const ace_t *m) {
+    return PICO_ACE_TURBO && ace_cassette_running(m);
+}
+
+/* The recorder took a block that is not on the card yet (tapeio.h). */
+static bool unsaved(const ace_t *m) {
+    uint32_t from, to;
+    return ace_cassette_unsaved(m, &from, &to);
+}
+
 /* What the card gave the boot, for the heartbeat: the slot now, the
  * settings file's state and first problem then (§15.2 M9), and the
  * tape's counters (M10). */
 static const char *card_text(void) {
     static char text[192];
     snprintf(text, sizeof text, "card %s (%lu changes), cfg %s%s%s | tape %lu loads, "
-             "%lu saves, %lu declined, %lu errors, max %lu us",
+             "%lu saves, %lu declined, %lu errors, max %lu us, %s",
              card_present() ? "in" : "out", (unsigned long)card_changes(),
              settingsio_state_str(g_boot.cfg), g_boot.cfg_error[0] ? ": " : "",
              g_boot.cfg_error, (unsigned long)g_tape_stats.loads,
              (unsigned long)g_tape_stats.saves, (unsigned long)g_tape_stats.declined,
-             (unsigned long)g_tape_stats.errors, (unsigned long)g_tape_stats.max_us);
+             (unsigned long)g_tape_stats.errors, (unsigned long)g_tape_stats.max_us,
+             g_ui.fast_tape ? "fast" : "signal");
     return text;
 }
 
@@ -163,6 +177,7 @@ static void tenths(char *out, size_t n, uint32_t v10) {
 void core0_run(ace_t *m, keymatrix_t *k) {
     const uint32_t clk_mhz = clock_get_hz(clk_sys) / 1000000u;
     uint32_t late = 0, slips = 0;   /* the timer's pacing; 0 on audio */
+    uint32_t turbo_fields = 0;      /* run unpaced, since boot          */
 #if PICO_ACE_AUDIO
     /* A field's samples, drained after it and pushed to the queue. */
     static int16_t pcm[ACE_AUDIO_BUF_LEN];
@@ -191,6 +206,11 @@ void core0_run(ace_t *m, keymatrix_t *k) {
     for (;;) {
         uint64_t now;
 #if !PICO_ACE_AUDIO
+        /* Turbo starts the schedule again from each field. */
+        if (turbo_now(m)) {
+            sched_us = time_us_64();
+            sched_fields = 0;
+        }
         uint64_t due = sched_us + sched_fields * field_t * 1000000u / ACE_CPU_HZ;
         now = time_us_64();
         if (now < due) {
@@ -213,8 +233,8 @@ void core0_run(ace_t *m, keymatrix_t *k) {
          * samples. After a hold, the menu or a pause the keys start again
          * from none held: theirs were not the guest's. A tape request
          * goes first, then whatever the keys asked for. */
-        while (why != PARK_NONE || ace_tape_pending(m)) {
-            uint32_t w = ace_tape_pending(m) ? PARK_TAPE : why;
+        while (why != PARK_NONE || ace_tape_pending(m) || unsaved(m)) {
+            uint32_t w = ace_tape_pending(m) || unsaved(m) ? PARK_TAPE : why;
             uint32_t parked = park(w, page, alt);
             if (w != PARK_TAPE) {
                 keymatrix_init(k);
@@ -282,12 +302,28 @@ void core0_run(ace_t *m, keymatrix_t *k) {
         size_t n = ace_audio_drain(m, pcm, ACE_AUDIO_BUF_LEN);
 #endif
         uint32_t busy = time_us_32() - t_busy;
+        bool turbo = turbo_now(m);
+        if (turbo) turbo_fields++;
 #if PICO_ACE_AUDIO
-        /* Blocks while the queue is full: this is the throttle, on the
-         * PWM wrap, which shares clk_sys with nothing that drifts
-         * (EL §6.3). The conversion to compare words inside is not
-         * counted as busy; it is ~732 short loops a field. */
-        audio_push(pcm, n);
+        if (turbo) {
+            /* Never block: the guest's samples are dropped, and the queue
+             * kept at its start depth with silence, so it never runs dry
+             * (EL §9.3). */
+            static const int16_t silence[256];
+            size_t room = audio_room();
+            const size_t keep = ACE_PCM_QUEUE_LEN - ACE_PCM_QUEUE_START;
+            while (room > keep) {
+                size_t k = room - keep < 256u ? room - keep : 256u;
+                audio_push(silence, k);
+                room -= k;
+            }
+        } else {
+            /* Blocks while the queue is full: this is the throttle, on
+             * the PWM wrap, which shares clk_sys with nothing that drifts
+             * (EL §6.3). The conversion to compare words inside is not
+             * counted as busy; it is ~732 short loops a field. */
+            audio_push(pcm, n);
+        }
 #endif
         hb_run_us += ran;
         sec_run_us += ran;
@@ -345,11 +381,17 @@ void core0_run(ace_t *m, keymatrix_t *k) {
                        (unsigned long)g_park_stats.parks, (unsigned long)g_park_stats.max_us);
             log_printf("  perf         : tier %u, %lu MHz, core 0 busy %s%%, guest %s%% of wall, "
                        "headroom %lu.%02lux, %s host cycles/insn, %lu.%02lu T/insn, "
-                       "%lu insns, %lu halts skipped\n",
+                       "%lu insns, %lu halts skipped | turbo %lu fields, cassette %s, "
+                       "%lu edges played, %lu blocks recorded (%lu dropped)\n",
                        (unsigned)PICO_ACE_RAM_TIER, (unsigned long)clk_mhz, busy_s, guest_s,
                        (unsigned long)(head100 / 100u), (unsigned long)(head100 % 100u),
                        hpi_s, (unsigned long)(tpi100 / 100u), (unsigned long)(tpi100 % 100u),
-                       (unsigned long)insns, (unsigned long)halts);
+                       (unsigned long)insns, (unsigned long)halts,
+                       (unsigned long)turbo_fields,
+                       m->cas.playing ? "playing" : m->cas.rec.on ? "recording"
+                       : m->cas.loaded ? "stopped" : "empty",
+                       (unsigned long)m->cas.edges, (unsigned long)m->cas.rec.blocks,
+                       (unsigned long)m->cas.rec.errors);
             hb_us = now;
             hb_t = m->cpu.t;
             hb_insns = m->cpu.insns;

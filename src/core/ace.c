@@ -90,17 +90,31 @@ static uint8_t ACE_HOT1(io_read)(void *ctx, uint16_t port) {
     unsigned rows = (unsigned)(~port >> 8) & 0xFFu;
     for (int r = 0; rows; r++, rows >>= 1)
         if (rows & 1u) v &= (uint8_t)~m->keys[r];
+    /* The deck, brought up to date only when it can be seen; before its
+     * next edge, one subtract and a branch (EL §4.3). Played as the save
+     * routine drives the line, inverted, so that the line rests at the
+     * input's idle level between blocks (§16). */
+    if (m->cas.playing) {
+        if ((int32_t)(m->cpu.t - m->cas.next) >= 0) cassette_advance(&m->cas, m->cpu.t);
+        m->tape_in = !m->cas.level;
+    }
     if (!m->tape_in) v &= (uint8_t)~0x20u;
 
     speaker_to(m, false);
     return v;
 }
 
+/* The speaker is the access; the tape output is D3 of the data, which
+ * is what the save routine moves (§16). */
 static void ACE_HOT1(io_write)(void *ctx, uint16_t port, uint8_t v) {
     ace_t *m = ctx;
-    (void)v;               /* the data byte is not decoded (§2.3, §16) */
     if (port & 1u) return;
     speaker_to(m, true);
+    bool d3 = (v & 0x08u) != 0;
+    if (d3 != m->tape_out) {
+        m->tape_out = d3;
+        if (m->cas.rec.on) cassette_rec_edge(&m->cas, m->cpu.t, d3);
+    }
 }
 
 /* ---- Power-on --------------------------------------------------------- */
@@ -187,12 +201,14 @@ void ace_reset(ace_t *m) {
     /* A request goes with the program that made it. */
     m->tape.op = TAPE_NONE;
     m->tape.pass = false;
+    cassette_stop_all(m);
 }
 
 void ace_restored(ace_t *m) {
     m->tape.op = TAPE_NONE;
     m->tape.pass = false;
     m->tape.begun = false;
+    cassette_stop_all(m);
     memset(m->keys, 0, sizeof m->keys);
     beeper_restart(&m->beeper, m->cpu.t, m->speaker);
 }

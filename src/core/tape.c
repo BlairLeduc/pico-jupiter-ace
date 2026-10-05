@@ -46,11 +46,26 @@ uint8_t tape_checksum(const uint8_t *p, size_t n) {
     return x;
 }
 
-/* Not const, so that it sits in SRAM beside the loop (EL §8.2). */
+/* Not const, so that they sit in SRAM beside the loop (EL §8.2). The
+ * second adds the exit, a cue only while the deck runs (cassette.h): its
+ * low byte is every page's $92, which is not worth a call otherwise. */
 static uint8_t trap_lo[256] = {
     [TAPE_SAVE_PC & 0xFFu] = 1,
     [TAPE_LOAD_PC & 0xFFu] = 1,
 };
+static uint8_t trap_lo_exit[256] = {
+    [TAPE_SAVE_PC & 0xFFu] = 1,
+    [TAPE_LOAD_PC & 0xFFu] = 1,
+    [EXIT_PC & 0xFFu] = 1,
+};
+
+void tape_hook(ace_t *m) {
+    const cassette_t *c = &m->cas;
+    bool on = m->tape.stock && (m->cfg.tape_traps || c->loaded);
+    bool exit = c->playing || c->rec.on;
+    m->cpu.bus.trap_lo = !on ? NULL : exit ? trap_lo_exit : trap_lo;
+    m->cpu.bus.trap = on ? tape_trap : NULL;
+}
 
 void tape_init(ace_t *m) {
     tape_t *t = &m->tape;
@@ -58,9 +73,7 @@ void tape_init(ace_t *m) {
     t->stock = m->cfg.rom &&
                memcmp(m->cfg.rom + TAPE_ROM_FIRST, ace_rom + TAPE_ROM_FIRST,
                       TAPE_ROM_END - TAPE_ROM_FIRST) == 0;
-    bool on = t->stock && m->cfg.tape_traps;
-    m->cpu.bus.trap_lo = on ? trap_lo : NULL;
-    m->cpu.bus.trap = on ? tape_trap : NULL;
+    tape_hook(m);
 }
 
 static uint16_t peek16(const ace_t *m, uint16_t a) {
@@ -76,13 +89,25 @@ bool tape_trap(void *ctx) {
     ace_t *m = ctx;
     tape_t *t = &m->tape;
     if (t->op != TAPE_NONE) return true;
-    if (t->pass) { t->pass = false; return false; }
 
     z80_t *c = &m->cpu;
+    if (c->pc == EXIT_PC) {
+        cassette_cue_exit(m);
+        return false;
+    }
     tape_op_t op;
     if (c->pc == TAPE_SAVE_PC) op = TAPE_SAVE;
     else if (c->pc == TAPE_LOAD_PC) op = (c->af.b.l & Z80_FC) ? TAPE_LOAD : TAPE_VERIFY;
     else return false;
+
+    /* Not served, by choice or by the port's decline: the ROM's routine
+     * runs, and the deck follows its cue (cassette.h). */
+    if (!m->cfg.tape_traps || t->pass) {
+        t->pass = false;
+        if (op == TAPE_SAVE) cassette_cue_save(m);
+        else cassette_cue_load(m);
+        return false;
+    }
 
     memset(t, 0, offsetof(tape_t, stock));
     t->op   = op;

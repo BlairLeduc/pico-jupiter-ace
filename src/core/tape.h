@@ -104,6 +104,12 @@ static inline uint8_t tape_block_flag(uint32_t i) {
 void tape_init(struct ace_s *m);
 bool tape_trap(void *ctx);
 
+/* Set the CPU's trap hook for the machine as it stands: the trap when
+ * cfg.tape_traps is set or a tape is in the deck, and the exit's cue
+ * while the deck runs (cassette.h). The trap stands aside for a ROM that
+ * is not the stock one either way. */
+void tape_hook(struct ace_s *m);
+
 /* The request the CPU is stalled on, or NULL. */
 const tape_t *ace_tape_pending(const struct ace_s *m);
 

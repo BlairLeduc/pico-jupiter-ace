@@ -27,6 +27,7 @@ set(PICO_ACE_GUEST_TESTS
     test_audio
     test_boot
     test_bus
+    test_cassette
     test_field
     test_golden
     test_halt

@@ -35,8 +35,9 @@
 
 enum { I_TAPE, I_SNAP, I_SETTINGS, I_SAVE, I_RESET, I_COUNT };
 
-/* The Tape page: the deck's two controls, then the files. */
-enum { T_EJECT, T_REWIND, T_FIRST };
+/* The Tape page: the deck's controls, then the files. Play is the
+ * signal's (design.md §10.4), for a loader that never calls the ROM. */
+enum { T_EJECT, T_REWIND, T_PLAY, T_FIRST };
 #define TAPE_ROWS (ROW_STATUS - 1 - (ROW_TOP + 2))
 
 /* The Snapshot page: the slot, chosen with < > on any of its rows, the
@@ -44,7 +45,7 @@ enum { T_EJECT, T_REWIND, T_FIRST };
 enum { N_SLOT, N_SAVE, N_LOAD, N_DELETE, N_FIRST };
 #define SNAP_ROWS (ROW_STATUS - 1 - (ROW_TOP + N_FIRST + 2))
 
-enum { S_VOLUME, S_PERF, S_COUNT };
+enum { S_VOLUME, S_PERF, S_FAST, S_COUNT };
 
 static settings_t s_file;     /* what the file says, for the save */
 static unsigned   s_slot;     /* the Snapshot page's slot, kept between openings */
@@ -109,8 +110,8 @@ static void draw_tape(void) {
     char line[TEXT_COLS + 1];
     const char *in = tapeio_inserted();
     if (in[0]) {
-        snprintf(line, sizeof line, " Deck: %.16s block %lu", base(in),
-                 (unsigned long)tapeio_position());
+        snprintf(line, sizeof line, " Deck: %.14s block %lu%s", base(in),
+                 (unsigned long)tapeio_position(s.m), s.m->cas.playing ? " >" : "");
     } else {
         snprintf(line, sizeof line, " Deck empty: LOAD/SAVE by name");
     }
@@ -125,6 +126,9 @@ static void draw_tape(void) {
             snprintf(line, sizeof line, " (Empty the deck)");
         } else if (i == T_REWIND) {
             snprintf(line, sizeof line, " (Rewind)");
+        } else if (i == T_PLAY) {
+            snprintf(line, sizeof line, "%s", g_ui.fast_tape ? " (Play: fast tape is on)"
+                                             : s.m->cas.playing ? " (Stop)" : " (Play)");
         } else if (i < T_FIRST + (int)s.n_tapes) {
             const tapeio_entry_t *e = &s_list[i - T_FIRST];
             bool here = strcmp(e->path, in) == 0;
@@ -162,6 +166,8 @@ static void draw_settings(void) {
     textpage_line(s_scr, ROW_TOP + S_VOLUME, line, s.set_sel == S_VOLUME);
     snprintf(line, sizeof line, " Perf line  %s", g_ui.perf_line ? "on" : "off");
     textpage_line(s_scr, ROW_TOP + S_PERF, line, s.set_sel == S_PERF);
+    snprintf(line, sizeof line, " Fast tape  %s", g_ui.fast_tape ? "on" : "off");
+    textpage_line(s_scr, ROW_TOP + S_FAST, line, s.set_sel == S_FAST);
     textpage_line(s_scr, ROW_TOP + S_COUNT + 1, " Save settings keeps them", false);
 }
 
@@ -259,6 +265,7 @@ static void save_settings(void) {
     out.ram = s.m->cfg.ram;
     out.volume = g_ui.volume;
     out.perf_line = g_ui.perf_line;
+    out.fast_tape = g_ui.fast_tape;
     settings_card_name(SETTINGS_TAPE_DIR, tapeio_chosen() ? tapeio_inserted() : "",
                        out.boot_tape);
     const char *err = settingsio_save(&out);
@@ -293,16 +300,24 @@ static void key_tape(uint8_t c) {
     case PICOCALC_KEY_DOWN: if (s.tape_sel < last) s.tape_sel++; break;
     case PICOCALC_KEY_ENTER:
         if (s.tape_sel == T_EJECT) {
-            (void)tapeio_insert(NULL);
+            (void)tapeio_insert(s.m, NULL);
             say(" Deck empty: LOAD/SAVE by name", "");
         } else if (s.tape_sel == T_REWIND) {
             if (!tapeio_inserted()[0]) { say(" The deck is empty", ""); return; }
-            tapeio_rewind();
+            tapeio_rewind(s.m);
             say(" Rewound", "");
+            return;
+        } else if (s.tape_sel == T_PLAY) {
+            bool on = !s.m->cas.playing;
+            const char *err = tapeio_play(s.m, on);
+            if (err) { say(" Not played: %.19s", err); return; }
+            if (!on) { say(" Stopped", ""); return; }
+            /* Back to the guest, whose loader is waiting for it. */
+            s.done = true;
             return;
         } else {
             const tapeio_entry_t *e = &s_list[s.tape_sel - T_FIRST];
-            const char *err = tapeio_insert(e->path);
+            const char *err = tapeio_insert(s.m, e->path);
             if (err) { say(" Not inserted: %.16s", err); return; }
             if (e->name[0])
                 snprintf(s.status, sizeof s.status, " In: %s %.10s", e->bytes ? "BLOAD" : "LOAD",
@@ -375,8 +390,12 @@ static void key_settings(uint8_t c) {
     if (s.set_sel == S_VOLUME) {
         int v = (int)g_ui.volume + d;
         g_ui.volume = (unsigned)(v < 0 ? 0 : v > 8 ? 8 : v);
-    } else {
+    } else if (s.set_sel == S_PERF) {
         g_ui.perf_line = !g_ui.perf_line;
+    } else {
+        g_ui.fast_tape = !g_ui.fast_tape;
+        tapeio_mode(s.m);
+        log_core1("  menu         : fast tape %s\n", g_ui.fast_tape ? "on" : "off");
     }
 }
 

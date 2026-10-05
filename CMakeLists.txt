@@ -14,6 +14,7 @@ option(PICO_ACE_HOST "Build the portable core and its host tests, with no Pico S
 set(PICO_ACE_CORE_SOURCES
     src/core/ace.c
     src/core/beeper.c
+    src/core/cassette.c
     src/core/font.c
     src/core/keymap_picocalc.c
     src/core/keymatrix.c
@@ -127,6 +128,16 @@ else()
         set(PICO_ACE_HALT_SKIP_ON 0)
     endif()
 
+    # PICO_ACE_TURBO=OFF paces the guest while the tape plays, the control
+    # for turbo's speed-up and for core 0's share during a load (design.md
+    # §11.2, §15.2 M13).
+    option(PICO_ACE_TURBO "Run unpaced while the tape plays or records" ON)
+    if (PICO_ACE_TURBO)
+        set(PICO_ACE_TURBO_ON 1)
+    else()
+        set(PICO_ACE_TURBO_ON 0)
+    endif()
+
     # How much of the core's hot path runs from SRAM (src/core/hot.h).
     # Tier 2 ships: M12 measured it against 0 and 1 (design.md §3.2). The
     # core library needs it too: that is where the marked functions are.
@@ -162,6 +173,7 @@ else()
             PICO_ACE_UART=${PICO_ACE_UART_ON}
             PICO_ACE_RAM_TIER=${PICO_ACE_RAM_TIER}
             PICO_ACE_HALT_SKIP=${PICO_ACE_HALT_SKIP_ON}
+            PICO_ACE_TURBO=${PICO_ACE_TURBO_ON}
             PICO_CLOCK_ADJUST_PERI_CLOCK_WITH_SYS_CLOCK=1
             # UART1 at 115200 8-N-1, TX GP4 / RX GP5 (hardware-notes.md §2.7).
             PICO_DEFAULT_UART=1

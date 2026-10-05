@@ -76,6 +76,7 @@ extern volatile core0_perf_t g_c0;
 typedef struct {
     volatile unsigned volume;      /* 0-8, as settings_t has it       */
     volatile bool     perf_line;
+    volatile bool     fast_tape;   /* the trap, or the signal (tapeio.h) */
     volatile bool     reset;       /* the menu's Reset: core 0 clears it */
     volatile bool     power_on;    /* a load failed part-way (§10.5)  */
 } ui_t;
