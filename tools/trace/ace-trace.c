@@ -78,6 +78,7 @@ int main(int argc, char **argv) {
     ace_config_default(&cfg);
     cfg.rom = ace_rom;
     cfg.ram = ACE_RAM_51K;
+    cfg.wait_states = false;   /* xAce holds nothing (design.md §6.4) */
     unsigned fields = 100;
     bool show = false;
 

@@ -9,8 +9,25 @@ Raspberry Pi Pico SDK. The guest is a Z80A at 3.25 MHz with an 8 KiB Forth
 ROM, a 32×24 character display from 768 bytes of screen RAM and 1 KiB of
 character RAM, a 40-key matrix, and a one-bit speaker and tape port.
 
-**Implementation status, 2026-10-05: M13 done.** Next is M14, wait
-states (`docs/design.md` §15).
+**Implementation status, 2026-10-05: M14 done.** Next is M15, finish
+(`docs/design.md` §15).
+
+**M14, wait states** (`src/core/ace.c`; `test/host/test_wait.c`;
+`src/port/main.c`, `core0.c`), on the Plus 2 W (id `7458DC82A89AAC12`)
+at 150 MHz, gcc 15.2, 2026-10-05. Read from the schematic (Wenzel's,
+commented by Martin Korth; the Mercury Ace clone's equations agree): the
+Z80's clock is the pixel counter's CNT0, and a memory access to `$2400`
+or `$2C00` in the first 128 T of display lines 0–191 is held to T 128.
+The same reading put the display at the circuit's line 0, 64 lines after
+INT, not MAME's 56. **Modelled, on by default** (`PICO_ACE_WAIT=OFF` is
+the control; `ace-trace` turns it off for xAce). Host: the ROM printing
+a screenful takes 15.9 % longer, dreamsoft racer runs 3.8 % fewer
+instructions a field, `VLIST` does not move; taking each access 4–11 T
+into its instruction instead of at its start moved nothing that matters.
+Board, against the control in one sitting: core 0 within 0.5 points on
+§14's workloads and a print loop, 0 underruns; the print loop held 29.5 %
+of the time (`out/m14/`). **Not checked:** timing against a real Ace;
+the shipping build.
 
 **M13, signal-level tape** (`src/core/cassette.c`, `tape.c`, `ace.c`;
 `src/port/tapeio.c`, `menu.c`, `core0.c`), on the Plus 2 W (id
@@ -339,7 +356,7 @@ core were verified on a Plus 2 W, and `design.md` §4.6 says which files to
 
 ## Build and test
 
-As of M13 these all work, and `tools/uart-type.sh` types at the guest.
+As of M14 these all work, and `tools/uart-type.sh` types at the guest.
 
 ```sh
 # host: src/core/ with the system compiler, no Pico SDK, under CTest
@@ -357,6 +374,7 @@ tools/build.sh -DPICO_ACE_HALT_SKIP=OFF build/pico-nohs # every HALT interpreted
 tools/build.sh -DPICO_ACE_UART=OFF build/pico-release   # the build that ships
 tools/build.sh -DPICO_ACE_AUDIO=OFF build/pico-noaudio  # paced on the timer, a control
 tools/build.sh -DPICO_ACE_TURBO=OFF build/pico-noturbo  # paced while a tape plays, a control
+tools/build.sh -DPICO_ACE_WAIT=OFF build/pico-nowait    # no wait states, a control
 tools/build.sh -DPICO_ACE_BOOT_RAM=3k build/pico-3k     # this machine over the card's
 tools/build.sh -DPICO_ACE_BOOT_TAPE=SQ.tap build/pico-t # this tape in the deck at boot
 
@@ -378,6 +396,7 @@ PICO_ACE_TAP=game.tap build/host/test/host/test_tape  # an archive .tap through 
 PICO_ACE_TAP=game.tap build/host/test/host/test_cassette  # ... and off the signal
 PICO_ACE_TAP_OUT=sq.tap build/host/test/host/test_cassette  # the recorder's .tap, for xAce
 PICO_ACE_ACE_DIR=dir build/host/test/host/test_snap_ace  # every archive .ace in dir
+PICO_ACE_WAIT_ACE=g.ace PICO_ACE_WAIT_KEYS=$'GO\n' build/host/test/host/test_wait  # a game, held and not
 
 # .ace against MAME (design.md §13.4): brew install mame, then
 tools/mame/romset.sh                 # out/mame/roms; needs roms/JA-DOSROM/

@@ -12,8 +12,8 @@
  * same time. None changes what xAce's CPU computes:
  *
  *  - INT is held over the same T-states of each field as
- *    ace_config_default's (MAME's: lines 248-255 of a field starting at
- *    line 56), where xmain.c latches a wall-clock SIGALRM. It is taken
+ *    ace_config_default's (the circuit's: lines 248-255 of a field
+ *    starting at line 0), where xmain.c latches a wall-clock SIGALRM. It is taken
  *    at most once in that window, since xAce clears no IFF when it takes
  *    one and would otherwise take it again at once; the ROM's handler
  *    outlasts the window (test_field), so ours takes it once too.
@@ -53,7 +53,7 @@ unsigned long tstates = 0, tsmax = 0;
 
 /* The field (ace_config_default, design.md §11.1). */
 #define FIELD_T  (312u * 208u)
-#define INT_RISE ((248u - 56u) * 208u)
+#define INT_RISE (248u * 208u)
 #define INT_T    (8u * 208u)
 
 static uint64_t total;          /* T-states since power-on, before this instruction */

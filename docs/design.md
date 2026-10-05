@@ -19,9 +19,10 @@ This document applies the lessons. It does not repeat them. Where a decision
 just follows a lesson, it cites the lesson and moves on, and the space goes
 to what is different about the Ace.
 
-**Status, 2026-10-05.** M0 to M13 are done (§15.2): the Z80 and the Ace
+**Status, 2026-10-05.** M0 to M14 are done (§15.2): the Z80 and the Ace
 on the host and on the board, video, the keyboard, audio, the card, the
-menu, tape by trap and by signal, snapshots and the performance pass, each
+menu, tape by trap and by signal, snapshots, the performance pass and
+the video circuit's wait states, each
 with what was checked on the device recorded under its milestone. Every number about the Ace below comes from secondary knowledge
 until §16's table says otherwise. Every performance figure is an
 **estimate** and is labelled as one (EL §14.4) until a milestone measures
@@ -370,6 +371,9 @@ control in one sitting:
   cache, the ROM fits it. Not kept (§10.2).
 - **The tape traps** of §10.3 cost 0.7 points idle and 0.9 compute at
   tier 2 (`out/m12/t2-notrap-c`): one load an instruction. Kept.
+- **The wait-state model** (§6.4, M14) puts the waiting mirrors on the
+  slow path: 0.5 points on scrolling and 0.1 on a print loop, nothing
+  measurable elsewhere (`out/m14/wait`, `nowait`). Kept.
 - **The run loop's shape** cost more than any of these. The first `HALT`
   skip was a check before every instruction, and with it GCC stopped
   inlining `z80_step` into `z80_run`: compute at tier 2 went from 102 to
@@ -745,11 +749,59 @@ screen through the waiting mirror, so printing on a real Ace is slower than on
 an emulator without wait states. A game timed by its own drawing loop would
 run fast.
 
-**The first version models no wait states.** M14 measures how much they matter:
-trace-diff the ROM printing a screenful against the reference emulator
-(§13.4), and time a known game's frame loop. If it matters, model wait states
-per access from the T-state within the line, in the slow path. That costs the
-waiting mirror's fast path, so measure it against a control build (EL §12).
+**The circuit**, read from the schematic on 2026-10-05 (Wenzel's drawing
+of the original board as Martin Korth commented it in 2010, and the
+Mercury Ace clone's equations for the same nets; §19). One 18-bit ripple
+counter clocked at 6.5 MHz times everything: CNT0–CNT8 count the 416
+pixels of a line and CNT9–CNT17 the 312 lines of a field. **The Z80's
+clock is CNT0**, so a T-state is two pixels and the CPU is in step with
+the beam. Then:
+
+- VIDEN, the display, is `NAND(CNT16, CNT15) AND NOR(CNT17, CNT8)`:
+  pixels 0–255 of lines 0–191, which is the first 128 T of each display
+  line.
+- FIELD, which drives INT, is lines 248–255 (CNT12–CNT16). So the
+  display begins 64 lines after INT rises, not 120 as under MAME's
+  numbering, which this design followed until M14 (§11.1, §16).
+- `/WAIT` is low for a memory access to `$2000–$2FFF` (`vram.mreq`, the
+  74LS138's output, gated by `/MREQ`) with A10 high while VIDEN is up. A
+  latch then keeps the video circuit's address on the RAM until VIDEN
+  falls. With A10 low, the CPU wins and the picture shows its data (snow,
+  §17). No I/O access and no refresh cycle is held.
+
+So an access to `$2400–$27FF` or `$2C00–$2FFF` at T h < 128 of a display
+line is held 128 − h T, and nowhere else.
+
+**As built (M14).** `ace_config_t.wait_states` puts those pages on the
+slow path, whose `hold()` adds the T-states to the CPU's clock before the
+access completes. `ace_run_field` records the field's nominal start, the
+clock plus the debt the last field left, so the hold is placed from it.
+The Z80 core has no time within an instruction (§5.2), so an access is
+taken at its instruction's start. Taking it 4, 8 or 11 T later moved the
+screenful below by 12 T in 625,334, and dreamsoft racer's rate not at
+all: after the first hold the CPU is in step with VIDEN's falling edge,
+and only the first access of each burst depends on where it falls.
+`test_wait` holds the window, its edges, the mirrors that do not wait,
+the opcode fetch and the data, with the model off as the control.
+`ace-trace` turns it off, because xAce has no wait states. MAME has none
+either, so the effect was measured against this model, not a reference.
+
+**Measured, 2026-10-05.** On the host (`test_wait`): the ROM printing a
+screenful, 24 lines through a word that scrolls, takes 625,346 T from
+Enter to the key wait with the hold and 539,539 without, **15.9 %
+longer**, 84,002 T of it held. `VLIST` does not move (9,415,717 T and
+9,419,489): it halts for the interrupt once a word. Two archive games,
+started from their `.ace` files: dreamsoft racer (`GO`) runs **3.8 %
+fewer instructions a field**, held 3.7 % of the time, and Pacman (`RUN`,
+no keys pressed) 0.1 %. On the board (§15.2 M14), a loop that prints
+without halting is held 29.5 % of the time and runs 29 % fewer
+instructions, while core 0 pays at most half a point for the model.
+
+**Decision: modelled, on by default** in `ace_config_default` and the
+firmware (`PICO_ACE_WAIT=OFF` is the control). The difference is large
+enough for a program that times itself by its own drawing to see, and
+the cost is within the measurement's spread. M15 may put it on the
+Settings page.
 
 ### 6.5 I/O
 
@@ -1227,7 +1279,9 @@ exact (EL §2.2, §5.6):
    program that redraws after the interrupt has finished before the snapshot
    (EL §5.6).
 
-Until the line numbers are settled, they are runtime configuration. Test with
+The line numbers are the circuit's (§6.4, §16): the display is lines 0–191
+of its count and INT lines 248–255, so the field starts at line 0 and INT
+rises 51,584 T into it. They stay runtime configuration. Test with
 a guest loop that `HALT`s for INT and redraws: every snapshot must show a
 finished redraw. Run a single-point field shape as a **control that must
 fail**.
@@ -1445,6 +1499,7 @@ EL §12, with these workloads, scripted over the UART, one boot each:
 | scrolling: `VLIST` repeated | screen writes and band presents |
 | sound: `BEEP` in a loop | speaker edges |
 | character-set animation | glyph-change dirty marking |
+| print: `CR ."` in a loop, no `HALT` | the waiting mirror's slow path (§6.4), added in M14 |
 
 **Heartbeat**: real-time ratio, core 0 share and headroom, host cycles per
 guest instruction, mean T per instruction, longest present, presents / full
@@ -1462,7 +1517,10 @@ The words, each run on the host first, are `: c 0 30000 0 do i + loop drop
 begin 100 200 beep 0 until ;` and `: g begin 256 0 do 8 0 do j 11520 i +
 c! loop loop 0 until ;`, which rewrites the space's glyph at `$2D00`. The
 heartbeat's `perf` line also counts the `HALT` repeats skipped (§5.3),
-and the battery reads `90%` or `90% charging`.
+and the battery reads `90%` or `90% charging`. M14 added `print`, `: p
+begin cr ." ABCDEFGHIJKLMNOPQRSTUVWXYZ0123" 0 until ;`, which `perf-run.sh`
+runs when named, and the share of guest T the video circuit held on the
+`perf` line (`held`, §6.4).
 
 ---
 
@@ -2079,6 +2137,30 @@ what §3.2 leaves.
 *Measured:* wait-state impact on guest timing; its host cost.
 *Leaves out:* display snow (§17).
 
+**Done, 2026-10-05**, on the Plus 2 W (id `7458DC82A89AAC12`) at 150 MHz,
+gcc 15.2. The wait logic was read from the schematic and modelled as in
+§6.4, which also records the host measurements and the decision: **the
+waits are modelled, on by default**. The same reading moved the field's
+display start from MAME's line 56 to the circuit's line 0, 64 lines
+after INT (§11.1, §16), and `test_field`'s redraw guest was shortened to
+what fits in them (a whole screen, 16,107 T, would tear on an Ace too).
+The trace diff against xAce stays clean with the model off on our side.
+The trace diff could not measure the waits, as this milestone planned:
+neither xAce nor MAME models them.
+
+On the board, §14's workloads and `print` were run on the model's build
+and on a `PICO_ACE_WAIT=OFF` control in one sitting (`out/m14/wait`,
+`out/m14/nowait`). Core 0: idle 21.5 % and 21.5 %, compute 23.4 and
+23.4, glyphs 23.3 and 23.3, sound 18.4 and 18.4, scrolling 3.9 and 3.4,
+print 21.3 and 21.2; every consumed rate 36,620–36,621 Hz, 0 underruns,
+0 late refills. Print ran 887,692 instructions a heartbeat against
+1,254,791, and the `held` figure on the rebuilt `perf` line read 29.5 %
+for print, 0.2–0.3 % for glyphs and 0.0 % idle (`out/m14/held`). The
+host's ZEXDOC and ZEXALL pass.
+*Not verified:* any timing against a real Ace (none to hand), so the
+access's place within an instruction and the RC on `/WAIT` stay as §16
+leaves them; the shipping build (`PICO_ACE_UART=OFF`) on the device.
+
 #### M15. Finish
 
 *Depends on:* M14.
@@ -2107,12 +2189,12 @@ runtime configuration (EL §14.2).
 | CPU clock | 3.25 MHz | schematic (crystal, divider) | high |
 | T-states per line | 208 (416 pixel clocks ÷ 2) | schematic; MAME `jupace` | medium. MAME's source read 2026-10-03: `set_raw(6.5_MHz_XTAL, 416, …, 312, …)`. Not yet against the schematic |
 | Lines per field | 312 | schematic; MAME | medium. MAME agrees (above); FRAMES counts one a field under it (`test_field`) |
-| First active line, INT line | 56 and 248 | schematic; MAME; trace diff | medium-low. MAME's (192 lines drawn from 56; INT set at line 248), read 2026-10-03, are `ace_config_default`'s, still runtime configuration. A redraw after INT is finished at line 56 (`test_field`) |
+| First active line, INT line | 0 and 248 | schematic; MAME; trace diff | medium-high. **From the schematic**, 2026-10-05 (§6.4): one 18-bit counter, CNT0–CNT8 the pixel and CNT9–CNT17 the line; VIDEN, the display, is lines 0–191 and FIELD, which drives INT, lines 248–255 of the same count, which resets at 312. `ace_config_default` takes the display from line 0. MAME's 56 (read 2026-10-03, the default until M14) is only where it puts the picture in its bitmap: under it INT fell 120 lines before the display, against the circuit's 64. A redraw after INT that fits in those 64 lines is finished by line 0 (`test_field`) |
 | INT duration | 8 lines, 1,664 T | schematic (the INT generator) | medium. MAME clears INT at line 256. **Bounded by the ROM**, 2026-10-03: its handler opens with a ~800 T delay and reaches `EI` at `$017C` 1,819 T after INT rises at idle, so INT held much past ~1,800 T would be taken twice; FRAMES (`$3C2B`) counts once a field at 1,664 T and twice at 2,500 (`test_field`) |
 | IM 2 vector byte (bus float on acknowledge) | `$FF` | schematic | low |
 | ROM size and hashes | 8,192 bytes; SHA-1 `597ba8a1…` (§10.2) | `roms/ace.rom`, hashed 2026-10-03 | **settled** 2026-10-03: both halves' CRC32 and SHA-1 match `ROM_LOAD` in MAME's `src/mame/cantab/jupace.cpp` |
 | Video and character RAM mirrors | §2.2 | schematic; ROM's own addresses | medium-high. The ROM writes the screen at `$2400`, workspace at `$2700`, the character set at `$2C00` and keeps its variables at `$3C00`, and boots in all three machines with §6.1's table (`test_boot`, 2026-10-03). MAME's map agrees, but reads character RAM back |
-| Which mirror waits, and for how long | `$2400`/`$2C00` wait during active display | schematic | medium / low |
+| Which mirror waits, and for how long | `$2400`/`$2C00` wait during active display | schematic | **settled** 2026-10-05 from the schematic (§6.4): `/WAIT` is `vram.mreq` (the 74LS138's `$2000–$2FFF`, gated by `/MREQ`) with A10 high and VIDEN up, so a memory access to `$2400–$27FF` or `$2C00–$2FFF` in the first 256 pixels, 128 T, of a display line is held until T 128. The Z80's clock is CNT0, so the hold is a fixed function of the T-state in the field. Executed in `test_wait`. Not settled: the T-state within an instruction at which the access samples WAIT (the core places it at the instruction's start; M14 found the results move by 12 T in 625,334) and the RC on `/WAIT` (330 Ω, 2.2 nF) |
 | Character RAM read value | `$FF` (`cram_read`) | schematic | low. Runtime configuration. MAME reads it back as RAM, xAce too |
 | Unpopulated read value | `$FF` (`open_bus`) | schematic; ROM's RAM sizing | low for the value; **what the ROM needs is settled**, 2026-10-03: its sizing at `$0028` writes `$FC` a page at a time from `$3D00` and stops at the first page that does not read it back, so any value but `$FC` works. RAMTOP (`$3C18`) is `$4000`, `$8000` and `$0000` in the three machines (`test_boot`) |
 | User RAM mirrors with a pack fitted | still mirrored at `$3000–$3BFF` | pack schematic | low |
@@ -2142,7 +2224,6 @@ Each entry says why, so nobody re-plans it without new evidence (EL §14.5).
 |---|---|---|
 | RP2040 boards | dropped | memory would fit (§3.3), but the Z80 estimate already needs most of an M33 core at 150 MHz; an M0+ cannot do it in real time |
 | Display snow from the CPU-priority mirrors | dropped | authentic but ugly, and needs per-T-state beam position; no software is known to rely on it |
-| Wait states on the waiting mirrors | deferred to M14 | measure the effect first (§6.4) |
 | Scaled display (320×240) | dropped | 56 % more wire for an uneven stretch (EL §5.4) |
 | Colour themes (green, amber) | dropped | the Ace is white on black; a pointer swap if ever wanted (§7.2), not worth a menu row now |
 | Ace sound boards (AY-3-8912 add-ons) | deferred | small user base; would be the first odd-port device and a PSG synth (HW §5.5). Revisit if the archive search shows titles that need one |
@@ -2210,7 +2291,12 @@ To obtain and record (with revision or date) before transcribing constants:
   Vickers, Jupiter Cantab, 1982): keyboard, editing keys, tape words, memory
   map, `BEEP`.
 - **The Ace schematic**: clock, video timing, INT generator, mirrors, wait
-  logic, port decode, bus pull-ups.
+  logic, port decode, bus pull-ups. Bodo Wenzel's drawing of the original
+  board (2006, 2114 RAMs), commented and rearranged by Martin Korth
+  (nocash) in July 2010 (`ace-sch.gif`), read 2026-10-05 for §6.4; and the
+  Mercury Ace clone's description of the same circuit as logic equations
+  (wilco2009, codeberg.org/wilco2009/Mercury_Ace, `README.md` at
+  `28744c3`, 2025-01-04), which agrees with it net for net.
 - **A commented ROM disassembly**, and **the ROM itself, executed on the host
   harness**. This is the best source for the matrix, tape routines, key timing
   and system variables (EL §14.2).

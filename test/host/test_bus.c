@@ -159,7 +159,7 @@ int main(void) {
     ace_copy(&c, &m);
     poke(0x4000, 0x22);
     CHECK(ace_peek(&c, 0x4000) == 0x11, "the copy shares the original's RAM");
-    CHECK(c.page[0x40].read == &c.xram[0] && c.page[0x24].write == &c.vram[0],
+    CHECK(c.page[0x40].read == &c.xram[0] && c.page[0x20].write == &c.vram[0],
           "the copy's page table points outside it");
     CHECK(c.page[0x00].read == ace_rom, "the copy lost the ROM");
     CHECK(c.cpu.bus.ctx == &c && c.cpu.bus.page == c.page, "the copy's CPU is on the original's bus");

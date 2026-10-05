@@ -11,15 +11,15 @@ void ace_config_default(ace_config_t *cfg) {
     cfg->ram = ACE_RAM_19K;                    /* §18 item 1 */
     cfg->rom = NULL;
 
-    /* MAME's jupace (read 2026-10-03): a 416-pixel line at 6.5 MHz is
-     * 208 T, 312 lines; the display drawn from line 56 for 192 lines; INT
-     * asserted at line 248 and cleared at 256. Not yet checked against
-     * the schematic (§16). */
+    /* The circuit's counters (§6.4, §16): a line of 416 pixels at
+     * 6.5 MHz is 208 T and a field 312 lines; the display is lines 0-191
+     * and INT (FIELD) lines 248-255, of the same count. MAME's line 56
+     * is only where it puts the picture in its bitmap. */
     cfg->line_t      = 208;
     cfg->field_lines = 312;
     cfg->int_line    = 248;
     cfg->int_t       = 8 * 208;
-    cfg->active_line = 56;
+    cfg->active_line = 0;
 
     /* Neither value is settled (§16). The ROM's RAM sizing needs only an
      * unpopulated read that is not $FC (§6.2); $FF is MAME's port idle
@@ -27,8 +27,9 @@ void ace_config_default(ace_config_t *cfg) {
     cfg->cram_read = 0xFFu;
     cfg->open_bus  = 0xFFu;
 
-    cfg->tape_traps = true;
-    cfg->halt_skip  = true;
+    cfg->tape_traps  = true;
+    cfg->halt_skip   = true;
+    cfg->wait_states = true;                   /* §6.4: modelled, from M14 */
 }
 
 uint32_t ace_ram_bytes(ace_ram_t ram) {
@@ -51,18 +52,50 @@ const char *ace_ram_name(ace_ram_t ram) {
 
 /* ---- The bus's slow path (§6.1) --------------------------------------- */
 
-/* Only character RAM and unpopulated pages have no read pointer. */
-static uint8_t ACE_HOT1(mem_read)(void *ctx, uint16_t addr) {
-    const ace_t *m = ctx;
+/* What the bus gives the CPU where the page table has no pointer, with no
+ * time passing: character RAM and unpopulated pages, and video RAM's
+ * waiting mirror while wait states are modelled. */
+static uint8_t bus_read(const ace_t *m, uint16_t addr) {
+    if ((addr & 0xF800u) == ACE_VRAM_BASE) return m->vram[addr & (ACE_BLOCK_BYTES - 1u)];
     if ((addr & 0xF800u) == ACE_CRAM_BASE) return m->cfg.cram_read;
     return m->cfg.open_bus;
 }
 
 /* ROM and unpopulated pages: the write goes nowhere. */
+static void bus_write(ace_t *m, uint16_t addr, uint8_t v) {
+    if ((addr & 0xF800u) == ACE_VRAM_BASE) m->vram[addr & (ACE_BLOCK_BYTES - 1u)] = v;
+    else if ((addr & 0xF800u) == ACE_CRAM_BASE) m->cram[addr & (ACE_BLOCK_BYTES - 1u)] = v;
+}
+
+/* The video circuit's hold (§6.4): a memory access to $2000-$2FFF with
+ * A10 high, while VIDEN is up, holds WAIT until VIDEN falls. VIDEN is the
+ * first 256 pixels, ACE_VIDEN_T, of each of the display's 192 lines,
+ * which the field counts from its first active line. The access is taken
+ * at its instruction's start, cpu.t during a bus call (z80.h), so a hold
+ * is up to an instruction's length long; M14 measured what that moves. */
+static inline void hold(ace_t *m, uint16_t addr) {
+    if (!m->cfg.wait_states || (addr & 0xF400u) != (ACE_VRAM_BASE | 0x0400u)) return;
+    uint32_t pos = m->cpu.t - m->field_start;
+    uint32_t field = ace_field_t(m);
+    if (pos >= field) pos %= field;       /* ace_run outside a field */
+    uint32_t line = pos / m->cfg.line_t;
+    if (line >= ACE_SCREEN_H) return;
+    uint32_t h = pos - line * m->cfg.line_t;
+    if (h >= ACE_VIDEN_T) return;
+    m->cpu.t  += ACE_VIDEN_T - h;
+    m->wait_t += ACE_VIDEN_T - h;
+}
+
+static uint8_t ACE_HOT1(mem_read)(void *ctx, uint16_t addr) {
+    ace_t *m = ctx;
+    hold(m, addr);
+    return bus_read(m, addr);
+}
+
 static void ACE_HOT1(mem_write)(void *ctx, uint16_t addr, uint8_t v) {
-    (void)ctx;
-    (void)addr;
-    (void)v;
+    ace_t *m = ctx;
+    hold(m, addr);
+    bus_write(m, addr, v);
 }
 
 /* Any access to an even port moves the speaker: IN one way, OUT the
@@ -137,6 +170,12 @@ static void build_pages(ace_t *m) {
     map(m, ACE_VRAM_BASE >> 8, (ACE_CRAM_BASE >> 8) - 1u, m->vram, m->vram, block);
     map(m, ACE_CRAM_BASE >> 8, (ACE_URAM_BASE >> 8) - 1u, NULL, m->cram, block);
     map(m, ACE_URAM_BASE >> 8, (ACE_XRAM_BASE >> 8) - 1u, m->uram, m->uram, block);
+    /* The waiting mirrors, $2400 and $2C00, on the slow path that holds
+     * the CPU (§6.4). */
+    if (m->cfg.wait_states) {
+        map(m, (ACE_VRAM_BASE + ACE_BLOCK_BYTES) >> 8, (ACE_CRAM_BASE >> 8) - 1u, NULL, NULL, 0);
+        map(m, (ACE_CRAM_BASE + ACE_BLOCK_BYTES) >> 8, (ACE_URAM_BASE >> 8) - 1u, NULL, NULL, 0);
+    }
 
     uint32_t x = ace_ram_bytes(m->cfg.ram) - ACE_BLOCK_BYTES;
     if (x)
@@ -209,8 +248,14 @@ void ace_restored(ace_t *m) {
     m->tape.pass = false;
     m->tape.begun = false;
     cassette_stop_all(m);
+    m->field_start = m->cpu.t + (uint32_t)m->budget;   /* saved between fields */
     memset(m->keys, 0, sizeof m->keys);
     beeper_restart(&m->beeper, m->cpu.t, m->speaker);
+}
+
+void ace_set_wait_states(ace_t *m, bool on) {
+    m->cfg.wait_states = on;
+    build_pages(m);
 }
 
 /* The page table is a function of cfg, so the copy's is rebuilt over its
@@ -243,6 +288,8 @@ static uint32_t run_budget(ace_t *m, uint32_t part) {
 }
 
 uint32_t ace_run_field(ace_t *m) {
+    /* The field began where the last one's debt says: t + budget. */
+    m->field_start = m->cpu.t + (uint32_t)m->budget;
     uint32_t done = run_budget(m, m->field_t[0]);
     z80_set_int(&m->cpu, true);
     done += run_budget(m, m->field_t[1]);
@@ -278,11 +325,11 @@ void ace_key_set(ace_t *m, int row, int col, bool down) {
 uint8_t ace_peek(const ace_t *m, uint16_t addr) {
     const uint8_t *p = m->page[addr >> 8].read;
     if (p) return p[addr & 0xFFu];
-    return mem_read((void *)m, addr);
+    return bus_read(m, addr);
 }
 
 void ace_poke(ace_t *m, uint16_t addr, uint8_t v) {
     uint8_t *p = m->page[addr >> 8].write;
     if (p) p[addr & 0xFFu] = v;
-    else mem_write(m, addr, v);
+    else bus_write(m, addr, v);
 }

@@ -107,6 +107,10 @@
 
 #define ACE_CPU_HZ        3250000u  /* 6.5 MHz crystal / 2                 */
 
+/* VIDEN, the part of a display line in which the video circuit fetches
+ * and the waiting mirrors hold the CPU: 256 pixels at 6.5 MHz (§6.4). */
+#define ACE_VIDEN_T          (ACE_SCREEN_W / 2u)                  /* 128 T */
+
 /* The rest of the field's shape (§11.1) is runtime configuration in
  * ace_config_t until §16 settles it. */
 

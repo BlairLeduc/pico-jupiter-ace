@@ -64,12 +64,14 @@ static size_t fields_draining(guest_t *gg, unsigned n, int16_t *dst, size_t max)
 }
 
 /* Type "m n BEEP" and come back with the note sounding: the typing's
- * replay takes a few fields, so n must outlast it. */
+ * replay takes a few fields, and the ROM a few more to redraw the line
+ * through the waiting mirror (§6.4), so n must outlast them. */
 static bool start_beep(unsigned m, unsigned n) {
     if (!guest_boot(&g, ACE_RAM_19K, 500)) return false;
     char line[40];
     snprintf(line, sizeof line, "%u %u BEEP\n", m, n);
     guest_type(&g, line);
+    for (int f = 0; f < 10 && g.m.cpu.iff1; f++) guest_fields(&g, 1);
     return !g.m.cpu.iff1;     /* DI for the whole note */
 }
 
