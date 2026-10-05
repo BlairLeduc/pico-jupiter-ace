@@ -1711,7 +1711,7 @@ host `.sav` round trip (150 fields identical) passes; a torn or foreign
 *Measured:* snapshot load time.
 *Leaves out:* `.ace` export (§18).
 *Reference:* MAME, run headless (§13.4, §18 item 6).
-*Built, 2026-10-04; `.ace` on the board not yet checked.* The format is
+*Done, 2026-10-04.* The format is
 §10.5's, settled from the archive's description, MAME's loader and 199
 files (§16). `snap_ace.c` imports, `snapshot.c` is pico-atom's `.sav` with
 the Z80's fields, `sha1.c` is pico-atom's, and the Snapshot page is §12's.
@@ -1747,9 +1747,12 @@ late refills 0 throughout, at 36,621 Hz consumed.
 *Measured:* a 19K state (19,604 bytes) saves in 132.0 ms to a new slot
 and 82.2 ms to another, and loads, both passes, in 47.0–47.1 ms on the
 board.
-*Not verified:* `.ace` loads on the board (no files on the card yet; the
-staged set is `out/m11-card/`); the Snapshot page looked at on the panel;
-the shipping build; a card pulled mid-save. After the first flash the
+The owner ran the shipping build (`PICO_ACE_UART=OFF`) on a Pico 2 W,
+2026-10-04, and loaded `.ace` files from the Snapshot page successfully
+(no UART, so no timings, board id or file names).
+*Not verified:* which `.ace` files were loaded on the device, and a refusal
+by the wrong machine there (host only); `.ace` load time on the device;
+a card pulled mid-save. After the first flash the
 Debug Probe dropped off USB and needed a replug, as once in M10.
 
 #### M12. Performance pass and soak
