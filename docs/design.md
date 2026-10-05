@@ -1752,10 +1752,12 @@ The owner ran the shipping build (`PICO_ACE_UART=OFF`) on a Pico 2 W,
 machine Pacman and Othello, the set's 19K files, loaded from the Snapshot
 page, and the rest, for 3K and 51K (35K) machines, were refused (no UART,
 so no timings or board id). The menu cannot change the RAM size until the
-Machine page (M15); `ram` in the settings file does (§10.6).
-*Not verified:* the 3K and 51K files loading on the device, in machines
-booted with `ram = 3k` and `ram = 51k`; `.ace` load time on the device;
-a card pulled mid-save. After the first flash the
+Machine page (M15); `ram` in the settings file does (§10.6), and with the
+machine booted as 3K and as 51K that way the owner loaded every other file
+in the set (Golfgrid and Hangman in the 3K; Casse Briques, Moon Buggy and
+Dreamsoft Racer, all 35K, in the 51K with the key wait's word written
+back), and Ace Invaders was refused, as on the host.
+*Not verified:* `.ace` load time on the device; a card pulled mid-save. After the first flash the
 Debug Probe dropped off USB and needed a replug, as once in M10.
 
 #### M12. Performance pass and soak
