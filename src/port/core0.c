@@ -142,6 +142,20 @@ static void apply_ui(ace_t *m) {
     }
 }
 
+/* The heartbeat's battery and die: "87%, 31 C", "87% charging, 31 C",
+ * with "?" for either before its first read or after a failed one. Bit 7
+ * of the gauge is the charger: set proves USB power, clear proves
+ * nothing (hardware-notes.md §6). The readings are core 1's. */
+static const char *power_text(void) {
+    static char text[48];
+    int32_t b = g_c1.battery, t = g_c1.temp_c;
+    char bat[20] = "?", die[16] = "?";
+    if (b >= 0) snprintf(bat, sizeof bat, "%u%%%s", (unsigned)(b & 0x7F), b & 0x80 ? " charging" : "");
+    if (t != INT32_MIN) snprintf(die, sizeof die, "%ld C", (long)t);
+    snprintf(text, sizeof text, "%s, %s", bat, die);
+    return text;
+}
+
 static void tenths(char *out, size_t n, uint32_t v10) {
     snprintf(out, n, "%lu.%lu", (unsigned long)(v10 / 10u), (unsigned long)(v10 % 10u));
 }
@@ -165,7 +179,7 @@ void core0_run(ace_t *m, keymatrix_t *k) {
 
     /* The heartbeat's window and the perf line's (§14). */
     uint64_t hb_us = time_us_64(), sec_us = hb_us;
-    uint32_t hb_t = m->cpu.t, hb_insns = m->cpu.insns, hb_late = 0;
+    uint32_t hb_t = m->cpu.t, hb_insns = m->cpu.insns, hb_halts = m->cpu.halts, hb_late = 0;
     uint32_t sec_insns = m->cpu.insns;
     uint64_t hb_run_us = 0, hb_busy_us = 0, sec_run_us = 0, sec_busy_us = 0;
     bool prompt = false;
@@ -210,6 +224,7 @@ void core0_run(ace_t *m, keymatrix_t *k) {
             hb_us = sec_us = time_us_64();
             hb_t = m->cpu.t;
             hb_insns = sec_insns = m->cpu.insns;
+            hb_halts = m->cpu.halts;
             hb_late = late;
             hb_run_us = hb_busy_us = sec_run_us = sec_busy_us = 0;
 #if PICO_ACE_AUDIO
@@ -296,6 +311,7 @@ void core0_run(ace_t *m, keymatrix_t *k) {
         if (now - hb_us >= HEARTBEAT_US) {
             uint64_t wall = now - hb_us;
             uint32_t t = m->cpu.t - hb_t, insns = m->cpu.insns - hb_insns;
+            uint32_t halts = m->cpu.halts - hb_halts;
             /* Guest T over wall time at 3.25 MHz: 1.000 is real time. */
             uint32_t rt1000 = (uint32_t)((uint64_t)t * 1000000u / ACE_CPU_HZ * 1000u / wall);
             uint32_t busy1000 = (uint32_t)(hb_busy_us * 1000u / wall);
@@ -312,7 +328,7 @@ void core0_run(ace_t *m, keymatrix_t *k) {
             log_printf("  heartbeat    : %lu fields, rt %lu.%03lu, late %lu (+%lu), slips %lu | "
                        "%lu presents (%lu full, %lu dropped), last %lu us, max %lu us | "
                        "keys %lu (%lu lost), polls %lu, i2c errors %lu | "
-                       "ed holes %lu, log dropped %u, battery %ld, die %ld C | "
+                       "ed holes %lu, log dropped %u, battery %s | "
                        "%s, parks %lu (max %lu us)\n",
                        (unsigned long)m->fields,
                        (unsigned long)(rt1000 / 1000u), (unsigned long)(rt1000 % 1000u),
@@ -325,18 +341,19 @@ void core0_run(ace_t *m, keymatrix_t *k) {
                        (unsigned long)(kbd_overflows() + k->dropped),
                        (unsigned long)g_c1.polls, (unsigned long)sb_error_count(),
                        (unsigned long)m->cpu.ed_holes, log_dropped(),
-                       (long)g_c1.battery, (long)g_c1.temp_c, card_text(),
+                       power_text(), card_text(),
                        (unsigned long)g_park_stats.parks, (unsigned long)g_park_stats.max_us);
             log_printf("  perf         : tier %u, %lu MHz, core 0 busy %s%%, guest %s%% of wall, "
                        "headroom %lu.%02lux, %s host cycles/insn, %lu.%02lu T/insn, "
-                       "%lu insns\n",
+                       "%lu insns, %lu halts skipped\n",
                        (unsigned)PICO_ACE_RAM_TIER, (unsigned long)clk_mhz, busy_s, guest_s,
                        (unsigned long)(head100 / 100u), (unsigned long)(head100 % 100u),
                        hpi_s, (unsigned long)(tpi100 / 100u), (unsigned long)(tpi100 % 100u),
-                       (unsigned long)insns);
+                       (unsigned long)insns, (unsigned long)halts);
             hb_us = now;
             hb_t = m->cpu.t;
             hb_insns = m->cpu.insns;
+            hb_halts = m->cpu.halts;
             hb_late = late;
             hb_run_us = hb_busy_us = 0;
 #if PICO_ACE_AUDIO

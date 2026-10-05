@@ -322,6 +322,71 @@ cycles per instruction, not in the beeper's few calls a field, which
 suggests the refill IRQ and `audio_push` (in flash at tier 0) taking XIP
 cache lines from the interpreter. M12 measures that with the tiers.
 
+**Measured, M12, 2026-10-04** (the same board, 150 MHz, gcc 15.2, the 19K
+machine, paced on the audio queue, with a card fitted). Each workload is a
+Forth word typed over the UART after a fresh boot, then left running
+(`tools/perf-run.sh`, §14): `c` and `vlist` in loops as in M8; `beep` in a
+loop (`100 200 beep`); and a glyph animation rewriting the space's eight
+rows 256 times over, so every blank cell changes glyph. Figures are core
+0's busy share (the guest, the keys and the snapshot, not the wait on the
+queue), averaged over eight 5 s heartbeats that agreed to within 0.1
+point. Every run had 0 underrun samples and 0 late refills, at 36,620–36,621
+Hz consumed. Logs and summaries: `out/m12/`.
+
+The final sitting (`out/m12/*-e`), against M11 built at tier 2 as the
+control for everything M12 changed:
+
+| Workload | M11, tier 2 | tier 0 | **tier 2, ships** | tier 2, no `HALT` skip | Host cycles per insn, ships |
+|---|---:|---:|---:|---:|---:|
+| idle at the prompt | 21.4 % | 22.7 % | **21.2 %** | 21.2 % | 115.8 |
+| compute, `c` in a loop | 23.4 % | 31.8 % | **23.3 %** | 23.3 % | 102.0 |
+| scrolling, `vlist` in a loop | 41.0 % | 5.2 % | **3.4 %** | 41.9 % | 193.5 |
+| sound, `beep` in a loop | | 21.1 % | **18.0 %** | | 100.2 |
+| glyph animation | | 31.9 % | **23.2 %** | | 102.9 |
+
+What M11 shipped, tier 0 with every `HALT` interpreted, measured 22.9 %
+idle and 41.4 % compute (`out/m12/m11-b`) and 57.7 % scrolling
+(`out/m12/t0-noskip-a`). **The worst workload is now 23.3 % of core 0**,
+against the ~85 % gate. What each change was worth, each against its
+control in one sitting:
+
+- **`HALT` fast-forward** (§5.3) took scrolling from 41.9 % to 3.4 % at
+  tier 2 and from 57.7 % to 5.5 % at tier 0: `VLIST` halts for the
+  interrupt once a word, and 3.7 M of its 3.8 M steps a heartbeat were
+  `HALT` repeats. The other workloads never halt and do not move. Kept.
+- **Tier 2** took compute from 31.8 % to 23.3 % and the glyph animation
+  from 31.9 % to 23.2 %; idle and sound gained 1.5–3 points. **Tier 1**
+  gained about 1 point on its own (`out/m12/t1-a`). Tier 2 ships: it is
+  the CMake default from M12. It puts 33.3 KiB more in SRAM than tier 0 (§3.3).
+  It is also **repeatable**: tier 2 read the same to 0.1 point in three
+  sittings, while tier 0 compute read 37.9 %, 41.1 %, 34.2 % and 31.8 %
+  in four builds whose differences were outside the interpreter: at tier 0
+  the layout of flash decides how the XIP cache serves it (HW §9.8).
+- **The ROM in SRAM**, an 8 KiB copy made at boot, changed nothing at tier
+  2 (to 0.1 point on every workload) and 0.1–1.3 points at tier 0
+  (`out/m12/t0-rom-b`, `t2-rom-b`). With the interpreter out of the XIP
+  cache, the ROM fits it. Not kept (§10.2).
+- **The tape traps** of §10.3 cost 0.7 points idle and 0.9 compute at
+  tier 2 (`out/m12/t2-notrap-c`): one load an instruction. Kept.
+- **The run loop's shape** cost more than any of these. The first `HALT`
+  skip was a check before every instruction, and with it GCC stopped
+  inlining `z80_step` into `z80_run`: compute at tier 2 went from 102 to
+  125 host cycles an instruction, 23.4 % to 28.6 % (`out/m12/t2-c`).
+  Forcing the step inline took it to 112; moving the skip into the `HALT`
+  opcode itself, so the loop checks nothing, took it to 102.0, M11's
+  figure. The tier 0 idle regression first blamed on M9–M11 (27.2 %
+  against M8's 21.5 %) was this, not them.
+- **Computed `goto` and CPU state in locals** (§5.2) were not tried: with
+  the worst workload at 23 % they cannot change a decision. They stay
+  available.
+
+**Audio at tier 2** (`out/m12/*-f`, against a `PICO_ACE_AUDIO=OFF`
+control flashed in the same sitting, paced on the timer): idle 21.2 %
+against 20.5 %, compute 23.3 % against 22.9 %, scrolling 3.4 % against
+2.6 %, sound 18.0 % against 17.6 %. 0.4–0.8 points, against M8's 0.4–2.0
+at tier 0: with the interpreter in SRAM the refill path no longer takes
+its cache lines.
+
 **The gate.** Milestone M2 (§15) puts the Z80 core alone on the board and
 measures host cycles per instruction on ZEXDOC and on a Forth-shaped loop,
 before any other port work. M7 then measures the real share. The Atom's 2 MHz
@@ -346,11 +411,15 @@ in SRAM. Keep every fixed capacity in `src/core/config.h` and print `arm-none-ea
 | Frame snapshots, 3 × (768 + 1,024 + status) | 5.5 K | §4.4 |
 | Presenter shadow + two RGB565 line buffers | 2.5 K | §7.3 |
 | Audio ring (aligned) + PCM queue | 6 K | HW §5.3, EL §6.2 |
-| Interpreter and hot paths moved to SRAM | 20–40 K | a measured tier, not a promise (§3.2) |
+| Interpreter and hot paths moved to SRAM | 20–40 K | a measured tier, not a promise (§3.2). Measured in M12: tier 2 adds 34,096 B to `.data` (36,524 B against tier 0's 2,428), and ships |
 | FatFs, sector buffers, settings text | 8 K | |
 | Stacks, both cores | 8 K | measure high water |
 | Log ring | 4 K | EL §2.3. As built in M6: a 2 KiB ring (`ACE_LOG_RING`) and a 512 B line on core 0's stack |
 | **Total** | **~180–200 K** | **35–38 %** |
+
+As built at M12, the shipping image (tier 2, UART on) links 36,524 B of
+`.data` (the code in SRAM with it), 110,408 B of `.bss`, a 2 KiB heap and
+two 2 KiB stacks: about 153 KiB, 29 %.
 
 SRAM is not this project's constraint, unlike the previous one's (EL §1). Spend
 the slack on SRAM code placement if §3.2 needs it, not on features.
@@ -570,6 +639,24 @@ heaviest workload (EL §12). **M3 found that it does not** (§16): the prompt
 spins on a flag at `$059B` that the interrupt sets, so fast-forward cannot
 help there. The ROM does halt once a word in `VLIST` (`$0679`), and a program
 may, so M12 measures it on those.
+
+**As built in M12** (`src/core/z80.c`), the skip is in the `HALT` opcode,
+not in the loop above. `z80_run` records where the run may stop; a `HALT`
+that has just run, with neither NMI pending nor INT held with IFF1 set,
+adds the repeats to the end of the run at 4 T each, and as many to `R`.
+INT and NMI change only between runs (§11.1), so nothing could wake it
+sooner, and the step has cleared `int_blocked`, `q` and the `LD A,I` flag
+as each repeat would. The loop itself checks nothing more per
+instruction: a check there cost 10 host cycles an instruction, and
+stopped GCC inlining the step at all (§3.2). The repeats count in
+`z80_t.halts`, not `insns`; `z80_step` skips nothing; and
+`cfg.halt_skip` (`PICO_ACE_HALT_SKIP=OFF`) interprets them all, the
+control. `test_halt` runs `VLIST` in two machines, one skipping, and
+holds them equal field by field in registers, RAM and PCM;
+`test_z80_behaviour` holds a skipping run to a stepping one over
+lengths that are and are not multiples of 4, and an interrupt held as
+the `HALT` runs to being taken. Measured: scrolling 41.9 % of core 0 to
+3.4 % (§3.2).
 
 **The INT line is a level with a duration**, not a pulse at a point. A Z80
 samples INT at the end of each instruction. If the Ace holds INT for a fixed
@@ -920,8 +1007,9 @@ point the ROM scans the keys.
 **The firmware embeds it.** CMake converts `roms/ace.rom` into a `const`
 array at build time and **fails the build if its SHA-1 differs** from the
 one above, so a damaged or substituted file cannot boot and then misbehave
-(EL §8.1). The ROM runs from flash through the XIP cache like the code, or
-from SRAM if M12 measures that it pays. There is no ROM on the card, so
+(EL §8.1). The ROM runs from flash through the XIP cache like the code.
+An SRAM copy made at boot was measured in M12 and paid nothing with the
+interpreter at tier 2, so it was not kept (§3.2). There is no ROM on the card, so
 there is no missing-ROM page: the machine boots to `OK` with no card fitted.
 
 The host tests and CI use the same file, so the tests that run the real ROM
@@ -1263,6 +1351,21 @@ matrix itself while keys are typed over the UART. A script checks the log:
 one boot, heartbeats throughout, real-time ratio ≥ 0.995, every failure
 counter zero (EL §11.5).
 
+**As built in M12**: `tools/soak.sh ELF [MINUTES]` types `: k 49150 in 31
+and 31 xor ;` and `: s 0 begin 1+ dup . k . cr 100 30 beep 0 until ;`,
+which counts, prints the count beside the half-row ENTER L K J H as port
+`$BFFE` reads it (§2.4: 16 for H, 8 for J) and beeps, for ever. It types
+`h` and `j` in turn every 5 s and asks for the screen every eleventh key.
+`tools/soak-check.py` then requires one boot; heartbeats over the whole
+run with no irregular step; rt never below 0.995 and a mean of at least
+0.999; late fields, slips, dropped snapshots, keys lost, I²C errors, `ED`
+holes, log lines dropped, underrun samples, late refills and the
+beeper's overflow all zero; presents, keyboard polls and speaker edges
+growing; and the screen dumps showing the program reading both typed
+keys. UART keys enter the matrix without passing the southbridge, so
+they are not its key events; keys pressed on the PicoCalc are reported,
+not required. A gauge showing charging fails the run.
+
 ---
 
 ## 14. Measuring
@@ -1283,6 +1386,17 @@ presents / dropped snapshots, underrun samples, late refills, queue depth and
 low water, samples consumed per second (**the control**, nominal
 36,621.09 Hz), I²C errors, key events dropped, `ED` holes executed, log lines
 dropped, battery and charging, die temperature.
+
+**As built in M12**: `tools/perf-run.sh ELF OUTDIR [WORKLOAD...]` flashes
+an image once per workload, types its Forth over the UART a line at a
+time (the ROM drops keys that arrive while it handles the line before),
+and keeps each log; `tools/perf-summary.sh` reduces them to a line each.
+The words, each run on the host first, are `: c 0 30000 0 do i + loop drop
+;` looped by `: r begin c 0 until ;`, `: v begin vlist 0 until ;`, `: b
+begin 100 200 beep 0 until ;` and `: g begin 256 0 do 8 0 do j 11520 i +
+c! loop loop 0 until ;`, which rewrites the space's glyph at `$2D00`. The
+heartbeat's `perf` line also counts the `HALT` repeats skipped (§5.3),
+and the battery reads `90%` or `90% charging`.
 
 ---
 
@@ -1782,6 +1896,40 @@ sitting and kept only if it pays; §3.2 records the final numbers; a
 30-minute battery soak passes (§13.5) with every counter zero.
 *Measured:* each workload's core 0 share before and after; soak log.
 *Leaves out:* new features.
+
+**Done, 2026-10-04**, on the Plus 2 W (id `7458DC82A89AAC12`) at 150 MHz,
+gcc 15.2, the 19K machine. Five workloads (§14) over the UART, a boot
+each, in six sittings with their controls; the final numbers are in §3.2.
+Kept: `HALT` fast-forward, in the `HALT` opcode (§5.3), which took
+scrolling from 41.9 % of core 0 to 3.4 %; and **tier 2, now the
+default**, which took compute from 31.8 % to 23.3 %. Measured and not
+kept: the ROM in SRAM (nothing at tier 2, §10.2). Measured and kept as a
+feature: the tape traps, 0.7–0.9 points. Not tried: computed `goto` and
+CPU state in locals, which cannot change a decision at 23 %. Against what
+M11 shipped (tier 0, every `HALT` run), the heaviest workload went from
+scrolling at 57.7 % to compute at 23.3 %. Audio costs 0.4–0.8 points at
+tier 2. The host tests hold the skip to stepping (`test_halt`,
+`test_z80_behaviour`), and fail with `R` left alone or an interrupt held
+through the `HALT` ignored, each planted in turn; ZEXDOC, ZEXALL and FUSE
+pass.
+
+The soak (§13.5), `out/m12/soak/soak-20261004-231251.log`: 30.5 minutes,
+one boot, 366 heartbeats, rt never below 0.999 (mean 0.9991); late
+fields, slips, dropped snapshots, keys lost, I²C errors, `ED` holes, log
+lines dropped, underrun samples, late refills and beeper overflow all 0;
+55,008 keyboard polls, 91,867 presents, 1,672,992 speaker edges; 36,620–
+36,621 Hz consumed; core 0 at 20.8–21.4 %; the program read H on 15
+dumped rows and J on 14. The gauge read 90 % to 89 %, never charging.
+A first soak an hour earlier had the same counters, all 0, but its
+screen dumps fell only after `j`, so the check was tightened and the
+soak run again.
+
+*Not verified:* that the soak ran on battery, which the gauge cannot
+prove (HW §6): the owner's word is needed. Keys pressed on the PicoCalc
+during a soak (none were; the UART's go round the southbridge). The
+shipping build's figures, which it does not log. A build directory
+configured before M12 keeps its cached `PICO_ACE_RAM_TIER=0`; pass
+`-DPICO_ACE_RAM_TIER=2` once, as the M12 builds did.
 
 #### M13. Signal-level tape
 

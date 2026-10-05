@@ -9,9 +9,9 @@
  * includes a Pico header.
  *
  * Moves come in tiers, and PICO_ACE_RAM_TIER says how many are taken.
- * None is measured on this project yet: M2 measures the first against
- * flash, and M12 chooses the one that ships (design.md §15.2). A host
- * build leaves it at 0 and gets ordinary functions.
+ * Tier 2 ships (design.md §3.2, measured in M12); the firmware's CMake
+ * defaults to it. A host build leaves it at 0 and gets ordinary
+ * functions.
  *
  *   ACE_HOT1(name)  what the interpreter calls out to: the bus slow path,
  *                   port I/O, the beeper.

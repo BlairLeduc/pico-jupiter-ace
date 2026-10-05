@@ -749,6 +749,20 @@ static void ACE_HOT2(exec_main)(z80_t *c, uint8_t op, uint8_t q) {
         c->halted = true;
         PC--;
         T(4);
+        /* HALT fast-forward (design.md §5.3). With nothing to wake it,
+         * every step to the end of the run would be this HALT again, a
+         * 4 T NOP counting in R; INT and NMI change only between runs.
+         * Those steps are taken here at once, so the run loop pays
+         * nothing for them. int_blocked is clear: the step cleared it. */
+        if (c->halt_skip && !c->nmi_pending && !(c->int_line && c->iff1)) {
+            int32_t left = (int32_t)(c->run_end - c->t);
+            if (left > 0) {
+                uint32_t n = ((uint32_t)left + 3u) / 4u;
+                c->t += 4u * n;
+                c->r = (uint8_t)(c->r + n);
+                c->halts += n;
+            }
+        }
         break;
 
 /* LD r,r'; LD r,(HL); LD (HL),r */
@@ -899,7 +913,10 @@ void z80_reset(z80_t *c) {
 
 void z80_nmi(z80_t *c) { c->nmi_pending = true; }
 
-uint32_t ACE_HOT2(z80_step)(z80_t *c) {
+/* One step, inlined into z80_run by force: as a call it cost the run
+ * loop ~20 host cycles an instruction when GCC once declined to inline
+ * it (design.md §3.2, M12). */
+static inline __attribute__((always_inline)) uint32_t step(z80_t *c) {
     uint32_t t0 = c->t;
     c->insns++;
 
@@ -927,6 +944,11 @@ uint32_t ACE_HOT2(z80_step)(z80_t *c) {
     return c->t - t0;
 }
 
+uint32_t ACE_HOT2(z80_step)(z80_t *c) {
+    c->run_end = c->t;              /* one step: a HALT skips nothing */
+    return step(c);
+}
+
 /* Would z80_step accept an interrupt rather than run an instruction? */
 static inline bool int_due(const z80_t *c) {
     return c->nmi_pending || (c->int_line && c->iff1 && !c->int_blocked);
@@ -935,9 +957,10 @@ static inline bool int_due(const z80_t *c) {
 uint32_t ACE_HOT2(z80_run)(z80_t *c, uint32_t t_states) {
     uint32_t t0 = c->t;
     const uint8_t *lo = c->bus.trap_lo;
+    c->run_end = t0 + t_states;
     if (!lo) {
         while ((uint32_t)(c->t - t0) < t_states)
-            z80_step(c);
+            step(c);
         return c->t - t0;
     }
     /* One load per instruction while traps are set (EL §8.2). An
@@ -949,7 +972,7 @@ uint32_t ACE_HOT2(z80_run)(z80_t *c, uint32_t t_states) {
             c->t = t0 + t_states;
             break;
         }
-        z80_step(c);
+        step(c);
     }
     return c->t - t0;
 }

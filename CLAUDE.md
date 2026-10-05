@@ -9,8 +9,28 @@ Raspberry Pi Pico SDK. The guest is a Z80A at 3.25 MHz with an 8 KiB Forth
 ROM, a 32×24 character display from 768 bytes of screen RAM and 1 KiB of
 character RAM, a 40-key matrix, and a one-bit speaker and tape port.
 
-**Implementation status, 2026-10-04: M11 done.** Next is M12, the
-performance pass (`docs/design.md` §15).
+**Implementation status, 2026-10-04: M12 done.** Next is M13,
+signal-level tape (`docs/design.md` §15).
+
+**M12, the performance pass and soak** (`src/core/z80.c`, `hot.h`;
+`tools/perf-run.sh`, `perf-summary.sh`, `soak.sh`, `soak-check.py`), on
+the Plus 2 W (id `7458DC82A89AAC12`) at 150 MHz, gcc 15.2, 2026-10-04.
+Five Forth workloads over the UART, a boot each, every change against a
+control in the same sitting (design.md §3.2). Kept: `HALT` fast-forward,
+in the `HALT` opcode, scrolling 41.9 % of core 0 to 3.4 %; **tier 2, now
+the CMake default**, compute 31.8 % to 23.3 %. Not kept: the ROM in SRAM
+(nothing at tier 2). Not tried: computed `goto`, CPU state in locals. The
+heaviest workload is compute at 23.3 %, against M11's shipped 57.7 %
+(scrolling). A per-instruction check in `z80_run` had cost 23 %: it
+stopped GCC inlining the step; the step is now `always_inline` and the
+loop checks nothing new. At tier 0 the layout moves results by up to 9
+points between builds; tier 2 repeats to 0.1. The 30-minute soak passed
+(`out/m12/soak/soak-20261004-231251.log`): one boot, rt ≥ 0.999, every
+failure counter 0, both typed keys read by the program. **Not checked:**
+that it ran on battery (gauge 90 % to 89 %, never charging, which cannot
+prove it); keys pressed on the PicoCalc during the soak. A build
+directory from before M12 keeps its cached tier 0; pass
+`-DPICO_ACE_RAM_TIER=2` once.
 
 **M11, snapshots** (`src/core/snap_ace.c`, `snapshot.c`, `sha1.c`;
 `src/port/snapio.c`, `menu.c`), 2026-10-04. The `.ace` format was settled
@@ -279,7 +299,7 @@ core were verified on a Plus 2 W, and `design.md` §4.6 says which files to
 
 ## Build and test
 
-As of M11 these all work, and `tools/uart-type.sh` types at the guest.
+As of M12 these all work, and `tools/uart-type.sh` types at the guest.
 
 ```sh
 # host: src/core/ with the system compiler, no Pico SDK, under CTest
@@ -292,7 +312,8 @@ ctest --test-dir build/host --output-on-failure -LE long # without ZEX
 # firmware: needs PICO_SDK_PATH and arm-none-eabi-gcc on PATH
 cmake -S . -B build/pico -DPICO_BOARD=pico2 -DCMAKE_BUILD_TYPE=Release
 cmake --build build/pico -j          # -> build/pico/pico-ace.uf2, pico-ace-bench.uf2
-tools/build.sh -DPICO_ACE_RAM_TIER=2 build/pico-t2      # an SRAM tier, in its own dir
+tools/build.sh -DPICO_ACE_RAM_TIER=0 build/pico-t0      # another SRAM tier (2 ships), own dir
+tools/build.sh -DPICO_ACE_HALT_SKIP=OFF build/pico-nohs # every HALT interpreted, a control
 tools/build.sh -DPICO_ACE_UART=OFF build/pico-release   # the build that ships
 tools/build.sh -DPICO_ACE_AUDIO=OFF build/pico-noaudio  # paced on the timer, a control
 tools/build.sh -DPICO_ACE_BOOT_RAM=3k build/pico-3k     # this machine over the card's
@@ -309,6 +330,9 @@ tools/uart-screen.sh                 # the guest's screen, as text, into the log
 tools/uart-hold.sh                   # park the guest and check the card; again to resume
 tools/uart-type.sh '\x1e'             # RS opens the menu (US pauses); then the UART's bytes
 tools/uart-type.sh '\x0e\r'           #   are its keys, ^P ^N ^B ^F the arrows, ESC closes
+tools/perf-run.sh build/pico/pico-ace.elf out/perf    # design.md §14's workloads, a boot each
+tools/perf-summary.sh out/perf                          #   one line per workload
+tools/soak.sh build/pico/pico-ace.elf 30 out/soak       # §13.5's soak, on battery, then its check
 PICO_ACE_TAP=game.tap build/host/test/host/test_tape  # an archive .tap through the trap
 PICO_ACE_ACE_DIR=dir build/host/test/host/test_snap_ace  # every archive .ace in dir
 

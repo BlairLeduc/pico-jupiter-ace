@@ -118,11 +118,20 @@ else()
         set(PICO_ACE_AUDIO_ON 0)
     endif()
 
+    # PICO_ACE_HALT_SKIP=OFF interprets every HALT repeat, the control for
+    # the fast-forward (design.md §5.3, §15.2 M12).
+    option(PICO_ACE_HALT_SKIP "Skip HALT repeats rather than interpret them" ON)
+    if (PICO_ACE_HALT_SKIP)
+        set(PICO_ACE_HALT_SKIP_ON 1)
+    else()
+        set(PICO_ACE_HALT_SKIP_ON 0)
+    endif()
+
     # How much of the core's hot path runs from SRAM (src/core/hot.h).
-    # M2 measured tier 2 against 0; tier 1 holds the Ace's bus slow path
-    # and even port since M3 (design.md §3.2). M12 chooses the one that ships. The core library needs it too: that is where the
-    # marked functions are.
-    set(PICO_ACE_RAM_TIER 0 CACHE STRING "Hot-code SRAM tier, 0-2 (src/core/hot.h)")
+    # Tier 2 ships: M12 measured it against 0 and 1 (design.md §3.2). The
+    # core library needs it too: that is where the marked functions are.
+    # A build directory configured before M12 keeps its cached 0.
+    set(PICO_ACE_RAM_TIER 2 CACHE STRING "Hot-code SRAM tier, 0-2 (src/core/hot.h)")
     target_compile_definitions(pico_ace_core PRIVATE PICO_ACE_RAM_TIER=${PICO_ACE_RAM_TIER})
 
     # The firmware's version, git describe --always --dirty, for the
@@ -152,6 +161,7 @@ else()
         target_compile_definitions(${target} PRIVATE
             PICO_ACE_UART=${PICO_ACE_UART_ON}
             PICO_ACE_RAM_TIER=${PICO_ACE_RAM_TIER}
+            PICO_ACE_HALT_SKIP=${PICO_ACE_HALT_SKIP_ON}
             PICO_CLOCK_ADJUST_PERI_CLOCK_WITH_SYS_CLOCK=1
             # UART1 at 115200 8-N-1, TX GP4 / RX GP5 (hardware-notes.md §2.7).
             PICO_DEFAULT_UART=1

@@ -245,6 +245,93 @@ static int test_run_contract(void) {
     return 0;
 }
 
+/* The registers and flags stepping would leave; not the counters, the
+ * option or the bus. */
+static bool same_state(const z80_t *a, const z80_t *b) {
+    z80_t x = *a, y = *b;
+    x.insns = y.insns = x.halts = y.halts = x.run_end = y.run_end = 0;
+    x.halt_skip = y.halt_skip = false;
+    memset(&x.bus, 0, sizeof x.bus);
+    memset(&y.bus, 0, sizeof y.bus);
+    return memcmp(&x, &y, sizeof x) == 0;
+}
+
+/* HALT fast-forward (§5.3): a run that skips the repeats ends where one
+ * that steps them does, every instruction counted once in insns or in
+ * halts. Run lengths not a multiple of 4 check the overshoot. */
+static int test_halt_skip(void) {
+    static z80_t step;
+    static const uint8_t prog[] = { 0xAF, 0xFE, 0x28, DI, HALT };   /* q and F set first */
+    static const uint32_t lens[] = { 1, 3, 4, 5, 64, 1001, 69888 };
+    for (size_t i = 0; i < sizeof lens / sizeof lens[0]; i++) {
+        for (int k = 0; k < 2; k++) {
+            z80_t *c = boot(prog, sizeof prog);
+            c->halt_skip = k;
+            uint32_t t = z80_run(c, 30);
+            /* A HALT that has run has cleared both; a restored state
+             * need not have, and the repeats clear them as well. */
+            c->q = 0x28;
+            c->ld_a_ir = true;
+            t += z80_run(c, lens[i]);
+            if (!k) step = *c;
+            else {
+                CHECK(t == (uint32_t)(step.t), "run of %u: %u T, stepping %u",
+                      (unsigned)lens[i], (unsigned)t, (unsigned)step.t);
+                CHECK(same_state(c, &step), "run of %u: state differs from stepping",
+                      (unsigned)lens[i]);
+                CHECK(c->insns + c->halts == step.insns, "run of %u: %u + %u, stepping %u",
+                      (unsigned)lens[i], (unsigned)c->insns, (unsigned)c->halts,
+                      (unsigned)step.insns);
+                CHECK(step.halts == 0, "stepping skipped %u", (unsigned)step.halts);
+                CHECK(lens[i] < 8 || c->halts > 0, "run of %u skipped nothing",
+                      (unsigned)lens[i]);
+            }
+        }
+    }
+
+    /* An interrupt the CPU would take is taken, not skipped past: with
+     * INT held and IFF1 set the run leaves the HALT at once. Control:
+     * with INT low the same run stays halted to the end, running the
+     * HALT once and skipping the other 249. */
+    static const uint8_t ei[] = { IM1, EI, HALT };
+    for (int held = 0; held < 2; held++) {
+        z80_t *c = boot(ei, sizeof ei);
+        c->halt_skip = true;
+        z80_run(c, 16);                                 /* IM 1, EI, HALT */
+        CHECK(c->halted, "not halted after the HALT");
+        z80_set_int(c, held);
+        uint32_t t = z80_run(c, 1000);
+        if (held)
+            CHECK(!c->halted && c->pc != 0x0003 && c->halts == 0,
+                  "INT held: pc %04x, %u skipped", c->pc, (unsigned)c->halts);
+        else
+            CHECK(c->halted && c->pc == 0x0003 && t == 1000 && c->halts == 249,
+                  "INT low: pc %04x, %u T, %u skipped", c->pc, (unsigned)t, (unsigned)c->halts);
+    }
+
+    /* EI; HALT with INT held: the HALT runs once, and the interrupt after
+     * it, at the end of the HALT's one step, wakes it. */
+    z80_t *c = boot(ei, sizeof ei);
+    c->halt_skip = true;
+    z80_step(c);
+    z80_set_int(c, true);
+    z80_run(c, 8);                                      /* EI, then HALT */
+    CHECK(c->halted && c->int_blocked == false, "after EI; HALT");
+    z80_run(c, 1);
+    CHECK(c->pc == 0x0038 && c->halts == 0, "pc %04x", c->pc);
+
+    /* The same in one long run: the HALT, held off by EI, must not skip
+     * past the interrupt that is due as soon as it has run. */
+    c = boot(ei, sizeof ei);
+    c->halt_skip = true;
+    z80_step(c);
+    z80_set_int(c, true);
+    uint32_t t = z80_run(c, 1000);
+    CHECK(c->halts == 0 && t < 1000 + 4, "%u skipped", (unsigned)c->halts);
+    CHECK(c->pc != 0x0003 && !c->halted, "still halted at %04x", c->pc);
+    return 0;
+}
+
 /* SCF and CCF take X and Y from (Q ^ F) | A, where Q is F if the
  * previous instruction wrote the flags and 0 if it did not. CP $28 leaves
  * X and Y set in F and clear in A, so they survive SCF only when an
@@ -273,7 +360,7 @@ static int test_q(void) {
 
 int main(void) {
     if (test_ei_delay() || test_halt() || test_modes() || test_level() || test_ld_a_i() ||
-        test_nmi() || test_run_contract() || test_q())
+        test_nmi() || test_run_contract() || test_halt_skip() || test_q())
         return 1;
     TEST_DONE();
 }
