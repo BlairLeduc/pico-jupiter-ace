@@ -2054,9 +2054,15 @@ After review (PR #12), the recorder keeps only whole blocks
 (`test_cassette` holds it, with no room for the data and with a reset
 part-way, and fails with the old rule planted), and the port saves by the
 trap when the image is full, recycles the scratch and keeps a recording
-the card was missing for. *Not verified:* those three port changes on the
-board (the probe's SWD wedged before they could be flashed); Play by hand
-on the board (on the host only);
+the card was missing for. On the board, 2026-10-05, in the 51K machine:
+`SAVE M13A` and then `SAVE M13B` each went at signal level to its own
+file with nothing dropped, the scratch emptied between them, and
+`0 65534 BSAVE M13BIG` recorded its header at signal level and, with no
+room for the data in the image, had the trap save the 65,534 bytes after
+it in the same file; the ROM said `OK` (`out/m13/device3.log`).
+*Not verified:* a recording kept for a missing card, on the board (the
+card would have to go in the milliseconds between the save and its
+park); Play by hand on the board (on the host only);
 a card pulled while a recording waits for its park; recording onto a tape
 the user put in the deck (the board's went to a new file); a loader of a
 program's own (none to hand).

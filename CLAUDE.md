@@ -40,8 +40,11 @@ empty, a LOAD of a name the card lacks logged the last file the header
 search had looked at (M10's; only the message was wrong). After Codex's review the recorder keeps only whole
 blocks (`test_cassette`, with a control), and the port saves by the trap
 when the 64 KiB image is full, empties the scratch at each header, and
-keeps a recording when the card is missing until the card changes; those
-port changes were built but not flashed (SWD wedged again). **Not
+keeps a recording when the card is missing until the card changes. On
+the board: two signal-level SAVEs to separate files with the scratch
+emptied between them, and a 65,534-byte BSAVE whose data the trap saved
+for want of room (`out/m13/device3.log`); the card-missing case was not
+checked on the board. **Not
 checked:** Play by hand from the menu on the board (host only); a card
 pulled while a recording waits to be written; a recording onto a tape the
 user put in the deck (the save went to a new file).
