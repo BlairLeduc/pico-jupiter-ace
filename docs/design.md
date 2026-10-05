@@ -1921,14 +1921,15 @@ fields, slips, dropped snapshots, keys lost, I²C errors, `ED` holes, log
 lines dropped, underrun samples, late refills and beeper overflow all 0;
 55,008 keyboard polls, 91,867 presents, 1,672,992 speaker edges; 36,620–
 36,621 Hz consumed; core 0 at 20.8–21.4 %; the program read H on 15
-dumped rows and J on 14. The gauge read 90 % to 89 %, never charging.
+dumped rows and J on 14. The gauge read 90 % to 89 %, never charging, and
+the owner confirmed on 2026-10-05 that the PicoCalc ran on its battery
+throughout.
 A first soak an hour earlier had the same counters, all 0, but its
 screen dumps fell only after `j`, so the check was tightened and the
 soak run again.
 
-*Not verified:* that the soak ran on battery, which the gauge cannot
-prove (HW §6): the owner's word is needed. Keys pressed on the PicoCalc
-during a soak (none were; the UART's go round the southbridge). The
+*Not verified:* keys pressed on the PicoCalc during a soak (none were;
+the UART's go round the southbridge). The
 shipping build's figures, which it does not log. A build directory
 configured before M12 keeps its cached `PICO_ACE_RAM_TIER=0`; pass
 `-DPICO_ACE_RAM_TIER=2` once, as the M12 builds did.
