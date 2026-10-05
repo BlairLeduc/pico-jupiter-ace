@@ -20,7 +20,12 @@ Z80's clock is the pixel counter's CNT0, and a memory access to `$2400`
 or `$2C00` in the first 128 T of display lines 0–191 is held to T 128.
 The same reading put the display at the circuit's line 0, 64 lines after
 INT, not MAME's 56. **Modelled, on by default** (`PICO_ACE_WAIT=OFF` is
-the control; `ace-trace` turns it off for xAce). Host: the ROM printing
+the control; `ace-trace` turns it off for xAce). The schematic, Wenzel's
+as nocash commented it, is `docs/ace-sch-nocash.gif`; from it §16 also
+settled the clock, the field's shape and INT (now `#define`s), the port
+decode, the speaker's polarity and the memory decode, and found the
+data bus without pull-ups, so open bus is the video's fetch, not `$FF`
+(not modelled). Host: the ROM printing
 a screenful takes 15.9 % longer, dreamsoft racer runs 3.8 % fewer
 instructions a field, `VLIST` does not move; taking each access 4–11 T
 into its instruction instead of at its start moved nothing that matters.
@@ -315,6 +320,7 @@ reopen these without the owner.
 | `docs/design.md` | the **guest** and the shape of this project's code: Ace hardware model, architecture, budgets, milestones, unverified constants |
 | `docs/hardware-notes.md` | the **host**: PicoCalc wiring, protocols, timing, measured costs, quirks |
 | `docs/emulator-lessons.md` | what pico-atom taught about writing any emulator on the PicoCalc |
+| `docs/ace-sch-nocash.gif` | the Ace's circuit: Bodo Wenzel's schematic as nocash commented it (`THIRD-PARTY.md`) |
 
 Read `docs/design.md` before writing emulator code. Its §4.6 says which
 pico-atom files to reuse, §15 says what each milestone builds and when it is

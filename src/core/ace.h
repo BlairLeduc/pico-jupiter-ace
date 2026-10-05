@@ -26,10 +26,11 @@ typedef enum {
     ACE_RAM_51K,      /* + 48 KiB at $4000-$FFFF                          */
 } ace_ram_t;
 
-/* What the machine is built from. Everything below `rom` is a guest fact
- * that §16 has not settled from a primary source, so it is configuration
- * rather than a #define (EL §14.2); ace_config_default gives the values
- * and says where each came from. */
+/* What the machine is built from. ace_config_default gives the values
+ * and says where each came from. The field's shape is settled, and its
+ * #defines are in config.h; it stays here so that a test can run a field
+ * of another shape as its control. The bus values below it are not
+ * settled (§16), so they are configuration (EL §14.2). */
 typedef struct {
     ace_ram_t ram;
 

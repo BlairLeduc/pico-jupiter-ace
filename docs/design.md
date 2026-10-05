@@ -121,12 +121,16 @@ them (§16), but not the hardware's values:
 
 - **What a read of character RAM returns.** The CPU cannot read it back, but a
   read returns *something*, and a program that tests it would see that.
-  Settle from the schematic. `$FF` meanwhile, as configuration.
-- **What unpopulated memory reads.** The ROM sizes RAM at boot by writing
-  `$FC` a page at a time from `$3D00` and reading it back (`$0028`), so any
-  value but `$FC` puts RAMTOP in the right place. EL §4.1 says to model open
-  bus rather than assume `$FF`. What the Ace's bus actually floats to is
-  still to settle; `$FF` meanwhile, as configuration.
+  The schematic shows a fight, through 1 kΩ resistors, between the CPU's
+  own address bits and the glyph data (§16). `$FF` meanwhile, as
+  configuration.
+- **What unpopulated memory reads.** The schematic has no pull-ups on the
+  data bus: an undriven read sees the video circuit's fetch (§16). The ROM
+  sizes RAM at boot by writing `$FC` a page at a time from `$3D00` and
+  reading it back (`$0028`), so any value but `$FC` puts RAMTOP in the
+  right place. EL §4.1 says to model open bus rather than assume `$FF`.
+  The value a read gives is still to settle; `$FF` meanwhile, as
+  configuration.
 - **Which mirror the ROM writes the screen through.** The waiting one,
   `$2400` (and the character set through `$2C00`). This decides how much
   wait-state modelling matters (§6.4).
@@ -2161,6 +2165,19 @@ host's ZEXDOC and ZEXALL pass.
 access's place within an instruction and the RC on `/WAIT` stay as §16
 leaves them; the shipping build (`PICO_ACE_UART=OFF`) on the device.
 
+A follow-up on the same PR read the rest of the schematic against §16
+(`docs/ace-sch-nocash.gif`, 2026-10-05). It settled the CPU clock, the
+line, the field, INT's line and length (now `ACE_LINE_T` and the rest in
+`config.h`), the port decode, the speaker's polarity and the memory
+decode. `test_bus` now checks that an interrupt acknowledge in IM 0, 1
+or 2 leaves the speaker alone, as the port's read strobe needs `/RD`; an
+acknowledge planted to read the port fails it. The schematic also shows
+that nothing pulls the data bus up. An undriven read, D6 and D7 of an
+`IN`, and the IM 2 vector byte therefore see the video circuit's fetch
+through two 1 kΩ arrays, not `$FF`. That is recorded in §16 and not
+modelled: the ROM does not depend on it, and the value needs a real Ace
+to settle.
+
 #### M15. Finish
 
 *Depends on:* M14.
@@ -2186,22 +2203,22 @@ runtime configuration (EL §14.2).
 
 | Constant | Believed | Primary source | Confidence |
 |---|---|---|---|
-| CPU clock | 3.25 MHz | schematic (crystal, divider) | high |
-| T-states per line | 208 (416 pixel clocks ÷ 2) | schematic; MAME `jupace` | medium. MAME's source read 2026-10-03: `set_raw(6.5_MHz_XTAL, 416, …, 312, …)`. Not yet against the schematic |
-| Lines per field | 312 | schematic; MAME | medium. MAME agrees (above); FRAMES counts one a field under it (`test_field`) |
-| First active line, INT line | 0 and 248 | schematic; MAME; trace diff | medium-high. **From the schematic**, 2026-10-05 (§6.4): one 18-bit counter, CNT0–CNT8 the pixel and CNT9–CNT17 the line; VIDEN, the display, is lines 0–191 and FIELD, which drives INT, lines 248–255 of the same count, which resets at 312. `ace_config_default` takes the display from line 0. MAME's 56 (read 2026-10-03, the default until M14) is only where it puts the picture in its bitmap: under it INT fell 120 lines before the display, against the circuit's 64. A redraw after INT that fits in those 64 lines is finished by line 0 (`test_field`) |
-| INT duration | 8 lines, 1,664 T | schematic (the INT generator) | medium. MAME clears INT at line 256. **Bounded by the ROM**, 2026-10-03: its handler opens with a ~800 T delay and reaches `EI` at `$017C` 1,819 T after INT rises at idle, so INT held much past ~1,800 T would be taken twice; FRAMES (`$3C2B`) counts once a field at 1,664 T and twice at 2,500 (`test_field`) |
-| IM 2 vector byte (bus float on acknowledge) | `$FF` | schematic | low |
+| CPU clock | 3.25 MHz | schematic (crystal, divider) | **settled** from the schematic (Wenzel, commented by nocash, `docs/ace-sch-nocash.gif`), read 2026-10-05: the 6.5 MHz crystal clocks the counter, and the Z80's clock is its first stage, CNT0 (Z9A), so a T-state is two pixels and the CPU is in step with the video (§6.4) |
+| T-states per line | 208 (416 pixel clocks ÷ 2) | schematic; MAME `jupace` | **settled** from the schematic, 2026-10-05: Z21C ANDs CNT5, CNT7 and CNT8 (32 + 128 + 256) and clears the pixel count at 416; CNT8 falling clocks the line count, so a line begins at pixel 0. MAME agrees (`set_raw(6.5_MHz_XTAL, 416, …)`, read 2026-10-03). `ACE_LINE_T` |
+| Lines per field | 312 | schematic; MAME | **settled** from the schematic, 2026-10-05: the 50 Hz version's Z21B ANDs CNT12–CNT14 (8 + 16 + 32) and Z20A that with CNT17 (256) to clear the line count at 312. MAME agrees; FRAMES counts one a field under it (`test_field`). `ACE_FIELD_LINES` |
+| First active line, INT line | 0 and 248 | schematic; MAME; trace diff | **settled** from the schematic, 2026-10-05 (§6.4): VIDEN is lines 0–191 (`NAND(CNT16, CNT15)` with `NOR(CNT17, CNT8)`), and FIELD, Z21A's AND of CNT15, CNT16 and Z21B's output, lines 248–255 of the same count. MAME's 56 (read 2026-10-03, the default until M14) is only where it puts the picture in its bitmap: under it INT fell 120 lines before the display, against the circuit's 64. A redraw after INT that fits in those 64 lines is finished by line 0 (`test_field`). `ACE_ACTIVE_LINE`, `ACE_INT_LINE` |
+| INT duration | 8 lines, 1,664 T | schematic (the INT generator) | **settled** from the schematic, 2026-10-05: `/INT` is Z19D's NAND of FIELD with VCC, so INT is FIELD, lines 248–255, exactly. MAME clears INT at line 256 too. The ROM bounds it (2026-10-03): its handler reaches `EI` at `$017C` 1,819 T after INT rises at idle, and FRAMES (`$3C2B`) counts once a field at 1,664 T and twice at 2,500 (`test_field`). `ACE_INT_T` |
+| IM 2 vector byte (bus float on acknowledge) | `$FF` | schematic | low for the value. The schematic shows no device driving the bus on an acknowledge, and the pull-ups by the data bus are marked "not installed": the CPU reads the video circuit's fetch through RN1 and RN2, as an unpopulated read does (below). The ROM uses IM 1 |
 | ROM size and hashes | 8,192 bytes; SHA-1 `597ba8a1…` (§10.2) | `roms/ace.rom`, hashed 2026-10-03 | **settled** 2026-10-03: both halves' CRC32 and SHA-1 match `ROM_LOAD` in MAME's `src/mame/cantab/jupace.cpp` |
-| Video and character RAM mirrors | §2.2 | schematic; ROM's own addresses | medium-high. The ROM writes the screen at `$2400`, workspace at `$2700`, the character set at `$2C00` and keeps its variables at `$3C00`, and boots in all three machines with §6.1's table (`test_boot`, 2026-10-03). MAME's map agrees, but reads character RAM back |
+| Video and character RAM mirrors | §2.2 | schematic; ROM's own addresses | **settled** from the schematic, 2026-10-05: the 74LS138 Z29 decodes A12–A14 with A15 low into ROM `$0000` and `$1000` (two 2732s, A0–A11, no mirror), video `$2000–$2FFF` and work RAM `$3000–$3FFF`; video RAM splits on A11 (screen, character set) and A10 (priority), and every 2114 has A0–A9 only, so each 1 KiB repeats as §2.2 says. The ROM boots in all three machines with §6.1's table (`test_boot`, 2026-10-03) |
 | Which mirror waits, and for how long | `$2400`/`$2C00` wait during active display | schematic | **settled** 2026-10-05 from the schematic (§6.4): `/WAIT` is `vram.mreq` (the 74LS138's `$2000–$2FFF`, gated by `/MREQ`) with A10 high and VIDEN up, so a memory access to `$2400–$27FF` or `$2C00–$2FFF` in the first 256 pixels, 128 T, of a display line is held until T 128. The Z80's clock is CNT0, so the hold is a fixed function of the T-state in the field. Executed in `test_wait`. Not settled: the T-state within an instruction at which the access samples WAIT (the core places it at the instruction's start; M14 found the results move by 12 T in 625,334) and the RC on `/WAIT` (330 Ω, 2.2 nF) |
-| Character RAM read value | `$FF` (`cram_read`) | schematic | low. Runtime configuration. MAME reads it back as RAM, xAce too |
-| Unpopulated read value | `$FF` (`open_bus`) | schematic; ROM's RAM sizing | low for the value; **what the ROM needs is settled**, 2026-10-03: its sizing at `$0028` writes `$FC` a page at a time from `$3D00` and stops at the first page that does not read it back, so any value but `$FC` works. RAMTOP (`$3C18`) is `$4000`, `$8000` and `$0000` in the three machines (`test_boot`) |
+| Character RAM read value | `$FF` (`cram_read`) | schematic | low. Runtime configuration. The schematic gives character RAM no path to the CPU but RN2, 1 kΩ a bit, while the CPU's A3–A9 drive its address on the video bus, which RN1 also joins to the CPU: the read is a fight between the address and the glyph data, as the Mercury Ace's notes describe. Not modelled. MAME and xAce read it back as RAM |
+| Unpopulated read value | `$FF` (`open_bus`) | schematic; ROM's RAM sizing | low for the value. The schematic has no pull-ups on the data bus (marked "not installed") and joins it through 1 kΩ arrays to the video circuit's screen byte (RN1) and glyph row (RN2), so an undriven read sees the current fetch, not `$FF`; where the two differ the line sits between levels. Not modelled. **What the ROM needs is settled**, 2026-10-03: its sizing at `$0028` writes `$FC` a page at a time from `$3D00` and stops at the first page that does not read it back, so any value but `$FC` works. RAMTOP (`$3C18`) is `$4000`, `$8000` and `$0000` in the three machines (`test_boot`) |
 | User RAM mirrors with a pack fitted | still mirrored at `$3000–$3BFF` | pack schematic | low |
-| Port decode | A0 only | schematic; ROM | medium |
+| Port decode | A0 only | schematic; ROM | **settled** from the schematic, 2026-10-05: the port is Z26B's OR of `/IORQ` and A0, with no other address line; reads are that ORed with `/RD`, writes with `/WR`. An interrupt acknowledge, which asserts `/IORQ` but not `/RD`, does not read it (`test_bus`) |
 | Keyboard matrix | §2.4 | **ROM, executed** | **settled** 2026-10-03: every cell pressed at the prompt alone, with SHIFT, with SYMBOL SHIFT and with both (`test_keyboard`). The cells agree with MAME's table; the editing set did not agree with this design's earlier belief (up is SHIFT+6, down SHIFT+7, and SHIFT+3 types `3`) |
-| Port read bits D5–D7 | tape on D5, rest high | schematic; ROM's tape loader | low-medium. MAME's `io_r` agrees: `$FF`, D5 cleared by the tape signal |
-| `IN` vs `OUT` speaker direction | `IN` one way, `OUT` the other | schematic; ROM's `BEEP` | medium. MAME: `IN` low, `OUT` high, which `ace.c` follows. MAME also takes the tape output from **D3 of the `OUT`**, not from the access. **Settled** 2026-10-05 by execution (`test_cassette`): the ROM's `SAVE` drives D3 and makes only one `IN` a byte, so the access line decodes to nothing and D3 decodes to the `.tap` the trap writes; the tape output is D3 (§2.3). The prompt makes no edge: its key scan is all `IN`s (`test_boot`). Executing `BEEP` (2026-10-04, §8) gives the manual's 8m µs only because each access moves the level: its `OUT` writes the counter's high byte, whose bits do not alternate. So the speaker follows the access; the polarity is still MAME's, and inaudible through the DC blocker |
+| Port read bits D5–D7 | tape on D5, rest high | schematic; ROM's tape loader | D5 **settled** from the schematic, 2026-10-05: the port's 74LS367 (Z14) drives D0–D4 from the matrix and D5 from EAR. **D6 and D7 are not driven**, so they read the video circuit's fetch as an unpopulated read does (above), not high. Still `$FF` here, as MAME's `io_r` has it; nothing in the ROM reads them |
+| `IN` vs `OUT` speaker direction | `IN` low, `OUT` high | schematic; ROM's `BEEP` | **settled** (below). MAME: `IN` low, `OUT` high, which `ace.c` follows. MAME also takes the tape output from **D3 of the `OUT`**, not from the access. **Settled** 2026-10-05 by execution (`test_cassette`): the ROM's `SAVE` drives D3 and makes only one `IN` a byte, so the access line decodes to nothing and D3 decodes to the `.tap` the trap writes; the tape output is D3 (§2.3). The prompt makes no edge: its key scan is all `IN`s (`test_boot`). Executing `BEEP` (2026-10-04, §8) gives the manual's 8m µs only because each access moves the level: its `OUT` writes the counter's high byte, whose bits do not alternate. So the speaker follows the access. The polarity is **settled** from the schematic, 2026-10-05: the port's write strobe sets the latch Z24C/Z24D ("speaker on") and its read strobe resets it, so `OUT` high and `IN` low, as MAME and `ace.c` have it; D3 is clocked into Z27A, the tape output, on the write |
 | Display polarity | set bits white | ROM, executed, against photographs | high. **Executed** 2026-10-03: with set bits as ink, the character set the ROM writes reads as text on a paper ground that its spaces clear to (`test/host/golden/boot.ppm` and `glyphs.ppm`, looked at). That paper is black and ink white is from photographs |
 | ROM uses IM 1 | yes | ROM | **settled** 2026-10-03: `IM 1` at `$008E`, `EI` at `$009F`; IM is 1 at the prompt in every machine (`test_boot`). The handler is at `$013A` |
 | ROM halts when waiting for a key | no | ROM | **settled** 2026-10-03, by execution: at the prompt it spins on FLAGS (`$3C28`) bit 5 at `$059B`, which the interrupt sets on ENTER, and never halts (`test_boot`). It does `HALT` once a word in `VLIST` (`$0679`), found by the trace diff |
@@ -2292,8 +2309,9 @@ To obtain and record (with revision or date) before transcribing constants:
   map, `BEEP`.
 - **The Ace schematic**: clock, video timing, INT generator, mirrors, wait
   logic, port decode, bus pull-ups. Bodo Wenzel's drawing of the original
-  board (2006, 2114 RAMs), commented and rearranged by Martin Korth
-  (nocash) in July 2010 (`ace-sch.gif`), read 2026-10-05 for §6.4; and the
+  board (dated March 16, 2006, 2114 RAMs), commented and rearranged by
+  Martin Korth (nocash) in July 2010: `docs/ace-sch-nocash.gif`
+  (`THIRD-PARTY.md`), read 2026-10-05 for §6.4 and §16; and the
   Mercury Ace clone's description of the same circuit as logic equations
   (wilco2009, codeberg.org/wilco2009/Mercury_Ace, `README.md` at
   `28744c3`, 2025-01-04), which agrees with it net for net.

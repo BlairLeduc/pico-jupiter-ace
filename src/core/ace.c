@@ -11,19 +11,20 @@ void ace_config_default(ace_config_t *cfg) {
     cfg->ram = ACE_RAM_19K;                    /* §18 item 1 */
     cfg->rom = NULL;
 
-    /* The circuit's counters (§6.4, §16): a line of 416 pixels at
-     * 6.5 MHz is 208 T and a field 312 lines; the display is lines 0-191
-     * and INT (FIELD) lines 248-255, of the same count. MAME's line 56
-     * is only where it puts the picture in its bitmap. */
-    cfg->line_t      = 208;
-    cfg->field_lines = 312;
-    cfg->int_line    = 248;
-    cfg->int_t       = 8 * 208;
-    cfg->active_line = 0;
+    /* The circuit's counters, settled from the schematic (config.h,
+     * §16). MAME's line 56 is only where it puts the picture in its
+     * bitmap. */
+    cfg->line_t      = ACE_LINE_T;
+    cfg->field_lines = ACE_FIELD_LINES;
+    cfg->int_line    = ACE_INT_LINE;
+    cfg->int_t       = ACE_INT_T;
+    cfg->active_line = ACE_ACTIVE_LINE;
 
-    /* Neither value is settled (§16). The ROM's RAM sizing needs only an
-     * unpopulated read that is not $FC (§6.2); $FF is MAME's port idle
-     * level and the usual pulled-up bus. */
+    /* Neither value is settled (§16). The schematic has no pull-ups on
+     * the data bus: an undriven read sees the video circuit's fetch
+     * through two 1K arrays, which this does not model. The ROM's RAM
+     * sizing needs only an unpopulated read that is not $FC (§6.2); $FF
+     * is MAME's port idle level. */
     cfg->cram_read = 0xFFu;
     cfg->open_bus  = 0xFFu;
 

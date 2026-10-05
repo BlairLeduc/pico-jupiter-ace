@@ -105,14 +105,20 @@
 
 /* ---- Timing (design.md §2.1, §11) ------------------------------------ */
 
-#define ACE_CPU_HZ        3250000u  /* 6.5 MHz crystal / 2                 */
+#define ACE_CPU_HZ        3250000u  /* 6.5 MHz crystal / 2: the clock is CNT0 */
+
+/* The field, from the schematic's counter (design.md §6.4, §11.1, §16):
+ * a line is 416 pixels, two to a T; the field is 312 lines, of which the
+ * display is 0-191 and FIELD, which is INT, 248-255. */
+#define ACE_LINE_T            208u
+#define ACE_FIELD_LINES       312u
+#define ACE_ACTIVE_LINE         0u
+#define ACE_INT_LINE          248u
+#define ACE_INT_T            (8u * ACE_LINE_T)                     /* 1,664 T */
 
 /* VIDEN, the part of a display line in which the video circuit fetches
  * and the waiting mirrors hold the CPU: 256 pixels at 6.5 MHz (§6.4). */
 #define ACE_VIDEN_T          (ACE_SCREEN_W / 2u)                  /* 128 T */
-
-/* The rest of the field's shape (§11.1) is runtime configuration in
- * ace_config_t until §16 settles it. */
 
 /* ---- Audio (design.md §8; EL §6; hardware-notes.md §5) ---------------- */
 
