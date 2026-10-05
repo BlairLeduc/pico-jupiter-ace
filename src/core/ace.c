@@ -28,6 +28,7 @@ void ace_config_default(ace_config_t *cfg) {
     cfg->open_bus  = 0xFFu;
 
     cfg->tape_traps = true;
+    cfg->halt_skip  = true;
 }
 
 uint32_t ace_ram_bytes(ace_ram_t ram) {
@@ -164,6 +165,7 @@ bool ace_init(ace_t *m, const ace_config_t *cfg) {
     connect_bus(m);
     tape_init(m);
     z80_reset(&m->cpu);
+    m->cpu.halt_skip = cfg->halt_skip;
     beeper_init(&m->beeper, m->cpu.t, m->speaker, ACE_CPU_HZ,
                 ACE_AUDIO_RATE_NUM, ACE_AUDIO_RATE_DEN);
     return true;

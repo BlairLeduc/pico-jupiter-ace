@@ -84,6 +84,7 @@ int main(void) {
     ace_config_default(&cfg);
     cfg.rom = ace_rom;
     cfg.ram = g_boot.settings.ram;
+    cfg.halt_skip = PICO_ACE_HALT_SKIP;   /* OFF is M12's control */
 #ifdef PICO_ACE_BOOT_RAM
     cfg.ram = PICO_ACE_BOOT_RAM;   /* over the file's (EL §8.7) */
 #endif
@@ -92,10 +93,11 @@ int main(void) {
         for (;;) sleep_ms(1000);
     }
     log_printf("  guest        : %s, %lu bytes of user RAM, %lu T a field at %lu Hz, "
-               "ROM %s, hot code in SRAM to tier %u (hot.h)\n",
+               "ROM %s, hot code in SRAM to tier %u (hot.h), HALT %s\n",
                ace_ram_name(cfg.ram), (unsigned long)ace_ram_bytes(cfg.ram),
                (unsigned long)ace_field_t(&g_ace),
-               (unsigned long)ACE_CPU_HZ, ACE_ROM_SHA1, (unsigned)PICO_ACE_RAM_TIER);
+               (unsigned long)ACE_CPU_HZ, ACE_ROM_SHA1, (unsigned)PICO_ACE_RAM_TIER,
+               cfg.halt_skip ? "skipped" : "interpreted");
 
     /* Audio last in bring-up order (hardware-notes.md §10), on core 0,
      * whose IRQ the refill is, and after core 1's LCD has claimed its

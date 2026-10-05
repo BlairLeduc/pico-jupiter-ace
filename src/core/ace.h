@@ -56,6 +56,10 @@ typedef struct {
      * Even when set, the trap stands aside for a ROM whose routines are
      * not the stock ROM's. */
     bool tape_traps;
+
+    /* Skip a HALT's repeats rather than run them (z80_t.halt_skip,
+     * §5.3). On by default; off is M12's control. */
+    bool halt_skip;
 } ace_config_t;
 
 typedef struct ace_s {

@@ -263,6 +263,19 @@ Measure first (§12). Then, in order of what paid off:
    ADC/SBC), then the dispatch loop. A 256-byte const table moved to SRAM
    measured nothing. Keep tier membership in one header of macros so a tier
    is a build option, and build each tier in its own build directory.
+4. **Skip what the guest is only waiting through.** A `HALT` repeated until
+   the next interrupt is free to skip if the interrupt line changes only
+   between run slices: add the repeats' cycles and refresh counts at once.
+   On a Z80 Forth whose screen listing halts once a word, that took the
+   listing from 42 % of core 0 to 3 %. Hold a skipping machine to a
+   stepping one, register for register, on the real ROM.
+5. **Keep the run loop bare.** Put a skip in the opcode that causes it,
+   not in a check before every instruction. On the Z80 such a check cost
+   10 host cycles an instruction by itself, and it also stopped GCC inlining
+   the step function into the loop, which cost 20 more: together 23 % on a
+   compute loop, found only because the same code was measured against
+   the previous release in one sitting. Look at the loop's disassembly
+   after any change to it, and mark the step `always_inline`.
 
 ---
 
@@ -1001,7 +1014,13 @@ emulator specifically:
 - **Measure every feature against a control build** with only that feature
   removed, in the same sitting. That is how a 3.5 % port hook, a 2.5–4 % VIA
   regression and its fix, and a recorder hook costing nothing were told apart
-  from layout noise. Code layout alone moves results by about 1 %.
+  from layout noise. Code layout alone moved results by about 1 % on the
+  6502. With a Z80 interpreter left in flash,
+  four builds differing only outside it read 31.8–41.1 % of core 0 on one
+  compute loop, steady within each run: the XIP cache's mapping decides it.
+  Measure placement tiers before any other change, and compare others
+  only at the tier you ship, where one SRAM image read the same to 0.1
+  point in three sittings.
 - **Heartbeat contents**: real-time ratio, core 0 share and headroom, host
   cycles per instruction, longest present, presents/full presents/dropped
   snapshots, underrun samples, late refills, queue depth and low water,

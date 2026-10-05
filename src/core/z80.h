@@ -86,6 +86,14 @@ typedef struct {
     uint32_t   t;                /* T-states, wrapping                    */
     uint32_t   insns;            /* instructions run, wrapping (§14)      */
     uint32_t   ed_holes;         /* ED opcodes that act as NOPs (§5.1)    */
+    uint32_t   halts;            /* HALT repeats skipped, not in insns    */
+    uint32_t   run_end;          /* t where the current run may stop      */
+
+    /* Not CPU state but an option, which z80_reset keeps: in z80_run a
+     * HALT jumps its repeats to the end of the run instead of running
+     * them, leaving T, R and the rest as stepping would (design.md §5.3).
+     * z80_step runs one HALT and skips nothing. */
+    bool       halt_skip;
 
     z80_bus_t  bus;
 } z80_t;
@@ -96,8 +104,9 @@ void     z80_reset(z80_t *c);
 
 /* Run whole instructions until at least t_states have passed, and return
  * the T-states actually run (design.md §4.2: the caller carries the
- * overshoot). An interrupt acceptance counts as an instruction. A trap
- * that stalls ends the run at exactly t_states. */
+ * overshoot). An interrupt acceptance counts as an instruction; a HALT
+ * repeat skipped by halt_skip counts in halts instead. A trap that stalls
+ * ends the run at exactly t_states. */
 uint32_t z80_run(z80_t *c, uint32_t t_states);
 
 /* One instruction, or one interrupt acceptance, which also counts in

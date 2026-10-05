@@ -29,6 +29,7 @@ set(PICO_ACE_GUEST_TESTS
     test_bus
     test_field
     test_golden
+    test_halt
     test_keyboard
     test_render
     test_snappool
