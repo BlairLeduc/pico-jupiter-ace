@@ -53,8 +53,9 @@ times and J never, and the owner chose to record it as it stands
 rather than run it again. The same run showed two windows 1/10 fast and
 slow, a read torn while core 0 rewrote the block; `swd-counters.py` now
 reads the block twice and keeps a read only when both agree (not yet
-used for a whole soak). **Not checked:** J read by the program in the
-final build's soak; loading a word back off a tape made by New tape. The owner
+used for a whole soak). The owner loaded a word back off a tape
+made by New tape, on the Plus 2 W. **Not checked:** J read by the
+program in the final build's soak. The owner
 read the settings file on a computer after saving and found it right,
 and made `/ace/keymaps/invaders.map`, chose it on the Keys row and found
 its keys remapped. A test SAVE went onto the owner's `BIG.tap` by
