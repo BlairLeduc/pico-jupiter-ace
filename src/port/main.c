@@ -66,19 +66,21 @@ int main(void) {
                (unsigned long)g_c1.i2c_hz, (long)g_c1.sb_version);
     log_printf("  lcd          : spi %lu Hz\n", (unsigned long)g_c1.spi_hz);
     log_printf("  settings     : card %s, file %s%s%s; ram %s, volume %u, perf_line %s, "
-               "layout %s, boot_tape %s, fast_tape %s\n",
+               "layout %s, boot_tape %s, fast_tape %s, status %s, backlight %u\n",
                card_state_str(g_boot.job.state), settingsio_state_str(g_boot.cfg),
                g_boot.cfg_error[0] ? ", first problem " : "", g_boot.cfg_error,
                ace_ram_name(g_boot.settings.ram), g_boot.settings.volume,
                g_boot.settings.perf_line ? "on" : "off",
                g_ui.layout ? g_ui.layout->name : "standard",
                g_boot.settings.boot_tape[0] ? g_boot.settings.boot_tape : "none",
-               g_boot.settings.fast_tape ? "on" : "off");
+               g_boot.settings.fast_tape ? "on" : "off",
+               g_boot.settings.status ? "on" : "off", g_boot.settings.backlight);
     /* ram is the machine; volume and perf_line go to the menu's state,
      * which core 0 applies; layout and boot_tape were taken as core 1
      * read the card (§9.4). */
     g_ui.volume = g_boot.settings.volume;
     g_ui.perf_line = g_boot.settings.perf_line;
+    g_ui.status = g_boot.settings.status;
     g_ui.fast_tape = g_boot.settings.fast_tape;
 
     ace_config_t cfg;

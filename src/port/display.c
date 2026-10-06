@@ -19,9 +19,11 @@ _Static_assert(ACE_SCREEN_X + ACE_SCREEN_W <= ACE_PANEL_W &&
                ACE_SCREEN_Y + ACE_SCREEN_H <= ACE_PANEL_H,
                "the guest must fit on the panel");
 
-_Static_assert(ACE_PERF_Y >= ACE_SCREEN_Y + ACE_SCREEN_H &&
-               ACE_PERF_Y + ACE_GLYPH_ROWS <= ACE_PANEL_H,
-               "the perf line must sit below the guest");
+_Static_assert(ACE_PERF_Y + ACE_GLYPH_ROWS <= ACE_SCREEN_Y,
+               "the perf line must sit above the guest");
+_Static_assert(ACE_STATUS_Y >= ACE_SCREEN_Y + ACE_SCREEN_H &&
+               ACE_STATUS_Y + ACE_GLYPH_ROWS <= ACE_PANEL_H,
+               "the status line must sit below the guest");
 
 /* The renderer lives here, on core 1, so its LUT is built by the only
  * core that reads it (§4.3). */
@@ -36,16 +38,23 @@ static uint8_t s_font[ACE_CHARSET_BYTES];
  * text lines can use them too. */
 static uint16_t s_line[ACE_LINEBUF_COUNT][ACE_LINEBUF_PIXELS];
 
-/* What the perf line shows now: blank, as lcd_init left the panel. */
-static char s_perf[ACE_TEXT_COLS];
+/* What each line shows now: blank, as lcd_init left the panel. */
+typedef struct {
+    unsigned y;
+    char     text[ACE_TEXT_COLS];
+} text_line_t;
 
-/* Grey, so the perf line does not read as the guest's. */
+static text_line_t s_perf   = { .y = ACE_PERF_Y };
+static text_line_t s_status = { .y = ACE_STATUS_Y };
+
+/* Grey, so the lines do not read as the guest's. */
 #define TEXT_INK RGB565(0x90, 0x90, 0x90)
 
 void display_init(void) {
     render_init(&s_render, ACE_INK_RGB565, ACE_PAPER_RGB565);
     font_from_rom(ace_rom, s_font);
-    memset(s_perf, ' ', sizeof s_perf);
+    memset(s_perf.text, ' ', sizeof s_perf.text);
+    memset(s_status.text, ' ', sizeof s_status.text);
     s_shadow.valid = false;
 }
 
@@ -91,16 +100,16 @@ void display_present(const uint8_t *screen, const uint8_t *charset, display_stat
     if (st) *st = s;
 }
 
-void display_perf(const char *text) {
+static void draw_line(text_line_t *l, const char *text) {
     char line[ACE_TEXT_COLS];
     size_t n = strnlen(text, ACE_TEXT_COLS);
     memcpy(line, text, n);
     memset(line + n, ' ', ACE_TEXT_COLS - n);
-    if (memcmp(line, s_perf, ACE_TEXT_COLS) == 0) return;
-    memcpy(s_perf, line, ACE_TEXT_COLS);
+    if (memcmp(line, l->text, ACE_TEXT_COLS) == 0) return;
+    memcpy(l->text, line, ACE_TEXT_COLS);
 
     unsigned cur = 0;
-    lcd_blit_begin(0, ACE_PERF_Y, ACE_PANEL_W, ACE_GLYPH_ROWS);
+    lcd_blit_begin(0, l->y, ACE_PANEL_W, ACE_GLYPH_ROWS);
     for (unsigned r = 0; r < ACE_GLYPH_ROWS; r++) {
         cur ^= 1u;
         uint16_t *px = s_line[cur];
@@ -112,6 +121,14 @@ void display_perf(const char *text) {
         lcd_blit_row(s_line[cur], ACE_PANEL_W);
     }
     lcd_blit_end();
+}
+
+void display_perf(const char *text) {
+    draw_line(&s_perf, text);
+}
+
+void display_status(const char *text) {
+    draw_line(&s_status, text);
 }
 
 void display_test_pattern(void) {
@@ -138,6 +155,7 @@ void display_test_pattern(void) {
     lcd_fill(x + 2u, y + h - 18u, 16, 16, RGB565(0x00, 0x00, 0xFF));
     lcd_fill(x + w - 18u, y + h - 18u, 16, 16, RGB565(0xFF, 0xFF, 0x00));
 
-    memset(s_perf, ' ', sizeof s_perf);
+    memset(s_perf.text, ' ', sizeof s_perf.text);
+    memset(s_status.text, ' ', sizeof s_status.text);
     display_invalidate();
 }

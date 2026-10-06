@@ -153,17 +153,19 @@ const keymap_t keymap_picocalc[] = {
     { 'V', AK_INVERSE,     KM_ALT | KM_SHIFT },
     { 'X', AK_DELETE_LINE, KM_ALT | KM_SHIFT },
     { 'M', KM_PAGE_MAIN, 0, KM_ALT | KM_MENU },
+    { 'H', KM_PAGE_HELP, 0, KM_ALT | KM_MENU },
     { 'P', NOCELL,          KM_ALT | KM_PAUSE },
-    { 'R', NOCELL,          KM_ALT | KM_RESET },
+    { 'K', NOCELL,          KM_ALT | KM_RESET },
 
-    /* F1-F5 and F10 open the menu at a page (§12). The Ace has no
-     * function keys, so they are the menu's everywhere. */
+    /* The function keys open the menu at a page, as pico-atom's do
+     * (§12): F2 is its Discs, and the Ace has no disc, so F2 is
+     * nothing. The Ace has no function keys, so they are the menu's
+     * everywhere. */
     { PICOCALC_KEY_F1 + 0, KM_PAGE_TAPE,     0, KM_MENU },
-    { PICOCALC_KEY_F1 + 1, KM_PAGE_SNAPSHOT, 0, KM_MENU },
-    { PICOCALC_KEY_F1 + 2, KM_PAGE_MACHINE,  0, KM_MENU },
-    { PICOCALC_KEY_F1 + 3, KM_PAGE_LAYOUT,   0, KM_MENU },
-    { PICOCALC_KEY_F1 + 4, KM_PAGE_ABOUT,    0, KM_MENU },
-    { PICOCALC_KEY_F10,    KM_PAGE_MAIN,     0, KM_MENU },
+    { PICOCALC_KEY_F1 + 2, KM_PAGE_SNAPSHOT, 0, KM_MENU },
+    { PICOCALC_KEY_F1 + 3, KM_PAGE_SETUP,    0, KM_MENU },
+    { PICOCALC_KEY_F1 + 4, KM_PAGE_MACHINE,  0, KM_MENU },
+    { PICOCALC_KEY_F10,    KM_PAGE_ABOUT,    0, KM_MENU },
 };
 
 const size_t keymap_picocalc_len = sizeof keymap_picocalc / sizeof keymap_picocalc[0];

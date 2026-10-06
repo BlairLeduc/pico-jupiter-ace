@@ -26,6 +26,7 @@ set(PICO_ACE_CORE_SOURCES
     src/core/snap_ace.c
     src/core/snappool.c
     src/core/snapshot.c
+    src/core/status.c
     src/core/tape.c
     src/core/z80.c
 )

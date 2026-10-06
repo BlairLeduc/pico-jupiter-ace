@@ -127,7 +127,7 @@ static const char *card_text(void) {
 
 /* The keys that ask the emulator rather than the guest for something
  * (design.md §12): the menu and pause park the guest at the next
- * boundary; Alt+R resets the CPU now, RAM kept. Returns the park, or
+ * boundary; Alt+K resets the CPU now, RAM kept. Returns the park, or
  * PARK_NONE. */
 static uint32_t requests(keymatrix_t *k, ace_t *m) {
     uint32_t why = PARK_NONE;
@@ -231,7 +231,7 @@ void core0_run(ace_t *m, keymatrix_t *k) {
     uint64_t hb_us = time_us_64(), sec_us = hb_us;
     uint32_t hb_t = m->cpu.t, hb_insns = m->cpu.insns, hb_halts = m->cpu.halts, hb_late = 0;
     uint32_t hb_wait = m->wait_t;
-    uint32_t sec_insns = m->cpu.insns;
+    uint32_t sec_insns = m->cpu.insns, sec_t = m->cpu.t;
     uint64_t hb_run_us = 0, hb_busy_us = 0, sec_run_us = 0, sec_busy_us = 0;
     bool prompt = false;
     uint32_t why = PARK_NONE;
@@ -284,6 +284,7 @@ void core0_run(ace_t *m, keymatrix_t *k) {
             hb_us = sec_us = time_us_64();
             hb_t = m->cpu.t;
             hb_insns = sec_insns = m->cpu.insns;
+            sec_t = m->cpu.t;
             hb_halts = m->cpu.halts;
             hb_wait = m->wait_t;
             hb_late = late;
@@ -336,6 +337,8 @@ void core0_run(ace_t *m, keymatrix_t *k) {
         int i = pool_claim();
         if (i >= 0) {
             snapshot_fill(&g_pool.buf[i], m);
+            uint32_t t10 = g_c0.turbo10;
+            g_pool.buf[i].status.turbo10 = (uint8_t)(t10 > 255u ? 255u : t10);
             pool_publish(i);
         }
 
@@ -374,8 +377,20 @@ void core0_run(ace_t *m, keymatrix_t *k) {
         now = time_us_64();
         if (now - sec_us >= 1000000u) {
             uint64_t wall = now - sec_us;
-            uint32_t insns = m->cpu.insns - sec_insns;
+            uint32_t insns = m->cpu.insns - sec_insns, st = m->cpu.t - sec_t;
             g_c0.busy1000 = (uint32_t)(sec_busy_us * 1000u / wall);
+            /* The perf line's (status.h): how many times real time the
+             * guest would run unpaced, and while it does, how fast. */
+            g_c0.head100 = (uint32_t)((uint64_t)st * 100u * 1000000u / ACE_CPU_HZ /
+                                      (sec_run_us + 1u));
+            g_c0.turbo10 = turbo_now(m) ? (uint32_t)((uint64_t)st * 10u * 1000000u /
+                                                     ACE_CPU_HZ / wall) : 0u;
+#if PICO_ACE_AUDIO
+            audio_stats_t sec_au;
+            audio_stats(&sec_au, false);
+            g_c0.underruns = sec_au.underrun_samples;
+            g_c0.late_refills = sec_au.late_refills;
+#endif
             g_c0.guest1000 = (uint32_t)(sec_run_us * 1000u / wall);
             g_c0.hpi10 = (uint32_t)(sec_run_us * clk_mhz * 10u / (insns + 1u));
             g_c0.late = late;
@@ -383,6 +398,7 @@ void core0_run(ace_t *m, keymatrix_t *k) {
             swd_update(m, k, late, slips);
             sec_us = now;
             sec_insns = m->cpu.insns;
+            sec_t = m->cpu.t;
             sec_run_us = sec_busy_us = 0;
         }
 

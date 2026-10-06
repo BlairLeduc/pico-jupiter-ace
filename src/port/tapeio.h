@@ -48,6 +48,9 @@ void tapeio_serve(ace_t *m, uint32_t *us);
  * machine exists (boot_tape). */
 const char *tapeio_insert(ace_t *m, const char *path);
 const char *tapeio_inserted(void);     /* "" when the deck is empty   */
+/* A new empty tape, TAPEnn.tap in TAPEIO_DIR, in the deck. NULL, or why
+ * not. */
+const char *tapeio_new(ace_t *m);
 bool        tapeio_chosen(void);       /* put in by the menu or boot_tape, not found by name */
 void        tapeio_rewind(ace_t *m);
 uint32_t    tapeio_position(const ace_t *m);  /* the next block, from 0 */

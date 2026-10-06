@@ -29,13 +29,15 @@
 #define KM_PAUSE  0x80u   /* no cell: pause the guest (§12)              */
 #define KM_NOCELL (KM_RESET | KM_MENU | KM_PAUSE)
 
-/* The menu's pages (§12): KM_MENU's row is the one it opens. */
+/* The menu's pages (§12), as pico-atom has them: KM_MENU's row is the
+ * one it opens. F2 is pico-atom's Discs, and the Ace has no disc. */
 #define KM_PAGE_MAIN     0u
 #define KM_PAGE_TAPE     1u
 #define KM_PAGE_SNAPSHOT 2u
-#define KM_PAGE_MACHINE  3u
-#define KM_PAGE_LAYOUT   4u
-#define KM_PAGE_ABOUT    5u
+#define KM_PAGE_SETUP    3u
+#define KM_PAGE_MACHINE  4u
+#define KM_PAGE_HELP     5u
+#define KM_PAGE_ABOUT    6u
 
 /* SHIFT and SYMBOL SHIFT are the first half-row's D0 and D1 (§2.4). A
  * table entry never names them as its cell: they are its flags. */

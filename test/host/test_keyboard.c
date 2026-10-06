@@ -205,8 +205,8 @@ static int editing_keys(void) {
     CHECK(strcmp(input(), "") == 0, "ab, Alt+X: \"%s\"", input());
 
     /* The requests type nothing. */
-    static const uint8_t asks[] = { 'M', 'P', 'R' };
-    for (unsigned i = 0; i < 3; i++) {
+    static const uint8_t asks[] = { 'M', 'H', 'P', 'K' };
+    for (unsigned i = 0; i < 4; i++) {
         fresh();
         guest_press(&g, asks[i], true);
         guest_type(&g, "a");

@@ -122,27 +122,38 @@ presses the Ace keys that give the same character. The ones that differ:
 | `£` | `` ` `` |
 | `©` | `Ctrl`+`I` |
 
-The emulator takes these for itself:
+The emulator takes these for itself, the same keys as pico-atom, the
+Acorn Atom emulator for the PicoCalc:
 
 | | |
 |---|---|
-| `Alt`+`M` or `F10` | the menu |
-| `F1` | the menu's *Tape* page |
-| `F2` | *Snapshot* |
-| `F3` | *Machine* |
-| `F4` | *Layout* |
-| `F5` | *About* |
-| `Alt`+`P` | pause |
-| `Alt`+`R` | reset the Ace, keeping its memory |
+| the emulator's menu | `Alt`+`M` |
+| one menu page, then back to the Ace | `F1` Tapes, `F3` Snapshots, `F4` Setup, `F5` Machine |
+| these keys, on the panel | `Alt`+`H` |
+| the About page | `F10` |
+| pause | `Alt`+`P` |
+| reset the Ace, keeping its memory | `Alt`+`K` |
 
-A page opened with `F1`–`F5` goes back to the Ace when you leave it. In
-the menu the arrows move, `Enter` chooses, left and right change a value,
-and `Esc` goes back. The row at the bottom names the first problem the
-emulator has found, if there is one.
+`F2` is pico-atom's discs; the Ace has no disc drive, so it does nothing.
+A page opened with a function key or `Alt`+`H` goes back to the Ace when
+you leave it. In the menu the arrows move, `Enter` chooses, left and
+right change a value, and `Esc` goes back a page, or to the Ace from the
+first page. The row at the bottom names the first problem the emulator
+has found, if there is one, and the title row shows the battery's charge.
 
-**Pause.** `Alt`+`P` stops the Ace where it is and dims the screen. Any
-key carries on, and that key is not typed. `Alt`+`M` and the function
-keys open the menu instead.
+**Pause.** `Alt`+`P` stops the Ace where it is and dims the screen. The
+bottom line says `Paused`. Any key carries on, and that key is not
+typed. `Alt`+`M`, `Alt`+`H` and the function keys open the menu instead.
+
+**The lines above and below the screen.** The line along the bottom, the
+status line, shows the tape in the deck: with fast tape on, its name;
+with fast tape off, whether it is stopped, playing or recording, how far
+through it is, and the speed while it runs fast. The line along the top,
+the perf line, shows the emulator's own figures: how much of the
+PicoCalc's first core the Ace takes, how many times real time it could
+run, the slowest screen update in the last second, frames dropped, and
+sound underruns and late refills since power-on. The menu's *Setup* page
+turns each on or off; the status line starts on and the perf line off.
 
 ### Tapes
 
@@ -150,24 +161,25 @@ Tapes are `.tap` files in `/ace/tapes/`. `LOAD NAME` loads `NAME.tap`, or
 failing that the first tape whose first file is called `NAME`. `SAVE NAME`
 writes `NAME.tap`, adding to it if it is there. `BLOAD`, `BSAVE` and
 `VERIFY` work the same way. To use a tape whose file names do not match
-the program's, put it in the deck on the menu's *Tape* page; the page
+the program's, put it in the deck on the menu's *Tapes* page; the page
 shows each tape's first file. With a tape in the deck, a `LOAD` reads it
 from where it stands, as a cassette would, unless the card has a file of
 the name asked for, and a `SAVE` adds to the end of it. *Rewind* takes it
-back to the start, and *Empty the deck* goes back to finding files by
-name.
+back to the start, and *Eject* goes back to finding files by name. To
+start a blank tape, choose *New tape*: it makes `TAPE01.tap` (or the next
+free number) and puts it in the deck, and every `SAVE` adds to it.
 
-**Fast tape** is on unless you turn it off on the *Settings* page. With it
+**Fast tape** is on unless you turn it off on the *Setup* page. With it
 on, a load or save takes a fraction of a second. With it off, the Ace
 reads and writes the tape's signal, as a real one does. A tape then takes
 as long as it did in 1982, divided by about three, since the emulator runs
 the Ace as fast as it can while a tape plays, without sound. A few
 programs load through a loader of their own and need fast tape off and
-*Play* on the *Tape* page.
+*Play* on the *Tapes* page.
 
 ### Snapshots and saved states
 
-The *Snapshot* page loads `.ace` files from `/ace/snaps/`, the snapshot
+The *Snapshots* page loads `.ace` files from `/ace/snaps/`, the snapshot
 format of the Ace's other emulators. A file saved on a 35K Ace loads into
 the 51K. A file for another machine is refused, and the page names the
 machine it needs; change it on the *Machine* page first.
@@ -181,7 +193,7 @@ format, and loads only into the machine it came from.
 The Ace was sold with 1 KiB of RAM for programs, and is called the 3K
 after its total memory. RAM packs made it the 19K and the 51K. The
 emulator starts as the **19K**, which most programs need. The *Machine*
-page changes it: left and right choose, and *Apply and power on* turns the
+page changes it: left and right choose, and *Apply and restart* turns the
 Ace off and on again as the new machine. The program in memory is lost,
 so save it first. The tape stays in the deck. To start as another machine
 every time, choose *Save settings* afterwards.
@@ -190,8 +202,8 @@ every time, choose *Save settings* afterwards.
 
 Ace games read the keyboard themselves, and many move on keys that sit
 apart on the PicoCalc. A game layout lays a few keys over the standard
-map, and every other key types as before. The *Layout* page (`F4`)
-chooses one, and shows each layout's keys.
+map, and every other key types as before. The *Keys* row of the *Setup*
+page (`F4`) chooses one, as pico-atom's does.
 
 Two are built in:
 
@@ -225,7 +237,7 @@ looks for the key. `name` is what the menu shows, at most 16 characters,
 and must differ from every other layout's; without it the file's own name
 is used. The optional `tapes` line names up to four files, without their
 `.tap` or `.ace`: putting one of them in the deck, or loading it on the
-*Snapshot* page, chooses the layout, and the *Layout* page says so. A
+*Snapshots* page, chooses the layout, and the menu says so. A
 line starting with `#` is a comment, except `# = ...`, which binds the `#`
 key. A file that does not parse is left out, and the menu names the file
 and line.
@@ -240,11 +252,16 @@ default. This file sets everything to its default:
 # /ace/pico-ace.cfg
 ram       = 19k        # 3k, 19k or 51k
 volume    = 8          # 0-8
-layout    = standard   # or a layout's name, as the Layout page shows it
+layout    = standard   # or a layout's name, as the Setup page shows it
 boot_tape =            # a tape in /ace/tapes/, in the deck at power-on
-perf_line = off        # the emulator's own figures below the screen; or on
+perf_line = off        # the emulator's own figures along the top; or on
+status    = on         # the tape along the bottom; or off
+backlight = 8          # 1-15, as the menu shows it; leave out to keep the last
 fast_tape = on         # off: the Ace reads and writes the tape's signal
 ```
+
+The backlight is the one exception: it is left alone unless the file
+sets it.
 
 Upper and lower case are the same. A `#` at the start of a line, or after
 a space, starts a comment. A line that is wrong is skipped and the rest
@@ -252,8 +269,8 @@ are used, and so is a tape or layout the card does not have; the menu's
 bottom row and the *About* page name the first problem.
 
 *Save settings* on the menu's first page writes what is in force: the
-machine as it is running, the volume, the perf line, fast tape, the
-layout you chose, and the tape you put in the deck. It edits the file
+machine as it is running, the volume, the backlight, the status and perf
+lines, fast tape, the layout you chose, and the tape you put in the deck. It edits the file
 rather than replacing it. A line it changes keeps its place and its
 comment, and a setting the file does not mention is added at the end,
 only if it differs from its default. Anything else is left as it is. A
@@ -262,10 +279,11 @@ it. With no file on the card, the save makes one.
 
 ### About
 
-The *About* page shows the firmware's version, the chip and its revision,
-the board's unique id, the clock, the keyboard controller's version, the
-chip's temperature, the ROM's SHA-1, the machine and layout in force, and
-the state of the settings file.
+The *About* page (`F10`), laid out as pico-atom's, shows the firmware's
+version, the board it was built for, the chip, its revision and clock,
+the keyboard controller's version, the chip's temperature, the machine,
+the ROM with the first eight digits of its SHA-1, to check against the
+one above, and the state of the settings file.
 
 ## Books
 

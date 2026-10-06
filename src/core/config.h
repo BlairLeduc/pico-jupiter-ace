@@ -78,11 +78,12 @@
 #define ACE_SCREEN_Y           64u  /* with a 64-row band above and below    */
 #define ACE_LINEBUF_COUNT       2u  /* DMA ping-pong (HW §4.6)              */
 
-/* The lines of text above and below the guest (§7.4), in the emulator's
- * font: 40 cells span the panel. The perf line sits in the middle of the
- * band below. M10: the status line in the band above. */
+/* The lines of text above and below the guest (§7.4, §12), in the Ace's
+ * own font: 40 cells span the panel. Where pico-atom has them: the perf
+ * line at the panel's top, the status line, the tape, at its foot. */
 #define ACE_TEXT_COLS          (ACE_PANEL_W / ACE_GLYPH_COLS)      /* 40  */
-#define ACE_PERF_Y             (ACE_SCREEN_Y + ACE_SCREEN_H + 28u) /* 284 */
+#define ACE_PERF_Y               2u
+#define ACE_STATUS_Y           306u
 #define ACE_LINEBUF_PIXELS  ACE_PANEL_W
 
 /* ---- Port buffers (design.md §3.3) ------------------------------------ */

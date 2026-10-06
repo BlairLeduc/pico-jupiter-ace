@@ -24,7 +24,10 @@
 typedef struct {
     ace_ram_t ram;          /* 3k, 19k or 51k (§6.2)                    */
     unsigned  volume;       /* 0-8, as the menu will show it            */
-    bool      perf_line;    /* the perf line below the guest (§7.4, §14) */
+    bool      perf_line;    /* the perf line above the guest (§7.4, §14) */
+    bool      status;       /* the status line below it: the tape (§12) */
+    unsigned  backlight;    /* 1-15, as the menu shows it; 0 leaves the
+                               panel's own, and a save keeps the file's */
     /* Tape by the trap (§10.3), or off: at signal level through the
      * ROM's own routines (§10.4). */
     bool      fast_tape;

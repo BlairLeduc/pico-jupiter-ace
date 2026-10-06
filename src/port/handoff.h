@@ -68,6 +68,10 @@ typedef struct {
     uint32_t guest1000;      /* inside ace_run_field, of wall            */
     uint32_t hpi10;          /* host cycles per guest instruction        */
     uint32_t late;           /* fields started after their deadline      */
+    uint32_t head100;        /* times real time it would run unpaced     */
+    uint32_t underruns;      /* underrun samples since boot (§8)         */
+    uint32_t late_refills;   /* late DMA refills since boot              */
+    uint32_t turbo10;        /* guest speed in tenths while unpaced, else 0 */
 } core0_perf_t;
 
 extern volatile core0_perf_t g_c0;
@@ -104,7 +108,9 @@ extern volatile swd_counters_t g_swd;
  * (EL §2.5). Core 1 reads perf_line to draw the perf line. */
 typedef struct {
     volatile unsigned volume;      /* 0-8, as settings_t has it       */
-    volatile bool     perf_line;
+    volatile bool     perf_line;   /* the top line (status.h)          */
+    volatile bool     status;      /* the bottom line: the tape         */
+    volatile unsigned backlight;   /* 1-15 as the Setup page has it; 0 unread */
     volatile bool     fast_tape;   /* the trap, or the signal (tapeio.h) */
     volatile bool     reset;       /* the menu's Reset: core 0 clears it */
     volatile bool     power_on;    /* a load failed part-way (§10.5)  */

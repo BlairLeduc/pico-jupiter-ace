@@ -11,7 +11,7 @@ boot_report_t g_boot;
 volatile core1_stats_t g_c1 = { .sb_version = -1, .battery = -1, .temp_c = INT32_MIN };
 volatile core0_perf_t  g_c0;
 volatile swd_counters_t g_swd = { .magic = SWD_MAGIC, .layout = SWD_LAYOUT };
-ui_t g_ui = { .volume = 8, .fast_tape = true };
+ui_t g_ui = { .volume = 8, .fast_tape = true, .status = true };
 board_info_t g_board;
 
 void handoff_init(void) {

@@ -202,6 +202,30 @@ int main(void) {
               out);
     }
 
+    /* status and backlight, as pico-atom has them (§12): a backlight of
+     * 0 is "leave it", which a save keeps as the file has it. */
+    {
+        settings_default(&s);
+        CHECK(s.status && s.backlight == 0u, "status on, backlight left, by default");
+        const char *file = "backlight = 9 # mine\nstatus = off\n";
+        CHECK(settings_parse(&s, file, strlen(file), &line) == SET_OK && s.backlight == 9u &&
+                  !s.status, "status and backlight read");
+        CHECK(parse(&s, "backlight = 16\n", &line) == SET_BAD_VALUE &&
+                  parse(&s, "backlight = 0\n", &line) == SET_BAD_VALUE, "backlight is 1-15");
+        settings_default(&s);
+        s.status = false;
+        s.backlight = 0u;
+        CHECK(REWRITE(file, &s) == SET_OK && IS(file), "backlight 0 keeps the file's:\n%.*s",
+              (int)out_len, out);
+        s.backlight = 12u;
+        CHECK(REWRITE(file, &s) == SET_OK && IS("backlight = 12 # mine\nstatus = off\n"),
+              "a new backlight in place:\n%.*s", (int)out_len, out);
+        settings_default(&s);
+        s.backlight = 4u;
+        CHECK(REWRITE("", &s) == SET_OK && IS("backlight = 4\n"),
+              "a backlight the file lacked is added:\n%.*s", (int)out_len, out);
+    }
+
     /* A refused value is replaced where it stands, even by the default,
      * so a save clears the problem; when another line gives the key a
      * good value, which writing it would make given twice, the refused

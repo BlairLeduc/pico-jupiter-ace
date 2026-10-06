@@ -31,10 +31,12 @@ const uint8_t *display_font(void);
 /* Forget what is on the panel, so the next present sends everything. */
 void display_invalidate(void);
 
-/* The perf line (§7.4): ACE_TEXT_COLS characters of the emulator's font
- * at ACE_PERF_Y, drawn only when the text differs from what is there.
- * Shorter text is padded with spaces. */
+/* The perf line at the panel's top and the status line at its foot
+ * (§7.4, §12), where pico-atom has them: ACE_TEXT_COLS characters of the
+ * Ace's own font, each drawn only when its text differs from what is
+ * there. Shorter text is padded with spaces. */
 void display_perf(const char *text);
+void display_status(const char *text);
 
 /* The bring-up pattern (design.md §15.2 M6): a 1-px white border exactly
  * on the guest's 256x192 rectangle at (32,64), with a 16x16 block in each

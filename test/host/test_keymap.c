@@ -373,13 +373,15 @@ int main(void) {
         fields(1);
         CHECK(k.n == 0 && matrix_empty(), "Alt+Q should do nothing");
 
-        /* Alt+M, Alt+P and Alt+R ask, and touch nothing in the machine. */
+        /* Alt+M, Alt+H, Alt+P and Alt+K ask, as pico-atom's do, and touch
+         * nothing in the machine. */
         static const struct { uint8_t code; bool *flag; const char *what; } asks[] = {
             { 'M', &k.menu_request,  "menu"  },
+            { 'H', &k.menu_request,  "keys page" },
             { 'P', &k.pause_request, "pause" },
-            { 'R', &k.reset_request, "reset" },
+            { 'K', &k.reset_request, "reset" },
         };
-        for (unsigned i = 0; i < 3; i++) {
+        for (unsigned i = 0; i < 4; i++) {
             fresh();
             press(PICOCALC_KEY_ALT);
             press(asks[i].code);
@@ -394,11 +396,21 @@ int main(void) {
         press('M');
         fields(1);
         CHECK(k.menu_page == KM_PAGE_MAIN, "Alt+M opens the main page");
+        fresh();
+        press(PICOCALC_KEY_ALT);
+        press('H');
+        fields(1);
+        CHECK(k.menu_page == KM_PAGE_HELP, "Alt+H opens the keys page");
+        fresh();
+        press(PICOCALC_KEY_ALT);
+        press('R');
+        fields(1);
+        CHECK(!k.reset_request && !k.menu_request && matrix_empty(), "Alt+R is nothing now");
 
-        /* F1-F5 open their pages (§12), with or without Alt held; F6,
-         * Shift+F1, is nothing; F10 is the menu. */
+        /* F1-F5 open pico-atom's pages (§12), with or without Alt held;
+         * F2, its Discs, is nothing, as is F6, Shift+F1; F10 is About. */
         static const uint8_t pages[5] = {
-            KM_PAGE_TAPE, KM_PAGE_SNAPSHOT, KM_PAGE_MACHINE, KM_PAGE_LAYOUT, KM_PAGE_ABOUT,
+            KM_PAGE_TAPE, 0xFF, KM_PAGE_SNAPSHOT, KM_PAGE_SETUP, KM_PAGE_MACHINE,
         };
         for (unsigned alt = 0; alt < 2; alt++) {
             for (unsigned f = 0; f < 5; f++) {
@@ -406,8 +418,11 @@ int main(void) {
                 if (alt) press(PICOCALC_KEY_ALT);
                 press((uint8_t)(PICOCALC_KEY_F1 + f));
                 fields(1);
-                CHECK(k.menu_request && k.menu_page == pages[f], "%sF%u: page %u, want %u",
-                      alt ? "Alt+" : "", f + 1, k.menu_page, pages[f]);
+                if (pages[f] == 0xFF)
+                    CHECK(!k.menu_request, "%sF%u requests a page", alt ? "Alt+" : "", f + 1);
+                else
+                    CHECK(k.menu_request && k.menu_page == pages[f], "%sF%u: page %u, want %u",
+                          alt ? "Alt+" : "", f + 1, k.menu_page, pages[f]);
                 CHECK(matrix_empty(), "F%u reached the matrix", f + 1);
             }
         }
@@ -419,7 +434,7 @@ int main(void) {
         press(PICOCALC_KEY_SHIFT_L);
         press(PICOCALC_KEY_F10);
         fields(1);
-        CHECK(k.menu_request && k.menu_page == KM_PAGE_MAIN, "F10 opens the menu");
+        CHECK(k.menu_request && k.menu_page == KM_PAGE_ABOUT, "F10 opens About");
     }
 
     /* ---- the queue is bounded, and never loses a release -------------- */
@@ -554,7 +569,7 @@ int main(void) {
         keymatrix_set_layout(&k, &greedy);
         press(PICOCALC_KEY_F1 + 2);
         fields(1);
-        CHECK(k.menu_request && k.menu_page == KM_PAGE_MACHINE,
+        CHECK(k.menu_request && k.menu_page == KM_PAGE_SNAPSHOT,
               "F3 is the menu under any layout");
         fresh();
         keymatrix_set_layout(&k, &greedy);

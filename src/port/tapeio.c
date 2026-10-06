@@ -107,6 +107,25 @@ const char *tapeio_insert(ace_t *m, const char *path) {
     return NULL;
 }
 
+/* pico-atom's New tape (§12): TAPE01.tap, or the next number free, made
+ * empty and put in the deck, where SAVE appends to it. */
+const char *tapeio_new(ace_t *m) {
+    char path[ACE_PATH_MAX];
+    FILINFO fi;
+    (void)f_mkdir(TAPEIO_DIR);
+    for (unsigned n = 1; n <= 99u; n++) {
+        snprintf(path, sizeof path, "%s/TAPE%02u.tap", TAPEIO_DIR, n);
+        FRESULT fr = f_stat(path, &fi);
+        if (fr == FR_OK) continue;
+        if (fr != FR_NO_FILE) return "card error";
+        if (f_open(&s_f, path, FA_CREATE_NEW | FA_WRITE) != FR_OK) return "cannot create";
+        f_close(&s_f);
+        log_core1("  tape         : %s made\n", path);
+        return tapeio_insert(m, path);
+    }
+    return "TAPE99 is the last";
+}
+
 const char *tapeio_inserted(void) { return s_path; }
 bool tapeio_chosen(void) { return s_user; }
 
