@@ -453,7 +453,7 @@ the two with a rename (§4.6). `PICO_ATOM_` becomes `PICO_ACE_`, and `atom_`
 becomes `ace_`.
 
 ```
-src/core/    config.h  hot.h  z80.c  ace.c  render.c  font.c  snappool.c  beeper.c
+src/core/    config.h  hot.h  z80.c  ace.c  render.c  romfont.c  snappool.c  beeper.c
              keymatrix.c  keymap_picocalc.c  keylayout.c  tape.c  cassette.c
              tap.c  snap_ace.c  snapshot.c  settings.c  status.c
 src/port/    main.c  core0.c  core1.c  menu_*.c  board.c  lcd.c  display.c
@@ -893,8 +893,13 @@ when bit 5 of the count is set), and the copyright sign from `$1FF4`. It
 still does not depend on character RAM. `test_boot` requires it to equal
 the character RAM the ROM writes, in all three machines, and a planted bug
 fails that. The menu, the PAUSED line and the perf line use it, and the menu
-is in mixed case. `font8x8` is no longer in the firmware; it stays as the
-font of `test_golden`'s `font.ppm` and `test_render`'s checks.
+is in mixed case.
+
+**Removed, 2026-10-06, before release:** `font8x8` had stayed only as the
+font of `test_golden`'s `font.ppm` and two of `test_render`'s checks, and
+is gone from the tree with `tools/mkfont.py` and `src/core/font.c`.
+`test_render` checks the row generator's bit order with a glyph of its
+own, and draws its redefined glyph over the ROM's set.
 
 ### 7.6 Golden images
 
@@ -903,7 +908,8 @@ character and every glyph, rendered to PPM and committed after being looked at
 (EL §5.7). As built in M4, `test_golden` renders five scenes and compares
 them with `test/host/golden/`: `boot` (the real ROM after `2 2 + .`),
 `inverse`, `redefined`, `glyphs` (all 256 codes in the ROM's set) and
-`font` (the same in §7.5's font). The ROM's set is the one it writes at
+`font` (the same in §7.5's font); `font` went with that font, 2026-10-06,
+leaving four. The ROM's set is the one it writes at
 boot, read back from character RAM. `test_golden --write DIR` writes them
 for inspection; on a mismatch the test writes `<name>.actual.ppm`.
 

@@ -15,7 +15,6 @@ set(PICO_ACE_CORE_SOURCES
     src/core/ace.c
     src/core/beeper.c
     src/core/cassette.c
-    src/core/font.c
     src/core/keylayout.c
     src/core/keymap_picocalc.c
     src/core/keymatrix.c

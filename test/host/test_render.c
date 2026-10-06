@@ -1,4 +1,4 @@
-/* test_render.c — the row generator, the emulator's font, power-on, and
+/* test_render.c — the row generator, power-on, and
  * the glyph-change dirty bands (design.md §7, §13.2 Video).
  *
  * The band diff is checked by executing it: a simulated panel is brought
@@ -11,6 +11,7 @@
 
 #include <string.h>
 
+#include "ace_rom.h"
 #include "font.h"
 #include "guest.h"
 #include "render.h"
@@ -107,8 +108,10 @@ int main(void) {
         memset(g_screen, 0x20, sizeof g_screen);
         g_screen[1] = 'A';
         g_screen[2] = 'A' | 0x80u;
+        memset(g_charset, 0, sizeof g_charset);
+        g_charset['A' * 8] = 0x30u;
         uint16_t row[ACE_PIXEL_W];
-        render_row(&g_r, g_screen, ace_font, 0, row);   /* 'A' row 0: $30 */
+        render_row(&g_r, g_screen, g_charset, 0, row);   /* 'A' row 0: $30 */
         static const uint16_t a0[8] = { 0, 0, 1, 1, 0, 0, 0, 0 };
         bool ok = true;
         for (unsigned x = 0; x < 8u; x++) {
@@ -119,24 +122,9 @@ int main(void) {
         CHECK(ok, "'A' row 0 should be ..XX.... at cell 1 and its inverse at cell 2");
 
         uint16_t part[2 * 8];
-        render_cells(&g_r, g_screen, ace_font, 0, 1, 2, part);
+        render_cells(&g_r, g_screen, g_charset, 0, 1, 2, part);
         CHECK(memcmp(part, &row[8], sizeof part) == 0,
               "render_cells for cells 1..2 should equal those cells of render_row");
-    }
-
-    /* ---- the emulator's font, against its source (EL §5.5) ----------- */
-    {
-        /* third_party/font8x8/README draws 'A' as 0C 1E 33 33 3F 33 33 00
-         * with bit 0 leftmost; here bit 7 is. */
-        static const uint8_t a[8] = { 0x30, 0x78, 0xCC, 0xCC, 0xFC, 0xCC, 0xCC, 0x00 };
-        CHECK(memcmp(&ace_font['A' * 8], a, 8) == 0, "the font's 'A' is not the README's");
-
-        uint8_t or_all = 0, blank = 0;
-        for (unsigned c = 0x21; c < 0x7Fu; c++)
-            for (unsigned y = 0; y < 8u; y++) or_all |= ace_font[c * 8u + y];
-        for (unsigned y = 0; y < 8u; y++) blank |= ace_font[' ' * 8u + y];
-        CHECK(or_all & 0x80u, "no printable glyph reaches the left column: shifted right?");
-        CHECK(blank == 0, "space is not blank");
     }
 
     /* ---- power-on: zeroed character RAM, drawn as it is (§7.5) ------- */
@@ -175,7 +163,7 @@ int main(void) {
     /* ---- a redefined glyph repaints exactly the cells showing it ----- */
     {
         memset(g_screen, ' ', sizeof g_screen);
-        memcpy(g_charset, ace_font, sizeof g_charset);
+        font_from_rom(ace_rom, g_charset);
         g_screen[3 * 32 + 5] = 'A';
         g_screen[10 * 32 + 20] = 'A' | 0x80u;
         g_screen[10 * 32 + 25] = 'B';
