@@ -127,8 +127,8 @@ void core1_main(void) {
             sec_dropped = dropped;
         }
 
-        /* One poll is an I2C transaction of ~4.8 ms (CLAUDE.md, M6), so
-         * at most one of these runs between two presents. */
+        /* One poll is an I2C transaction of ~4.8 ms (hardware-notes.md
+         * §6.1), so at most one of these runs between two presents. */
         now = time_us_32();
         if ((int32_t)(now - next_poll) >= 0) {
             next_poll = now + KBD_POLL_US;
