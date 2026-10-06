@@ -5,7 +5,7 @@ the **ClockworkPi PicoCalc**, primarily in C with the Raspberry Pi Pico SDK.
 It covers wiring, peripheral protocols, timing, memory tradeoffs and observed
 quirks. It can be copied into a new project without companion files.
 
-**Scope, September 2026.** This is our current understanding of the platform.
+**Scope, September–October 2026.** This is our current understanding of the platform.
 Hardware observations cover Pico 2, Pico 2 W and Pico Plus 2 W configurations;
 RP2040 guidance is based on documentation and SDK behavior, not equivalent
 on-device validation. Measurements describe the stated board and workload,
@@ -320,6 +320,15 @@ underruns. **Measured** on a Plus 2 W, 2026-10-05: 30 such reads over 44 s,
 each a fresh OpenOCD, left the audio's underrun and late-refill counts at 0
 and dropped no video frames. Each read takes about a second, most of it
 OpenOCD starting.
+
+**A memory read over SWD is not atomic against the running core.** A block
+of a few dozen words read while the firmware rewrites it can come back
+half old and half new. In a 30-minute soak sampled every 10 s on a Plus 2 W
+(2026-10-05), one such torn read made two windows of a field counter
+read a tenth fast and a tenth slow. Read the block twice in one
+OpenOCD session and keep it only when both reads agree, retrying a few
+times; or have the writer bump a sequence word before and after the update
+and discard a read whose two sequence words differ.
 
 ---
 
@@ -882,6 +891,14 @@ PCM underrun samples and late DMA refills; one counter cannot replace the other.
 Bound queues, define the silence value, and keep consuming samples when muted
 so muting does not change application timing.
 
+**The late path, forced.** A late refill rarely happens in normal running, so
+its recovery goes unexercised. A scratch build that masked the producing
+core's interrupts for 9 ms every 250 video fields (on a Plus 2 W,
+2026-10-04, with §5.3's ring of two 128-frame halves at oversample 2)
+counted 3 late refills per stall and lost three halves' worth of samples,
+with no IRQ storm, no PCM underrun, and playback carrying on afterwards.
+That is what the ring wrap and the both-registers re-arm of §5.3 buy.
+
 A tested arrangement uses a 1,024-sample software queue (about 28 ms), starts
 streaming after 768 samples (about 21 ms), and has two 128-sample DMA halves
 adding up to about 7 ms. These are buffering calculations, not measured
@@ -1084,6 +1101,19 @@ before the card was really in. Debounce card detect, and treat a failed
 mount after an insertion as a state to retry on the next change rather than
 an error, since nothing about it hangs.
 
+Three more things from the same driver on the same board:
+
+- **Bound every wait below the southbridge's 2.5 s watchdog** (§6.1) when one
+  core does both card work and keyboard polling. A card that stays
+  `ACMD41` busy is the longest case; a 1 s limit kept every job inside it.
+  Jobs measured 7–221 ms.
+- **A transfer that fails marks the card uninitialised**, so the next mount
+  runs the full SPI initialisation again rather than talking to a card in
+  an unknown state.
+- **macOS writes a `._name` file beside every file it copies** to a FAT card
+  (AppleDouble metadata). A file list on the device should skip names
+  starting `._`; they are not the user's files.
+
 **Prefer the card to internal flash for anything the application writes**,
 such as settings. A text file on the card is one source of truth the user can
 read and edit on any computer, it survives reflashing, and writing it opens no
@@ -1160,6 +1190,11 @@ input 4 or 8 yourself, and write `AINSEL` directly, since
 on 2026-09-27 the banner said QFN-80, input 8, and the reading passed the
 load test: 23 °C idle at 150 MHz, 25 °C at 300 MHz and a 4 MHz guest on
 boot, 27 °C after two and a half minutes of a compute loop.
+
+On battery, at 150 MHz with one core about 21 % busy and the
+other presenting and polling, a Plus 2 W read **20–21 °C throughout two
+30-minute runs** (2026-10-05, uncalibrated, room temperature not recorded).
+At this clock the die is not a constraint.
 
 ### 8.2 The remaining ADC inputs
 
@@ -1331,6 +1366,11 @@ So measure core 0 with core 1 idle as well as busy. If core 0's timing
 wanders while core 1 has nothing to do, look for sleeps on core 1. Use
 `busy_wait_*` there, or give core 1 its own alarm pool.
 
+**Check drivers when they change cores.** An SD driver brought over from
+another project had one `sleep_us` in its initialisation; on core 1, it
+would have interrupted core 0. Search any code bound for core 1 for `sleep_` and
+`best_effort_wfe_or_timeout`.
+
 ### 9.8 SRAM placement, measured on an interpreter
 
 §9.2's tiers, applied to a 6502 interpreter, gave
@@ -1364,6 +1404,28 @@ The same method on a Z80 interpreter (2026-10-03, Plus 2 W at 150 MHz, 30 KB
 in SRAM) gave the same shape: **1.20×** on ZEXDOC's wide instruction mix,
 and nothing (−1.2 %) on a small Forth inner-interpreter loop whose opcodes
 already fit the cache.
+
+The whole emulator around that Z80 interpreter (2026-10-04, same board and
+clock, its real ROM, core 1 presenting) showed what the benchmark could
+not, because the benchmark had the XIP cache to itself:
+
+- **With the interpreter in flash, layout outside it decided the result.**
+  Four builds whose differences were all outside the interpreter read
+  37.9, 41.1, 34.2 and 31.8 % of core 0 on one compute loop, each steady
+  within its run. With the interpreter in SRAM (33 KB), the same loop read
+  23.3 % in three sittings, to 0.1 point. So measure placement before any
+  other change, and compare other changes only at the placement you ship.
+- **Once the interpreter left the cache, 8 KB of guest ROM data fitted it.**
+  Copying the ROM into SRAM at boot changed nothing at that tier (to 0.1
+  point), against 0.1–1.3 points with the interpreter still in flash.
+- **Audio's cost fell with it.** The audio code cost the foreground 0.4–2.0 points with the interpreter in flash, mostly as extra
+  cycles per guest instruction rather than time in audio code, and 0.4–0.8
+  with it in SRAM.
+
+A fourth build trap: **CMake caches options in the build directory.** When a
+project changes an option's default (here the SRAM tier), a directory
+configured earlier keeps its cached value until the option is passed once.
+A fresh directory per tier (above) avoids it.
 
 ---
 
@@ -1404,6 +1466,11 @@ Checks to retain in each new driver/application:
       too; the regulator survives a reset (§3).
 - [ ] No `sleep_us`/`sleep_ms` in core 1's loop; `busy_wait_us_32` (§9.7).
 - [ ] No blocking `printf` on a core with a deadline (§2.7).
+- [ ] SD waits bounded below the southbridge's 2.5 s watchdog when one core
+      does card work and keyboard polling (§7.1).
+- [ ] Counters read over SWD read twice and kept only when they agree (§2.7).
+- [ ] A Mac's display kept awake (`caffeinate -d`) while the Debug Probe is
+      in use (§2.7).
 - [ ] Each SRAM-placement tier built in its own build directory, and its
       symbols checked with `nm` (§9.8).
 - [ ] Remap y through the vertical-scroll offset in *every* blit path, or do not
