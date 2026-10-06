@@ -9,8 +9,47 @@ Raspberry Pi Pico SDK. The guest is a Z80A at 3.25 MHz with an 8 KiB Forth
 ROM, a 32×24 character display from 768 bytes of screen RAM and 1 KiB of
 character RAM, a 40-key matrix, and a one-bit speaker and tape port.
 
-**Implementation status, 2026-10-05: M14 done.** Next is M15, finish
-(`docs/design.md` §15).
+**Implementation status, 2026-10-05: M15 done; all sixteen milestones
+are done** (`docs/design.md` §15).
+
+**M15, finish** (`src/core/keylayout.c`, `status.c`, `keymap_picocalc.c`,
+`settings.c`; `src/port/menu.c`, `keymapio.c`, `display.c`, `tapeio.c`;
+`tools/swd-counters.py`; `README.md`), on the Plus 2 W (id
+`7458DC82A89AAC12`) at 150 MHz, gcc 15.2, 2026-10-05. Game layouts are
+pico-atom's parser and overlay with the Ace's targets: built-ins CURSOR
+(arrows as 5 6 7 8, `]` as 0) and QAOP (O Q A P, `]` as SPACE), card
+layouts in `/ace/keymaps/`, and a `tapes` line that names **files**
+(`.tap` or `.ace` stems), since an `.ace` has no name. `test_keyboard`
+types each built-in through the ROM (`56780`, `oqap `), the standard
+map's arrows the control; layout lookup turned off fails 7 checks. **The
+owner decided the menu is pico-atom's** (2026-10-05): its items less
+Discs, its rows and Escape, F1 Tapes, F3 Snapshots, F4 Setup (the layout
+is its Keys row), F5 Machine, F10 About, Alt+H keys, Alt+K reset (Alt+R
+gone); F2, pico-atom's Discs, is nothing. `status.c` came from pico-atom
+with `test_status`: the perf line at the panel's top, the tape's status
+line at its foot, each hidden by Setup or the file's new `status`;
+`backlight` joined the file. Tapes gained New tape (`TAPEnn.tap`, empty,
+in the deck); pico-atom's Record is left out, as the Ace's recorder
+follows the ROM's save cue. The build that ships has no UART, so core 0
+copies its counters into `g_swd` once a second and
+`tools/swd-counters.py` reads them with OpenOCD's `read_memory`, no halt:
+30 reads in 44 s left underruns and late refills at 0 (HW §2.7). **The
+release soak passed** on battery, 30 minutes, the program typed on the
+PicoCalc and H and J held by hand: rt 1.000 in every 10 s window, every
+failure counter 0, 36,618–36,624 Hz, core 0 20.3–21.8 %, the count
+rising in 180 dumps, 45 real key events; **die 20 °C throughout**,
+uncalibrated (`out/m15/soak/`). A 1-minute run with no program fails it,
+the control. The owner checked every page on the panel, every menu key,
+every setting, pause and the backlight; saved settings, rebooted, and the
+changed settings were used; saved and loaded words. Over the UART:
+Machine 51K to 3K (`16384 c@ .` 255) and back (252), CURSOR's `]` typed
+`0`, New tape made `TAPE01.tap` and a SAVE wrote to it. CI green on both
+jobs for PR #14. **Not checked:** the soak on the final build, whose
+menu, lines and per-second figures changed after it (it ran on
+`3b53a40`); a settings file read on a computer after two saves (the
+comments-and-order rule is held by `test_settings` only); a `.map` file
+on the card; loading a word back off a tape made by New tape. A test
+SAVE went onto the owner's `BIG.tap` by mistake (40 bytes appended).
 
 **M14, wait states** (`src/core/ace.c`; `test/host/test_wait.c`;
 `src/port/main.c`, `core0.c`), on the Plus 2 W (id `7458DC82A89AAC12`)

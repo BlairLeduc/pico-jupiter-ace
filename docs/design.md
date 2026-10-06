@@ -2271,6 +2271,19 @@ passes again on the release build (counters read over SWD).
 *Leaves out:* everything in §17, including the 300 MHz host clock and
 `.ace` export (§18).
 
+**Done 2026-10-05** on the Plus 2 W (id `7458DC82A89AAC12`). Built as
+§9.4, §10.6, §12 and §13.5 record, with the menu made pico-atom's at the
+owner's word. Every menu row and key was checked on the device by the
+owner, and saved settings were used at the next boot. The release
+build's soak passed over SWD, 30 minutes on battery: rt 1.000 in every
+window, every failure counter 0, 36,618–36,624 Hz consumed, core 0
+20.3–21.8 %; **die 20 °C throughout** (uncalibrated, HW §8.1), against
+pico-atom's 23 °C idle. *Not checked:* the soak on the final build (it
+ran before the menu was made pico-atom's, which changed core 0's
+per-second figures and core 1's lines); the settings file read on a
+computer after two saves, which `test_settings` holds; a card `.map`
+file.
+
 ---
 
 ## 16. Unverified constants
