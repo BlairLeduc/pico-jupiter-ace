@@ -2280,9 +2280,9 @@ window, every failure counter 0, 36,618–36,624 Hz consumed, core 0
 20.3–21.8 %; **die 20 °C throughout** (uncalibrated, HW §8.1), against
 pico-atom's 23 °C idle. *Not checked:* the soak on the final build (it
 ran before the menu was made pico-atom's, which changed core 0's
-per-second figures and core 1's lines); the settings file read on a
-computer after two saves, which `test_settings` holds; a card `.map`
-file.
+per-second figures and core 1's lines). The owner read the settings
+file on a computer after saving and found it right, and a card `.map`
+file, chosen on the Keys row, remapped its keys.
 
 ---
 

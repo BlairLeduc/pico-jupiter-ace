@@ -46,10 +46,11 @@ Machine 51K to 3K (`16384 c@ .` 255) and back (252), CURSOR's `]` typed
 `0`, New tape made `TAPE01.tap` and a SAVE wrote to it. CI green on both
 jobs for PR #14. **Not checked:** the soak on the final build, whose
 menu, lines and per-second figures changed after it (it ran on
-`3b53a40`); a settings file read on a computer after two saves (the
-comments-and-order rule is held by `test_settings` only); a `.map` file
-on the card; loading a word back off a tape made by New tape. A test
-SAVE went onto the owner's `BIG.tap` by mistake (40 bytes appended).
+`3b53a40`); loading a word back off a tape made by New tape. The owner
+read the settings file on a computer after saving and found it right,
+and made `/ace/keymaps/invaders.map`, chose it on the Keys row and found
+its keys remapped. A test SAVE went onto the owner's `BIG.tap` by
+mistake (40 bytes appended); the owner truncated it back.
 
 **M14, wait states** (`src/core/ace.c`; `test/host/test_wait.c`;
 `src/port/main.c`, `core0.c`), on the Plus 2 W (id `7458DC82A89AAC12`)
