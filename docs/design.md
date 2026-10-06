@@ -2278,9 +2278,13 @@ owner, and saved settings were used at the next boot. The release
 build's soak passed over SWD, 30 minutes on battery: rt 1.000 in every
 window, every failure counter 0, 36,618–36,624 Hz consumed, core 0
 20.3–21.8 %; **die 20 °C throughout** (uncalibrated, HW §8.1), against
-pico-atom's 23 °C idle. *Not checked:* the soak on the final build (it
-ran before the menu was made pico-atom's, which changed core 0's
-per-second figures and core 1's lines). The owner read the settings
+pico-atom's 23 °C idle. The final build, after the menu was made
+pico-atom's, was soaked again the same way: one boot, rt 1.000 in every
+window, every failure counter 0, 36,621.1 Hz over the run, die 20–21 °C.
+Its check failed only because the program was never seen reading J (H
+18 times), which the owner chose to record as it stands. That run also
+showed a read torn while core 0 rewrote the block, which the reader
+now refuses (§13.5). The owner read the settings
 file on a computer after saving and found it right, and a card `.map`
 file, chosen on the Keys row, remapped its keys.
 

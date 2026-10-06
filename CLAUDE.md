@@ -44,9 +44,17 @@ every setting, pause and the backlight; saved settings, rebooted, and the
 changed settings were used; saved and loaded words. Over the UART:
 Machine 51K to 3K (`16384 c@ .` 255) and back (252), CURSOR's `]` typed
 `0`, New tape made `TAPE01.tap` and a SAVE wrote to it. CI green on both
-jobs for PR #14. **Not checked:** the soak on the final build, whose
-menu, lines and per-second figures changed after it (it ran on
-`3b53a40`); loading a word back off a tape made by New tape. The owner
+jobs for PR #14. **The final build's soak** (after the menu rework, 30
+minutes on battery, `out/m15/soak2/`): one boot, rt 1.000 in every
+window, every failure counter 0, the count rising in all 180 dumps,
+36,621.1 Hz over the run, core 0 20.4–22.0 %, die 20–21 °C. Its check
+**failed on the workload's keys alone**: the dumps showed H read 18
+times and J never, and the owner chose to record it as it stands
+rather than run it again. The same run showed two windows 1/10 fast and
+slow, a read torn while core 0 rewrote the block; `swd-counters.py` now
+reads the block twice and keeps a read only when both agree (not yet
+used for a whole soak). **Not checked:** J read by the program in the
+final build's soak; loading a word back off a tape made by New tape. The owner
 read the settings file on a computer after saving and found it right,
 and made `/ace/keymaps/invaders.map`, chose it on the Keys row and found
 its keys remapped. A test SAVE went onto the owner's `BIG.tap` by
