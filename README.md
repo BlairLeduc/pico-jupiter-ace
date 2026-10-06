@@ -1,8 +1,9 @@
 # pico-jupiter-ace
 
 A Jupiter Ace emulator for the ClockworkPi PicoCalc, on a Raspberry Pi
-Pico 2, Pico 2 W or Pimoroni Pico Plus 2 W. The RP2040 is not supported:
-it is too slow to run the Z80 in real time.
+Pico 2 or compatible board. Unfortunately, a board based on the RP2040
+(Pico or the like) is not supported as it is too slow to run the Z80
+in real time.
 
 The Jupiter Ace (Jupiter Cantab, 1982) is a small British home computer
 that runs Forth instead of BASIC. It has a Z80A at 3.25 MHz, an 8 KiB ROM
@@ -11,14 +12,15 @@ all be redefined, a 40-key keyboard, and a one-bit speaker. This emulator
 runs the original ROM on an emulated Z80, in real time, with sound, tape
 and snapshots.
 
-It leaves out the Ace's add-on hardware (sound boards, printer, ROM
-packs), `.wav` and `.tzx` tapes, and writing `.ace` files;
-[`docs/design.md`](docs/design.md) §17 gives the reason for each.
+> [!NOTE]
+> It does not emulate the Ace's add-on hardware (sound boards, printer, ROM
+> packs), `.wav` and `.tzx` tapes, and writing `.ace` files;
+> [`docs/design.md`](docs/design.md) §17 provides the reason for each.
 
 ## Documentation
 
 - [Design](docs/design.md): the Ace as emulated, the architecture,
-  budgets, milestones, and every guest fact with how it was settled.
+  budgets, milestones, and every guest fact and how each was settled.
 - [PicoCalc hardware notes](docs/hardware-notes.md): the host platform.
 - [Emulator lessons](docs/emulator-lessons.md): what an earlier emulator
   on the same hardware taught.
@@ -50,8 +52,6 @@ The build refuses any file but this one:
 ```
 
 The menu's *About* page shows the same SHA-1, read from the firmware.
-The Ace DOS ROM is not distributed: no permission covers it, and the
-emulator has no disc drive.
 
 ## Building and flashing
 
@@ -62,12 +62,9 @@ You need the Raspberry Pi Pico SDK (2.x) and `arm-none-eabi-gcc` on your
 tools/build.sh -DPICO_ACE_UART=OFF build/pico-release
 ```
 
-This makes `build/pico-release/pico-ace.uf2`, the build to use. Hold
-BOOTSEL on the Pico while connecting it to a computer, and copy the
-`.uf2` onto the drive that appears. One image runs on all three boards.
-[`CLAUDE.md`](CLAUDE.md) lists the other builds, which are for
-development: the default build logs to UART1 on GP4 and GP5, and is
-flashed and driven over a Raspberry Pi Debug Probe.
+This makes `build/pico-release/pico-ace.uf2`. Hold BOOTSEL on the Pico
+while connecting it to a computer, and copy the `.uf2` onto the drive
+that appears. One image runs on all three boards.
 
 ## The SD card
 
@@ -78,15 +75,14 @@ writes is under `/ace/`:
 ```
 /ace/
   pico-ace.cfg          the settings, read at power-on (below)
-  tapes/*.tap           tapes; SAVE writes here too
+  tapes/*.tap           tape images
   snaps/*.ace           snapshots in the format other Ace emulators use
   states/slot1.sav      the emulator's own saved states, slots 1 to 4
-  keymaps/*.map         game layouts (below)
+  keymaps/*.map         keyboard mapping layouts (below)
 ```
 
-The card is FAT32, or FAT16 for small cards. It may be shared with
-pico-atom, the Acorn Atom emulator for the same hardware, which keeps
-everything under `/atom/`.
+> [!WARNING]
+> The card must be formatted as FAT32, or FAT16 for small cards.
 
 ## Software
 
@@ -122,23 +118,21 @@ presses the Ace keys that give the same character. The ones that differ:
 | `£` | `` ` `` |
 | `©` | `Ctrl`+`I` |
 
-The emulator takes these for itself, the same keys as pico-atom, the
-Acorn Atom emulator for the PicoCalc:
+Use the following key-bindings to access the emulator itself:
 
 | | |
 |---|---|
 | the emulator's menu | `Alt`+`M` |
-| one menu page, then back to the Ace | `F1` Tapes, `F3` Snapshots, `F4` Setup, `F5` Machine |
-| these keys, on the panel | `Alt`+`H` |
+| specific menu page, then back to the Ace | `F1` Tapes, `F3` Snapshots, `F4` Setup, `F5` Machine |
+| help, shows these key bindings | `Alt`+`H` |
 | the About page | `F10` |
 | pause | `Alt`+`P` |
 | reset the Ace, keeping its memory | `Alt`+`K` |
 
-`F2` is pico-atom's discs; the Ace has no disc drive, so it does nothing.
 A page opened with a function key or `Alt`+`H` goes back to the Ace when
 you leave it. In the menu the arrows move, `Enter` chooses, left and
 right change a value, and `Esc` goes back a page, or to the Ace from the
-first page. The row at the bottom names the first problem the emulator
+main page. The row at the bottom names the first problem the emulator
 has found, if there is one, and the title row shows the battery's charge.
 
 **Pause.** `Alt`+`P` stops the Ace where it is and dims the screen. The
@@ -173,8 +167,10 @@ free number) and puts it in the deck, and every `SAVE` adds to it.
 on, a load or save takes a fraction of a second. With it off, the Ace
 reads and writes the tape's signal, as a real one does. A tape then takes
 as long as it did in 1982, divided by about three, since the emulator runs
-the Ace as fast as it can while a tape plays, without sound. A few
-programs load through a loader of their own and need fast tape off and
+the Ace as fast as it can while a tape plays, without sound. 
+
+> [!TIP]
+A few programs load through a loader of their own and need fast tape off and
 *Play* on the *Tapes* page.
 
 ### Snapshots and saved states
@@ -185,8 +181,11 @@ the 51K. A file for another machine is refused, and the page names the
 machine it needs; change it on the *Machine* page first.
 
 The same page saves the whole machine to one of four slots in
-`/ace/states/`, and loads it back. A saved state is this emulator's own
-format, and loads only into the machine it came from.
+`/ace/states/`, and loads it back. 
+
+> [!IMPORTANT]
+> A saved state is stored using this emulator's own format, and can only
+> be loaded using the same machine configuration that saved it.
 
 ### The machine
 
@@ -200,8 +199,8 @@ every time, choose *Save settings* afterwards.
 
 ### Game layouts
 
-Ace games read the keyboard themselves, and many move on keys that sit
-apart on the PicoCalc. A game layout lays a few keys over the standard
+Ace games read the keyboard themselves, and many move on keys that are
+not in good placement for the PicoCalc. A game layout adjusts the standard
 map, and every other key types as before. The *Keys* row of the *Setup*
 page (`F4`) chooses one, as pico-atom's does.
 
@@ -260,8 +259,9 @@ backlight = 8          # 1-15, as the menu shows it; leave out to keep the last
 fast_tape = on         # off: the Ace reads and writes the tape's signal
 ```
 
-The backlight is the one exception: it is left alone unless the file
-sets it.
+> [!NOTE]
+> The backlight is the one exception: it is left alone unless the file
+> sets it.
 
 Upper and lower case are the same. A `#` at the start of a line, or after
 a space, starts a comment. A line that is wrong is skipped and the rest
@@ -279,11 +279,11 @@ it. With no file on the card, the save makes one.
 
 ### About
 
-The *About* page (`F10`), laid out as pico-atom's, shows the firmware's
-version, the board it was built for, the chip, its revision and clock,
-the keyboard controller's version, the chip's temperature, the machine,
-the ROM with the first eight digits of its SHA-1, to check against the
-one above, and the state of the settings file.
+The *About* page (`F10`), shows the firmware's version, the board it was
+built for, the chip, its revision and clock, the keyboard controller's
+version, the chip's temperature, the machine, the ROM with the first
+eight digits of its SHA-1, to check against the one above, and the state
+of the settings file.
 
 ## Books
 
