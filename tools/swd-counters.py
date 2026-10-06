@@ -103,12 +103,24 @@ def openocd(commands):
 def read(elf, screen=False):
     """One sample: the block's words by name, and the screen's rows if asked."""
     addr = symbol(elf, "g_swd")
-    cmds = ["echo \"SWD [read_memory 0x%08x 32 %d]\"" % (addr, len(WORDS))]
-    text = openocd(cmds)
-    m = re.search(r"^SWD ([0-9a-fx ]+)$", text, re.M)
-    if not m:
-        sys.exit("swd-counters.py: no read from the target:\n" + text)
-    vals = [int(v, 16) for v in m.group(1).split()]
+    # Core 0 rewrites the block while it is read, a word at a time, so a
+    # read can mix two seconds: an old clock with a new sample count, which
+    # shows as a window 1/10 fast and the next 1/10 slow (seen in M15's
+    # second soak). Read it twice in one session and keep it only when the
+    # two agree; core 0 writes once a second, and the reads are
+    # milliseconds apart.
+    cmd = "echo \"SWD [read_memory 0x%08x 32 %d]\"" % (addr, len(WORDS))
+    vals = None
+    for _ in range(5):
+        text = openocd([cmd, cmd])
+        reads = re.findall(r"^SWD ([0-9a-fx ]+)$", text, re.M)
+        if len(reads) != 2:
+            sys.exit("swd-counters.py: no read from the target:\n" + text)
+        if reads[0] == reads[1]:
+            vals = [int(v, 16) for v in reads[0].split()]
+            break
+    if vals is None:
+        sys.exit("swd-counters.py: the block changed under five reads in a row")
     s = dict(zip(WORDS, vals))
     for k in SIGNED:
         if s[k] >= 1 << 31:
