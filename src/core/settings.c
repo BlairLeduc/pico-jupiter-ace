@@ -13,6 +13,8 @@ void settings_default(settings_t *s) {
     s->volume    = 8u;
     s->perf_line = false;
     s->fast_tape = true;
+    s->status    = true;
+    s->backlight = 0u;
 }
 
 /* strcasecmp is POSIX, not C11. */
@@ -76,10 +78,11 @@ static settings_status_t layout(settings_t *s, const char *v) {
 
 /* Every setting the file may give, in §10.6's order. Only the boot tape
  * may be left empty, meaning none. */
-enum { K_RAM, K_VOLUME, K_LAYOUT, K_BOOT_TAPE, K_PERF_LINE, K_FAST_TAPE, K_COUNT };
+enum { K_RAM, K_VOLUME, K_LAYOUT, K_BOOT_TAPE, K_PERF_LINE, K_FAST_TAPE, K_STATUS,
+       K_BACKLIGHT, K_COUNT };
 
 static const char *const k_names[K_COUNT] = {
-    "ram", "volume", "layout", "boot_tape", "perf_line", "fast_tape",
+    "ram", "volume", "layout", "boot_tape", "perf_line", "fast_tape", "status", "backlight",
 };
 
 static settings_status_t apply(settings_t *s, unsigned k, const char *v) {
@@ -91,6 +94,8 @@ static settings_status_t apply(settings_t *s, unsigned k, const char *v) {
     case K_BOOT_TAPE: return path(v, s->boot_tape);
     case K_PERF_LINE: return on_off(v, &s->perf_line);
     case K_FAST_TAPE: return on_off(v, &s->fast_tape);
+    case K_STATUS:    return on_off(v, &s->status);
+    case K_BACKLIGHT: return number(v, 1u, 15u, &s->backlight);
     }
     return SET_UNKNOWN;
 }
@@ -202,6 +207,8 @@ static bool same_path(const char *dir, const char *a, const char *b) {
     return same_name(pa, pb);
 }
 
+/* b is the settings being saved, whose backlight of 0 says "the file's,
+ * whatever it is": equal to anything, so the line is kept. */
 static bool key_equal(unsigned k, const settings_t *a, const settings_t *b) {
     switch (k) {
     case K_RAM:       return a->ram == b->ram;
@@ -210,6 +217,8 @@ static bool key_equal(unsigned k, const settings_t *a, const settings_t *b) {
     case K_BOOT_TAPE: return same_path(SETTINGS_TAPE_DIR, a->boot_tape, b->boot_tape);
     case K_PERF_LINE: return a->perf_line == b->perf_line;
     case K_FAST_TAPE: return a->fast_tape == b->fast_tape;
+    case K_STATUS:    return a->status == b->status;
+    case K_BACKLIGHT: return b->backlight == 0 || a->backlight == b->backlight;
     }
     return true;
 }
@@ -219,13 +228,18 @@ static const char *value_of(unsigned k, const settings_t *s, char num[4]) {
     switch (k) {
     case K_RAM:       return k_rams[s->ram];
     case K_VOLUME:
-        num[0] = (char)('0' + s->volume % 10u);
-        num[1] = 0;
-        return num;
+    case K_BACKLIGHT: {
+        unsigned v = k == K_VOLUME ? s->volume : s->backlight;
+        num[0] = (char)('0' + v / 10u % 10u);
+        num[1] = (char)('0' + v % 10u);
+        num[2] = 0;
+        return v < 10u ? num + 1 : num;
+    }
     case K_LAYOUT:    return s->layout[0] ? s->layout : "standard";
     case K_BOOT_TAPE: return s->boot_tape;
     case K_PERF_LINE: return s->perf_line ? "on" : "off";
     case K_FAST_TAPE: return s->fast_tape ? "on" : "off";
+    case K_STATUS:    return s->status ? "on" : "off";
     }
     return "";
 }

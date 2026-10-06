@@ -85,12 +85,15 @@ void board_identify(board_info_t *info) {
     info->sdk_board = PICO_BOARD;
 #if PICO_RP2350
     info->sdk_platform = "rp2350";
+    info->chip = (sysinfo_hw->package_sel & SYSINFO_PACKAGE_SEL_BITS) ? "RP2350A" : "RP2350B";
     info->chip_version = (uint8_t)((sysinfo_hw->chip_id >> 28) & 0xFu);
 #elif PICO_RP2040
     info->sdk_platform = "rp2040";
+    info->chip = "RP2040";
     info->chip_version = 0;
 #else
     info->sdk_platform = "unknown";
+    info->chip = "unknown";
     info->chip_version = 0;
 #endif
 

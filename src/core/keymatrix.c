@@ -8,6 +8,10 @@ void keymatrix_init(keymatrix_t *k) {
     memset(k, 0, sizeof(*k));
 }
 
+void keymatrix_set_layout(keymatrix_t *k, const keylayout_t *l) {
+    k->layout = l;
+}
+
 static void enqueue(keymatrix_t *k, uint8_t state, uint8_t code, uint8_t canon) {
     unsigned tail = (k->q_head + k->q_len) % ACE_KEY_EVENT_QUEUE;
     k->queue[tail] = (keymatrix_event_t){ state, code, canon };
@@ -67,7 +71,20 @@ static const keymap_t *find(uint8_t code, uint8_t layer) {
     return NULL;
 }
 
-static const keymap_t *lookup(const keymatrix_t *k, uint8_t code) {
+/* With Alt down the Alt layer only, so no layout can take the menu,
+ * pause or reset away. Otherwise the layout first, by physical key, then
+ * the standard map (§9.4). */
+static const keymap_t *lookup(const keymatrix_t *k, uint8_t code, bool *from_layout) {
+    *from_layout = false;
+    if (!k->alt && k->layout) {
+        uint8_t canon = keymap_picocalc_canonical(code);
+        for (unsigned i = 0; i < k->layout->n; i++) {
+            if (k->layout->bind[i].code == canon) {
+                *from_layout = true;
+                return &k->layout->bind[i];
+            }
+        }
+    }
     if (!k->alt) return find(code, 0);
     const keymap_t *e = find(code, KM_ALT);
     /* A function key pressed with Alt still held arrives as itself
@@ -137,7 +154,8 @@ static bool apply_head(keymatrix_t *k) {
     if (h >= 0) return true;
     if (k->gap > 0) return false;
 
-    const keymap_t *e = lookup(k, ev.code);
+    bool from_layout;
+    const keymap_t *e = lookup(k, ev.code, &from_layout);
     if (!e) return true;
     if (e->flags & KM_MENU) { k->menu_request = true; k->menu_page = e->row; }
     if (e->flags & KM_PAUSE) k->pause_request = true;
@@ -148,8 +166,10 @@ static bool apply_head(keymatrix_t *k) {
      * Ace types without SHIFT keeps SHIFT up: on the PicoCalc '!' is a
      * Shift chord, on the Ace a SYMBOL SHIFT one. The ROM would type it
      * either way; a program reading the matrix would not see it the
-     * Ace's way (§9.2). */
-    bool unshift = k->shift && !(e->flags & (KM_SHIFT | KM_NOCELL | KM_ALT));
+     * Ace's way (§9.2). A layout's cell is a key, not a character, and
+     * takes SHIFT as it finds it (§9.4). */
+    bool unshift = k->shift && !from_layout &&
+                   !(e->flags & (KM_SHIFT | KM_NOCELL | KM_ALT));
     k->held[k->n++] = (keymatrix_held_t){ .canon = canon, .map = *e, .unshift = unshift };
     return true;
 }

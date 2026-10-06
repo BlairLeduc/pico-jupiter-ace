@@ -27,6 +27,8 @@
 
 #include "keymatrix.h"
 
+#include <ctype.h>
+
 /* Ace keys as "row, col". */
 #define AK_Z     0, 2
 #define AK_X     0, 3
@@ -151,17 +153,19 @@ const keymap_t keymap_picocalc[] = {
     { 'V', AK_INVERSE,     KM_ALT | KM_SHIFT },
     { 'X', AK_DELETE_LINE, KM_ALT | KM_SHIFT },
     { 'M', KM_PAGE_MAIN, 0, KM_ALT | KM_MENU },
+    { 'H', KM_PAGE_HELP, 0, KM_ALT | KM_MENU },
     { 'P', NOCELL,          KM_ALT | KM_PAUSE },
-    { 'R', NOCELL,          KM_ALT | KM_RESET },
+    { 'K', NOCELL,          KM_ALT | KM_RESET },
 
-    /* F1-F5 and F10 open the menu at a page (§12). The Ace has no
-     * function keys, so they are the menu's everywhere. */
+    /* The function keys open the menu at a page, as pico-atom's do
+     * (§12): F2 is its Discs, and the Ace has no disc, so F2 is
+     * nothing. The Ace has no function keys, so they are the menu's
+     * everywhere. */
     { PICOCALC_KEY_F1 + 0, KM_PAGE_TAPE,     0, KM_MENU },
-    { PICOCALC_KEY_F1 + 1, KM_PAGE_SNAPSHOT, 0, KM_MENU },
-    { PICOCALC_KEY_F1 + 2, KM_PAGE_MACHINE,  0, KM_MENU },
-    { PICOCALC_KEY_F1 + 3, KM_PAGE_LAYOUT,   0, KM_MENU },
-    { PICOCALC_KEY_F1 + 4, KM_PAGE_ABOUT,    0, KM_MENU },
-    { PICOCALC_KEY_F10,    KM_PAGE_MAIN,     0, KM_MENU },
+    { PICOCALC_KEY_F1 + 2, KM_PAGE_SNAPSHOT, 0, KM_MENU },
+    { PICOCALC_KEY_F1 + 3, KM_PAGE_SETUP,    0, KM_MENU },
+    { PICOCALC_KEY_F1 + 4, KM_PAGE_MACHINE,  0, KM_MENU },
+    { PICOCALC_KEY_F10,    KM_PAGE_ABOUT,    0, KM_MENU },
 };
 
 const size_t keymap_picocalc_len = sizeof keymap_picocalc / sizeof keymap_picocalc[0];
@@ -173,6 +177,118 @@ const size_t keymap_picocalc_len = sizeof keymap_picocalc / sizeof keymap_picoca
 #define PC_PAGE_UP   0xD6u
 #define PC_PAGE_DOWN 0xD7u
 #define PC_TAB       0x09u
+
+/* ---- game layouts (§9.4) ------------------------------------------- */
+
+/* Ace games commonly read 5-8, the keys the Ace's own cursor arrows are
+ * on, or Q A O P, so the built-ins put those on the PicoCalc's arrows,
+ * unshifted, since a game scanning the matrix sees the cell. Fire is on
+ * ']', across the keyboard from the arrows: pico-atom chose it after
+ * play on the device, and a Shift cannot be fire, because while one is
+ * down the MCU sends nothing for Left or Right (hardware-notes.md §6.3).
+ * Fire is 0 for the cursor keys, as on a cursor joystick, and SPACE for
+ * Q A O P. Neither names a game: the user chooses one in the menu. */
+const keylayout_t keylayout_builtin[] = {
+    {
+        .name = "CURSOR",
+        .n = 5,
+        .bind = {
+            { PICOCALC_KEY_LEFT,  AK_5, 0 }, { PICOCALC_KEY_UP,    AK_6, 0 },
+            { PICOCALC_KEY_DOWN,  AK_7, 0 }, { PICOCALC_KEY_RIGHT, AK_8, 0 },
+            { ']',                AK_0, 0 },
+        },
+    },
+    {
+        .name = "QAOP",
+        .n = 5,
+        .bind = {
+            { PICOCALC_KEY_LEFT,  AK_O, 0 }, { PICOCALC_KEY_UP,    AK_Q, 0 },
+            { PICOCALC_KEY_DOWN,  AK_A, 0 }, { PICOCALC_KEY_RIGHT, AK_P, 0 },
+            { ']',                AK_SPACE, 0 },
+        },
+    },
+};
+
+const size_t keylayout_builtin_len = sizeof keylayout_builtin / sizeof keylayout_builtin[0];
+
+/* strcasecmp is POSIX, not C11. */
+static bool same_name(const char *a, const char *b) {
+    for (; *a && *b; a++, b++) {
+        if (toupper((unsigned char)*a) != toupper((unsigned char)*b)) return false;
+    }
+    return *a == *b;
+}
+
+typedef struct { const char *name; uint8_t code; } key_name_t;
+
+static const key_name_t picocalc_keys[] = {
+    { "left", PICOCALC_KEY_LEFT }, { "right", PICOCALC_KEY_RIGHT },
+    { "up", PICOCALC_KEY_UP },     { "down", PICOCALC_KEY_DOWN },
+    { "space", ' ' }, { "enter", PICOCALC_KEY_ENTER },
+    { "backspace", PICOCALC_KEY_BACKSPACE }, { "tab", PC_TAB },
+    { "del", PICOCALC_KEY_DEL }, { "esc", PICOCALC_KEY_ESC },
+};
+
+bool keymap_picocalc_key_named(const char *name, uint8_t *code) {
+    /* A printable character names the key it is on, shifted or not. */
+    if (name[0] > ' ' && name[0] < 0x7F && name[1] == 0) {
+        *code = keymap_picocalc_canonical((uint8_t)name[0]);
+        return true;
+    }
+    for (size_t i = 0; i < sizeof picocalc_keys / sizeof picocalc_keys[0]; i++) {
+        if (same_name(name, picocalc_keys[i].name)) {
+            *code = picocalc_keys[i].code;
+            return true;
+        }
+    }
+    return false;
+}
+
+typedef struct { const char *name; uint8_t row, col; } ace_target_t;
+
+/* Every Ace key, by the name on its keycap. SHIFT and SYMBOL SHIFT are
+ * cells like the rest (§2.4), so a game that reads them alone can have
+ * them. */
+static const ace_target_t ace_targets[] = {
+    { "SHIFT", AK_ROW_MODS, AK_COL_SHIFT }, { "SYMBOL", AK_ROW_MODS, AK_COL_SYM },
+    { "ENTER", AK_ENTER }, { "SPACE", AK_SPACE },
+    { "0", AK_0 }, { "1", AK_1 }, { "2", AK_2 }, { "3", AK_3 }, { "4", AK_4 },
+    { "5", AK_5 }, { "6", AK_6 }, { "7", AK_7 }, { "8", AK_8 }, { "9", AK_9 },
+    { "A", AK_A }, { "B", AK_B }, { "C", AK_C }, { "D", AK_D }, { "E", AK_E },
+    { "F", AK_F }, { "G", AK_G }, { "H", AK_H }, { "I", AK_I }, { "J", AK_J },
+    { "K", AK_K }, { "L", AK_L }, { "M", AK_M }, { "N", AK_N }, { "O", AK_O },
+    { "P", AK_P }, { "Q", AK_Q }, { "R", AK_R }, { "S", AK_S }, { "T", AK_T },
+    { "U", AK_U }, { "V", AK_V }, { "W", AK_W }, { "X", AK_X }, { "Y", AK_Y },
+    { "Z", AK_Z },
+};
+
+bool keymap_ace_target_named(const char *name, keymap_t *out) {
+    for (size_t i = 0; i < sizeof ace_targets / sizeof ace_targets[0]; i++) {
+        const ace_target_t *t = &ace_targets[i];
+        if (same_name(name, t->name)) {
+            *out = (keymap_t){ 0, t->row, t->col, 0 };
+            return true;
+        }
+    }
+    return false;
+}
+
+void keymap_binding_str(const keymap_t *e, char *out, size_t n) {
+    char ch[2] = { (char)e->code, 0 };
+    const char *key = ch, *target = "?";
+    for (size_t i = 0; i < sizeof picocalc_keys / sizeof picocalc_keys[0]; i++)
+        if (picocalc_keys[i].code == e->code) key = picocalc_keys[i].name;
+    for (size_t i = 0; i < sizeof ace_targets / sizeof ace_targets[0]; i++)
+        if (ace_targets[i].row == e->row && ace_targets[i].col == e->col)
+            target = ace_targets[i].name;
+    /* By hand: src/core/ leaves printf, and whatever it may allocate,
+     * to the port. */
+    size_t at = 0;
+    for (const char *p = key; *p && at + 1 < n; p++) out[at++] = *p;
+    if (at + 1 < n) out[at++] = '=';
+    for (const char *p = target; *p && at + 1 < n; p++) out[at++] = *p;
+    if (n) out[at] = 0;
+}
 
 uint8_t keymap_picocalc_canonical(uint8_t code) {
     if (code >= 'A' && code <= 'Z') return (uint8_t)(code + ('a' - 'A'));

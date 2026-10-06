@@ -51,4 +51,5 @@ void snapshot_fill(snapshot_t *s, const ace_t *m) {
     memcpy(s->screen, ace_screen(m), ACE_SCREEN_BYTES);
     memcpy(s->charset, ace_charset(m), ACE_CHARSET_BYTES);
     s->field = m->fields;
+    ace_status(m, &s->status);
 }

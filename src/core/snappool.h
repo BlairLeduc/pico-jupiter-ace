@@ -19,6 +19,7 @@
 
 #include "ace.h"
 #include "config.h"
+#include "status.h"
 
 typedef enum {
     SNAP_FREE,       /* owned by nobody; core 0 may claim it        */
@@ -27,13 +28,13 @@ typedef enum {
     SNAP_RENDERING,  /* core 1 owns it                              */
 } snap_state_t;
 
-/* What core 1 needs from a field (§4.4): the two video inputs, and the
- * field number for the perf line. */
+/* What core 1 needs from a field (§4.4): the two video inputs, the
+ * field number, and the status line's few bytes (status.h). */
 typedef struct {
-    uint8_t  screen[ACE_SCREEN_BYTES];
-    uint8_t  charset[ACE_CHARSET_BYTES];
-    uint32_t field;
-    /* M10: tape position and the status line's flags (§4.4). */
+    uint8_t      screen[ACE_SCREEN_BYTES];
+    uint8_t      charset[ACE_CHARSET_BYTES];
+    uint32_t     field;
+    ace_status_t status;    /* the turbo ratio is the port's to fill */
 } snapshot_t;
 
 typedef struct {

@@ -9,8 +9,9 @@
  *
  * The menu is a text page through the guest's row generator (textpage.h),
  * and closing it invalidates the presenter, so the next snapshot is drawn
- * whole. Its status row names the first problem: the tape's last word,
- * then the settings file's first bad line.
+ * whole. Its pages and rows are pico-atom's (menu.c says where they
+ * differ). Its status row names the first problem: a layout a file
+ * chose, the tape's last word, then the settings file's first bad line.
  */
 #ifndef PICO_ACE_MENU_H
 #define PICO_ACE_MENU_H
@@ -20,21 +21,21 @@
 #include "ace.h"
 #include "settings.h"
 
-/* What the settings file said at boot, kept for the save: the keys the
- * menu does not set (layout) are saved from here (EL §8.7). Core 1, at
- * boot. */
+/* What the settings file said at boot, kept for the save: what the
+ * menu does not set, and a layout a file chose, is saved from here
+ * (EL §8.7). Core 1, at boot. */
 void menu_init(const settings_t *file);
 
-/* Run the menu until it is closed. `page` is KM_PAGE_MAIN or the page an
- * F-key asked for, which closing then returns from to the guest. `alt`
- * is whether Alt was down when it was asked for, so that Alt+M closes it
- * only as a chord. */
+/* Run the menu until it is closed. `page` is KM_PAGE_MAIN or the page a
+ * function key or Alt+H asked for, which closing then returns from to
+ * the guest. `alt` is whether Alt was down when it was asked for, so
+ * that Alt+M closes it only as a chord. */
 void menu_run(ace_t *m, unsigned page, bool alt);
 
-/* Pause: the guest's last frame stays, the backlight is dimmed, and
- * PAUSED shows below the guest. Any key resumes and is not typed; a
- * modifier alone does not, nor does the pause chord's own repeat. Alt+M
- * and the F-keys go to the menu instead: returns -1 to resume, or the
+/* Pause: the guest's last frame stays, the backlight is dimmed, and the
+ * status line says Paused, whether or not it is on. Any key resumes and
+ * is not typed; a modifier alone does not, nor does the pause chord's
+ * own repeat. Alt+M, Alt+H and the function keys go to the menu instead: returns -1 to resume, or the
  * page, with whether Alt was down in *alt. */
 int pause_run(bool *alt);
 

@@ -18,6 +18,7 @@
 #include "menu.h"
 #include "park.h"
 #include "southbridge.h"
+#include "status.h"
 #include "tapeio.h"
 
 /* Keyboard polls, as hardware-notes.md §6.1 and design.md §9.1 have them;
@@ -27,28 +28,29 @@
 #define BAT_POLL_US  5000000u
 #define TEMP_POLL_US 1000000u
 
-/* The perf line (design.md §7.4, §14): core 0's last window, and core 1's
- * longest present and dropped snapshots over its own second. */
+/* The perf line at the top (design.md §7.4, §14), as pico-atom has it:
+ * core 0's last second, core 1's longest present and dropped snapshots
+ * over its own, and the audio's counters since boot. Hidden, it is
+ * blank; drawn only when the text changes. */
 static void draw_perf(uint32_t present_max_us, uint32_t dropped) {
-    char text[96];   /* wider than the line: display_perf cuts it */
-    if (!g_ui.perf_line) {
-        display_perf("");   /* drawn only when its text changes */
-        return;
-    }
-    if (g_c0.seconds == 0) {
-        snprintf(text, sizeof text, "present %lu.%lums",
-                 (unsigned long)(present_max_us / 1000u),
-                 (unsigned long)(present_max_us % 1000u / 100u));
-    } else {
-        uint32_t busy = g_c0.busy1000, hpi = g_c0.hpi10;
-        snprintf(text, sizeof text, "c0 %lu.%lu%% %lu.%lucy/i pr %lu.%lums dr %lu",
-                 (unsigned long)(busy / 10u), (unsigned long)(busy % 10u),
-                 (unsigned long)(hpi / 10u), (unsigned long)(hpi % 10u),
-                 (unsigned long)(present_max_us / 1000u),
-                 (unsigned long)(present_max_us % 1000u / 100u),
-                 (unsigned long)dropped);
+    char text[ACE_TEXT_COLS + 1] = "";
+    if (g_ui.perf_line) {
+        perf_line_t p = {
+            .busy1000 = g_c0.busy1000, .head100 = g_c0.head100,
+            .present_us = present_max_us, .dropped = dropped,
+            .underruns = g_c0.underruns, .late = g_c0.late_refills,
+        };
+        status_perf_format(&p, text);
     }
     display_perf(text);
+}
+
+/* The status line at the foot (§12): the cassette from the snapshot's
+ * few bytes, and the deck's name, which is core 1's own. */
+static void draw_status(const ace_status_t *st) {
+    char text[ACE_TEXT_COLS + 1] = "";
+    if (g_ui.status) status_format(st, tapeio_inserted(), text);
+    display_status(text);
 }
 
 void core1_main(void) {
@@ -77,6 +79,15 @@ void core1_main(void) {
     g_boot.ready_us = time_us_32();
     menu_init(&g_boot.settings);
 
+    /* The file's backlight, or the panel's own as the southbridge has
+     * it (hardware-notes.md §6): register values step by 16, 16-240. */
+    if (g_boot.settings.backlight) {
+        g_ui.backlight = g_boot.settings.backlight;
+        (void)sb_write(SB_REG_BKL, (uint8_t)(g_ui.backlight * 16u), NULL);
+    } else if (sb_read(SB_REG_BKL, r) == SB_OK && r[1] >= 16u) {
+        g_ui.backlight = r[1] / 16u > 15u ? 15u : r[1] / 16u;
+    }
+
     __dmb();
     g_c1.ready = true;
 
@@ -88,7 +99,9 @@ void core1_main(void) {
         if (i >= 0) {
             display_stats_t st;
             display_present(g_pool.buf[i].screen, g_pool.buf[i].charset, &st);
+            ace_status_t line = g_pool.buf[i].status;
             pool_release(i);
+            draw_status(&line);
             g_c1.presents++;
             if (st.full) g_c1.full_presents++;
             g_c1.last_us = st.us;

@@ -14,6 +14,7 @@ typedef struct {
     const char *sdk_board;      /* what we were compiled for            */
     const char *sdk_platform;
     char        unique_id[17];  /* physical: the module's flash id      */
+    const char *chip;           /* physical: RP2350A or B, by package   */
     uint8_t     chip_version;   /* physical: RP2350 revision, 0 if n/a  */
     uint32_t    clk_sys_hz;
     uint32_t    clk_peri_hz;

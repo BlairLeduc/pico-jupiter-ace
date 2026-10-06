@@ -7,6 +7,7 @@
 
 #include "pico/stdlib.h"
 
+#include "keymapio.h"
 #include "log.h"
 #include "sd.h"
 #include "settingsio.h"
@@ -40,6 +41,16 @@ static void boot_tape(const settings_t *s) {
               err ? err : "");
 }
 
+/* The card's layouts, and the one the file names (design.md §9.4); a
+ * boot_tape that a layout names may choose another after it. */
+static void boot_layout(const settings_t *s) {
+    keymapio_scan();
+    if (!s->layout[0]) return;
+    int i = keymapio_find(s->layout);
+    if (i >= 0) keymapio_choose(keymapio_get((unsigned)i));
+    else settingsio_fail("layout", "no such layout");
+}
+
 static void job(settings_t *out, card_job_t *j, const char *why) {
     j->mount_us = j->read_us = 0;
     j->fresult = 0;
@@ -65,7 +76,10 @@ static void job(settings_t *out, card_job_t *j, const char *why) {
     t0 = time_us_32();
     settingsio_load(out);
     j->read_us = time_us_32() - t0;
-    if (why[0] == 'b') boot_tape(out);
+    if (why[0] == 'b') {
+        boot_layout(out);
+        boot_tape(out);
+    }
     storage_unmount();
     log_core1("  card         : %s: mounted in %lu us, settings %s in %lu us\n", why,
            (unsigned long)j->mount_us, settingsio_state_str(settingsio_state()),

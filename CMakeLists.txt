@@ -16,6 +16,7 @@ set(PICO_ACE_CORE_SOURCES
     src/core/beeper.c
     src/core/cassette.c
     src/core/font.c
+    src/core/keylayout.c
     src/core/keymap_picocalc.c
     src/core/keymatrix.c
     src/core/render.c
@@ -25,6 +26,7 @@ set(PICO_ACE_CORE_SOURCES
     src/core/snap_ace.c
     src/core/snappool.c
     src/core/snapshot.c
+    src/core/status.c
     src/core/tape.c
     src/core/z80.c
 )
@@ -250,6 +252,7 @@ else()
         src/port/display.c
         src/port/handoff.c
         src/port/kbd.c
+        src/port/keymapio.c
         src/port/lcd.c
         src/port/log.c
         src/port/main.c

@@ -10,6 +10,7 @@
 #include "pico/stdlib.h"
 
 #include "handoff.h"
+#include "keymapio.h"
 #include "log.h"
 #include "storage.h"
 
@@ -64,6 +65,8 @@ static void set_deck(const char *path, bool user) {
     s_user = user && s_path[0];
     s_pos = s_index = 0;
     s_wrapped = false;
+    /* A tape a layout's tapes line names chooses it (design.md §9.4). */
+    if (s_path[0]) keymapio_file_loaded(s_path);
 }
 
 /* The cassette holds this file's image, or the scratch. A machine
@@ -102,6 +105,37 @@ const char *tapeio_insert(ace_t *m, const char *path) {
     set_deck(path, true);
     log_core1("  tape         : %s in the deck\n", path);
     return NULL;
+}
+
+/* A name a tape holds: the file, or the .new an interrupted save left,
+ * which a load takes as the tape (open_read). FR_NO_FILE when neither. */
+static FRESULT taken(const char *path) {
+    FILINFO fi;
+    char tmp[ACE_PATH_MAX + 4];
+    FRESULT fr = f_stat(path, &fi);
+    if (fr != FR_NO_FILE) return fr;
+    snprintf(tmp, sizeof tmp, "%s.new", path);
+    return f_stat(tmp, &fi);
+}
+
+/* pico-atom's New tape (§12): TAPE01.tap, or the next number free, made
+ * empty and put in the deck, where SAVE appends to it. FatFs makes no
+ * missing parent, so /ace first, as a save does. */
+const char *tapeio_new(ace_t *m) {
+    char path[ACE_PATH_MAX];
+    (void)f_mkdir("/ace");
+    (void)f_mkdir(TAPEIO_DIR);
+    for (unsigned n = 1; n <= 99u; n++) {
+        snprintf(path, sizeof path, "%s/TAPE%02u.tap", TAPEIO_DIR, n);
+        FRESULT fr = taken(path);
+        if (fr == FR_OK) continue;
+        if (fr != FR_NO_FILE) return "card error";
+        if (f_open(&s_f, path, FA_CREATE_NEW | FA_WRITE) != FR_OK) return "cannot create";
+        f_close(&s_f);
+        log_core1("  tape         : %s made\n", path);
+        return tapeio_insert(m, path);
+    }
+    return "TAPE99 is the last";
 }
 
 const char *tapeio_inserted(void) { return s_path; }

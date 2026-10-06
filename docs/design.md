@@ -857,9 +857,10 @@ it repaints exactly the cells using the changed glyphs.
 ### 7.4 Geometry
 
 The guest is drawn **1:1 at (32, 64)** on the 320×320 panel (EL §5.4, HW
-§4.10). The 64-row band above it holds the **status line** (tape, RAM size,
-warnings) and the band below it the **perf line**. Each is drawn only when its
-text changes. The border is black and never redrawn. A full guest redraw is
+§4.10). As pico-atom has them (M15), the **perf line** is at the panel's top
+(y = 2) and the **status line**, the tape, at its foot (y = 306), each in the
+Ace's own font, each drawn only when its text changes and each hidden by the
+Setup page or the settings file (`status.h`). The border is black and never redrawn. A full guest redraw is
 ~11.5 ms of wire at 75 MHz (EL §1), well inside a 20 ms field.
 
 Tearing is accepted (EL §5.4). Small band presents confine a tear to one
@@ -996,11 +997,13 @@ Alt down comes from this layer only):
 | Alt+V | INVERSE VIDEO (SHIFT+4), a toggle; the ROM has no TRUE VIDEO (§2.4) |
 | Alt+X | DELETE LINE (SHIFT+1) |
 | Alt+M | menu |
+| Alt+H | the menu's page of keys (M15, as pico-atom's) |
 | Alt+P | pause |
-| Alt+R | reset (asks first) |
+| Alt+K | reset, RAM kept (M15, as pico-atom's; Alt+R before) |
 
 Avoid Alt+`,` `.` Space `B` (MCU's own) and Alt+I (the MCU's Insert) (HW
-§6.3). F1–F5 and F10 open emulator pages directly (§12).
+§6.3). F1, F3–F5 and F10 open emulator pages directly, as pico-atom's do
+(§12).
 
 ### 9.3 Settling the matrix by execution
 
@@ -1028,6 +1031,32 @@ target>` a line), so its parser comes across with only the target names
 changed (§4.6). Ace games
 commonly use 5–8, Q/A/O/P and Z/X, so the built-ins are "cursor keys as
 5–8" and "arrows as Q/A/O/P", with fire on a key the arrows can chord with.
+
+**As built (M15).** `keylayout.c` is pico-atom's parser with the Ace's
+targets: `A`–`Z`, `0`–`9`, `SPACE`, `ENTER`, and `SHIFT` and `SYMBOL` as
+the cells they are (§2.4). A target carries no flags, so a game sees the
+key without the SHIFT the standard map would add, and takes the host's
+Shift as it finds it. `lookup()` in `keymatrix.c` consults the layout by
+canonical code, then the standard map, and with Alt down the Alt layer
+only, so no layout takes the menu, pause or reset; the binding is copied
+at press, so a release undoes what its press did across a change. The
+built-ins are **CURSOR** (Left, Up, Down, Right as 5, 6, 7, 8, the Ace's
+own arrow keys, and `]` as 0) and **QAOP** (O, Q, A, P, and `]` as
+SPACE). Fire is `]` for pico-atom's reason: chosen there after play on
+the device, and a Shift cannot be fire, since the MCU sends nothing for
+Left or Right under it (HW §6.3). `test_keyboard` types each built-in's
+keys through the ROM (`56780`, `oqap `), with the standard map's arrows,
+which type nothing, as the control; `test_keymap` brings pico-atom's
+held-set and parser tests across. Card layouts are `.map` files in
+`/ace/keymaps/`, read at boot and each time the menu opens
+(`keymapio.c`). The **tapes line names files**, not tape headers: a
+`.tap` or `.ace` without its extension, since an `.ace` has no name in
+it. Putting a named tape in the deck (the menu, `boot_tape`, or a LOAD
+that finds the file by name) or loading a named `.ace` chooses the
+layout; the menu's status row says which file did, and Save settings keeps the
+file's own `layout` while one is in force. Core 1 writes the choice to
+`g_ui.layout` only with core 0 parked or not started, and core 0 takes it
+after every park.
 
 ---
 
@@ -1254,8 +1283,10 @@ saved only by a menu action, no flash writes (EL §8.7). Keys: `ram`
 (`3k`/`19k`/`51k`, default `19k`), `volume` (0–8, default 8), `layout` (a
 layout's name, at most 16 characters, or `standard`, the default),
 `boot_tape` (a path, or a bare name in `/ace/tapes/`; empty is none),
-`perf_line` (`on`/`off`, default `off`) and `fast_tape` (`on`/`off`,
-default `on`: the trap, or the signal, §10.4; added in M13). Names and values are read in either
+`perf_line` (`on`/`off`, default `off`), `fast_tape` (`on`/`off`,
+default `on`: the trap, or the signal, §10.4; added in M13), and, as
+pico-atom has them (M15), `status` (`on`/`off`, default `on`) and
+`backlight` (1–15; unset leaves the panel's own). Names and values are read in either
 case, and a `#` at the start of a line or after a space begins a comment.
 Build-time `BOOT_*` overrides win (EL §13.1); M9 has `PICO_ACE_BOOT_RAM`.
 
@@ -1266,7 +1297,9 @@ that key a good value, and made a comment when one does, so that saving
 clears the problem the status row names. Core 1 reads the
 file at boot, before core 0 powers the machine on, because `ram` is the
 machine. As of M9 only `ram` is applied; the other keys are read and
-checked, so a mistake in them is named, and M10 applies them.
+checked, so a mistake in them is named, and M10 applies them. M15
+applies `layout`: the card's layouts are read before `boot_tape` goes in,
+and a name no layout has is the file's problem, `layout: no such layout`.
 
 ---
 
@@ -1321,20 +1354,31 @@ EL §10, with the Ace's specifics:
 - **Boot straight to the prompt**: the Ace's blank screen and cursor,
   with no menu or splash first (the ROM prints `OK` only after a line
   runs, §15.2 M3).
-- **Alt+M** opens the menu, which pauses the guest. Pages: Tape (select,
-  play/stop, new recording), Snapshot (load `.ace`, save/load `.sav`), Machine
-  (RAM size, staged, applied by power-on restart, with a warning
-  that the program is lost), Layout, Settings (save), About.
-- **F1** Tape, **F2** Snapshot, **F3** Machine, **F4** Layout, **F5** About,
-  **F10** menu. A page opened this way returns to the guest when closed.
+- **The menu is pico-atom's** (the owner's decision, 2026-10-05: the two are
+  one family). **Alt+M** opens it, which pauses the guest. Its items, in
+  pico-atom's order less Discs: Tapes (eject, play/stop, rewind, new tape,
+  the files), Snapshots (slot, save, load, delete, every slot's state, then
+  the `.ace` files), Setup (status line, perf line, backlight, volume, keys,
+  fast tape), Machine (RAM size, staged, applied by *Apply and restart*,
+  with a warning that the program is lost), Reset, Save settings, About.
+- **F1** Tapes, **F3** Snapshots, **F4** Setup, **F5** Machine, **F10**
+  About, **Alt+H** a page of these keys, as pico-atom's. **F2** is
+  pico-atom's Discs, and does nothing: the Ace has no disc. A page opened
+  this way returns to the guest when closed. **Alt+K** resets, as
+  pico-atom's BREAK does.
 - The menu is a 32×24 text page rendered through §7.2's generator with the
-  emulator's own font. Closing it invalidates the shadow, so the next
+  Ace's own font, in mixed case as the Ace has it; pico-atom's is upper
+  case because the Atom's is. pico-atom's rows from the top are kept, and
+  its status and key rows are the page's last two. Closing it invalidates the shadow, so the next
   snapshot is presented whole.
-- **Pause** dims the backlight (read it first, restore it after) and shows
-  `PAUSED`. Any key resumes and is not passed on.
-- **About**: firmware version from `git describe --always --dirty` at build
-  time, physical board, chip revision, clocks, southbridge version, die
-  temperature, the ROM's SHA-1, RAM size, settings file state.
+- **Pause** dims the backlight (read it first, restore it after), and the
+  status line says `Paused: any key resumes`, whether or not it is on. Any
+  key resumes and is not passed on.
+- **About**, laid out as pico-atom's: firmware version from `git describe
+  --always --dirty` at build time, the board built for, the chip, its
+  revision and clock, the southbridge's version and the die, the machine,
+  the ROM's row with the first eight digits of its SHA-1, and the settings
+  file's state. The battery's charge is on every page's title row.
 - A **status row** in the menu names the first problem.
 - Firmware names no titles. Per-title configuration lives on the card.
 
@@ -1355,11 +1399,26 @@ stops it (§10.4).
 The pages are in mixed case, in the Ace's own character set (§7.5).
 What the menu changes for core 0, the volume and a reset, goes through
 `g_ui` and is applied by core 0 when it has the machine back (EL §2.5).
-Alt+R resets the CPU with RAM kept. Save settings writes the running
+Alt+R (Alt+K from M15) resets the CPU with RAM kept. Save settings writes the running
 machine's RAM size, the volume, the perf line and the tape in the deck, if
 the user put it there, as `boot_tape`. Over the UART, RS opens the menu
 and US pauses, and while either is up the UART's bytes are its keys, with
 ^P ^N ^B ^F for the arrows (`park.c`).
+**M15** made the menu pico-atom's (above): the main page, Tapes,
+Snapshots, Setup, Machine, About and the keys page, with its rows, its
+key rows and its Escape. The game layout is Setup's *Keys* row, cycled
+with < >, as pico-atom's is; a layout a file chose says so on the status
+row when the menu opens. Tapes gains *New tape*, `TAPE01.tap` or the next
+free number made empty and put in the deck (`tapeio_new`). pico-atom's
+*Record* is left out: the Ace's recorder starts a block at the ROM's save
+cue (`cassette.h`), so every SAVE records and a recorder started by hand
+would take nothing. Machine's *Apply and restart* sets the RAM size in
+`m->cfg` and calls `ace_power_on` on core 1, which owns the machine while
+it is parked, as a snapshot load does; a recording not yet on the card
+refuses it. The settings file gains pico-atom's `status` (default on)
+and `backlight` (1-15; unset leaves the panel's own, and a save keeps
+what the file has), and Save settings writes them and `layout`. Alt+R is
+gone for Alt+K.
 
 ---
 
@@ -1491,6 +1550,18 @@ next, so a workload that stopped early fails; and the screen dumps
 showing the program reading both typed keys. UART keys enter the matrix without passing the southbridge, so
 they are not its key events; keys pressed on the PicoCalc are reported,
 not required. A gauge showing charging fails the run.
+
+**The release build (M15).** With `PICO_ACE_UART=OFF` there is no log
+and no UART to type at, so core 0 copies its counters once a second
+into `g_swd` (`handoff.h`): a magic word and layout number, then the
+fields run, the board's clock in milliseconds, and the same failure and
+growth counters, with the battery, the die and the guest screen's
+address. `tools/swd-counters.py` reads the block over SWD with OpenOCD's
+`read_memory` and no halt (HW §2.7); `soak` samples it every 10 s with
+the screen, and `check` holds the samples to `soak-check.py`'s rules, rt
+taken from the fields over the board's own clock. The owner types the
+program on the PicoCalc and holds H and J by hand, so the release soak
+exercises the real keyboard, which M12's did not.
 
 ---
 
@@ -2199,6 +2270,23 @@ passes again on the release build (counters read over SWD).
 *Measured:* the release build's soak; die temperature on battery.
 *Leaves out:* everything in §17, including the 300 MHz host clock and
 `.ace` export (§18).
+
+**Done 2026-10-05** on the Plus 2 W (id `7458DC82A89AAC12`). Built as
+§9.4, §10.6, §12 and §13.5 record, with the menu made pico-atom's at the
+owner's word. Every menu row and key was checked on the device by the
+owner, and saved settings were used at the next boot. The release
+build's soak passed over SWD, 30 minutes on battery: rt 1.000 in every
+window, every failure counter 0, 36,618–36,624 Hz consumed, core 0
+20.3–21.8 %; **die 20 °C throughout** (uncalibrated, HW §8.1), against
+pico-atom's 23 °C idle. The final build, after the menu was made
+pico-atom's, was soaked again the same way: one boot, rt 1.000 in every
+window, every failure counter 0, 36,621.1 Hz over the run, die 20–21 °C.
+Its check failed only because the program was never seen reading J (H
+18 times), which the owner chose to record as it stands. That run also
+showed a read torn while core 0 rewrote the block, which the reader
+now refuses (§13.5). The owner read the settings
+file on a computer after saving and found it right, and a card `.map`
+file, chosen on the Keys row, remapped its keys.
 
 ---
 

@@ -11,7 +11,9 @@
 #include <stdbool.h>
 #include <stdint.h>
 
+#include "board.h"
 #include "card.h"
+#include "keymatrix.h"
 #include "settings.h"
 #include "settingsio.h"
 #include "snappool.h"
@@ -66,21 +68,61 @@ typedef struct {
     uint32_t guest1000;      /* inside ace_run_field, of wall            */
     uint32_t hpi10;          /* host cycles per guest instruction        */
     uint32_t late;           /* fields started after their deadline      */
+    uint32_t head100;        /* times real time it would run unpaced     */
+    uint32_t underruns;      /* underrun samples since boot (§8)         */
+    uint32_t late_refills;   /* late DMA refills since boot              */
+    uint32_t turbo10;        /* guest speed in tenths while unpaced, else 0 */
 } core0_perf_t;
 
 extern volatile core0_perf_t g_c0;
+
+/* The counters a build without the UART can give (design.md §13.5,
+ * §15.2 M15): core 0 copies them here once a second, and
+ * tools/swd-counters.sh reads the block over SWD with both cores
+ * running, since halting core 0 would starve the audio it measures.
+ * Every word is cumulative from boot, with one writer. The layout is
+ * the script's too: change both, and SWD_LAYOUT with them. */
+#define SWD_MAGIC  0x41434531u   /* "ACE1", little-endian in memory */
+#define SWD_LAYOUT 1u
+typedef struct {
+    uint32_t magic, layout;
+    uint32_t updates;        /* one a second; the block is current      */
+    uint32_t uptime_ms;      /* the board's clock at the update         */
+    uint32_t fields;         /* guest fields run: rt is these over time */
+    uint32_t late, slips;    /* the timer's pacing; 0 on audio          */
+    uint32_t presents, snapshots_dropped;
+    uint32_t key_events, keys_lost, polls, i2c_errors;
+    uint32_t ed_holes;
+    uint32_t underrun_samples, late_refills, consumed;
+    uint32_t beeper_overflow, speaker_edges;
+    uint32_t busy1000;       /* core 0 outside the pacing wait, last second */
+    int32_t  battery;        /* SB_REG_BAT's byte, -1 until read        */
+    int32_t  temp_c;         /* the die, INT32_MIN until read           */
+    uint32_t screen;         /* the guest's 768 screen bytes, an address */
+} swd_counters_t;
+
+extern volatile swd_counters_t g_swd;
 
 /* What the menu changes (design.md §12), written by core 1 while the
  * guest is parked and applied by core 0 when it has the machine back
  * (EL §2.5). Core 1 reads perf_line to draw the perf line. */
 typedef struct {
     volatile unsigned volume;      /* 0-8, as settings_t has it       */
-    volatile bool     perf_line;
+    volatile bool     perf_line;   /* the top line (status.h)          */
+    volatile bool     status;      /* the bottom line: the tape         */
+    volatile unsigned backlight;   /* 1-15 as the Setup page has it; 0 unread */
     volatile bool     fast_tape;   /* the trap, or the signal (tapeio.h) */
     volatile bool     reset;       /* the menu's Reset: core 0 clears it */
     volatile bool     power_on;    /* a load failed part-way (§10.5)  */
+    /* The game layout over the standard map, NULL for none (§9.4):
+     * core 0 takes it after every park (keymapio.h). */
+    const keylayout_t *volatile layout;
 } ui_t;
 
 extern ui_t g_ui;
+
+/* The board, identified by main() before core 1 starts, for the About
+ * page (design.md §12). */
+extern board_info_t g_board;
 
 #endif /* PICO_ACE_HANDOFF_H */

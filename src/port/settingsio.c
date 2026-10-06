@@ -16,7 +16,7 @@ static char s_text[ACE_SETTINGS_FILE_MAX];
 static FIL  s_file;
 
 /* The first problem only: the one a user fixes first. */
-static void fail(const char *what, const char *why) {
+void settingsio_fail(const char *what, const char *why) {
     log_core1("  settings     : %s: %s\n", what, why);
     if (!s_error[0]) snprintf(s_error, sizeof s_error, "%s: %s", what, why);
 }
@@ -59,7 +59,7 @@ void settingsio_load(settings_t *out) {
     }
     if (fr != FR_OK) {
         s_state = SETTINGSIO_UNREADABLE;
-        fail("file", fr == FR_DENIED ? "too big" : "cannot read");
+        settingsio_fail("file", fr == FR_DENIED ? "too big" : "cannot read");
         return;
     }
 
@@ -70,7 +70,7 @@ void settingsio_load(settings_t *out) {
     if (st != SET_OK) {
         char at[16];
         snprintf(at, sizeof at, "line %u", line);
-        fail(at, settings_status_str(st));
+        settingsio_fail(at, settings_status_str(st));
     }
     log_core1("  settings     : %s read, %lu bytes\n", from, (unsigned long)got);
 }

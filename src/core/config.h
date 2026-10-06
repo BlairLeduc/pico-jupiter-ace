@@ -78,11 +78,12 @@
 #define ACE_SCREEN_Y           64u  /* with a 64-row band above and below    */
 #define ACE_LINEBUF_COUNT       2u  /* DMA ping-pong (HW §4.6)              */
 
-/* The lines of text above and below the guest (§7.4), in the emulator's
- * font: 40 cells span the panel. The perf line sits in the middle of the
- * band below. M10: the status line in the band above. */
+/* The lines of text above and below the guest (§7.4, §12), in the Ace's
+ * own font: 40 cells span the panel. Where pico-atom has them: the perf
+ * line at the panel's top, the status line, the tape, at its foot. */
 #define ACE_TEXT_COLS          (ACE_PANEL_W / ACE_GLYPH_COLS)      /* 40  */
-#define ACE_PERF_Y             (ACE_SCREEN_Y + ACE_SCREEN_H + 28u) /* 284 */
+#define ACE_PERF_Y               2u
+#define ACE_STATUS_Y           306u
 #define ACE_LINEBUF_PIXELS  ACE_PANEL_W
 
 /* ---- Port buffers (design.md §3.3) ------------------------------------ */
@@ -98,6 +99,11 @@
 #define ACE_SETTINGS_FILE_MAX 2048u /* /ace/pico-ace.cfg, read whole       */
 #define ACE_SETTINGS_LINE_MAX (ACE_PATH_MAX + 32u)  /* "boot_tape = " and a path */
 #define ACE_KEYMAP_NAME_LEN    16u  /* a layout's name (§9.4)              */
+#define ACE_KEYMAP_LAYOUTS      8u  /* built-in and card layouts together  */
+#define ACE_KEYMAP_BINDINGS    16u  /* bindings per layout                 */
+#define ACE_KEYMAP_TAPES        4u  /* files on a layout's tapes line      */
+#define ACE_KEYMAP_TAPE_LEN    16u  /* one of them: a .tap or .ace, no extension */
+#define ACE_KEYMAP_FILE_MAX  1024u  /* the largest .map file read          */
 #define ACE_TAPE_CHUNK        512u  /* card reads and writes for the tape  */
 #define ACE_TAPE_IMAGE_MAX  65536u  /* a .tap whole, for the signal (§3.3, §10.4) */
 #define ACE_TAPE_LIST_MAX      64u  /* .tap files the Tape page lists      */
