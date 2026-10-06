@@ -66,7 +66,10 @@ static bool load(const char *fname) {
         fail(fname, line, keylayout_status_str(st));
         return false;
     }
-    if (keymapio_find(s_card[s_n_card].name) >= 0) {
+    /* STANDARD is the settings file's word for no layout (settings.c),
+     * so a layout of that name could be chosen and never saved. */
+    if (keymapio_find(s_card[s_n_card].name) >= 0 ||
+        strcmp(s_card[s_n_card].name, "STANDARD") == 0) {
         fail(fname, 0, "name taken");
         return false;
     }
