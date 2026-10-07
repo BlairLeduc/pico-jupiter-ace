@@ -105,6 +105,14 @@ int main(void) {
         CHECK(keymap_picocalc_text('a', ev) == 2 && ev[0].state == KEY_EV_PRESSED &&
                   ev[0].code == 'a' && ev[1].state == KEY_EV_RELEASED && ev[1].code == 'a',
               "a is a press and a release");
+        CHECK(keymap_picocalc_text(PICOCALC_KEY_F1, ev) == 2 && ev[0].code == PICOCALC_KEY_F1,
+              "F1 is itself");
+        CHECK(keymap_picocalc_text(PICOCALC_KEY_F6, ev) == 4 &&
+              ev[0].code == PICOCALC_KEY_SHIFT_L && ev[1].code == PICOCALC_KEY_F6 &&
+              ev[2].code == PICOCALC_KEY_F6 && ev[3].code == PICOCALC_KEY_SHIFT_L,
+              "F6 is Shift+F1's code inside Shift");
+        CHECK(keymap_picocalc_text(0x8Au, ev) == 0 && keymap_picocalc_text(0x80u, ev) == 0,
+              "no key sends 0x8A or 0x80");
         CHECK(keymap_picocalc_text('!', ev) == 4 && ev[0].code == PICOCALC_KEY_SHIFT_L &&
                   ev[1].code == '!' && ev[2].code == '!' && ev[2].state == KEY_EV_RELEASED &&
                   ev[3].code == PICOCALC_KEY_SHIFT_L && ev[3].state == KEY_EV_RELEASED,
@@ -387,7 +395,7 @@ int main(void) {
             press(asks[i].code);
             fields(1);
             CHECK(*asks[i].flag, "Alt+%c requests the %s", asks[i].code, asks[i].what);
-            CHECK(k.menu_request + k.pause_request + k.reset_request == 1,
+            CHECK(k.menu_request + k.pause_request + k.reset_request + k.shot_request == 1,
                   "Alt+%c requests only the %s", asks[i].code, asks[i].what);
             CHECK(matrix_empty(), "Alt+%c reached the matrix", asks[i].code);
         }
@@ -408,7 +416,8 @@ int main(void) {
         CHECK(!k.reset_request && !k.menu_request && matrix_empty(), "Alt+R is nothing now");
 
         /* F1-F5 open pico-atom's pages (§12), with or without Alt held;
-         * F2, its Discs, is nothing, as is F6, Shift+F1; F10 is About. */
+         * F2, its Discs, is nothing; F6, Shift+F1, is a screenshot; F10
+         * is About. */
         static const uint8_t pages[5] = {
             KM_PAGE_TAPE, 0xFF, KM_PAGE_SNAPSHOT, KM_PAGE_SETUP, KM_PAGE_MACHINE,
         };
@@ -426,10 +435,19 @@ int main(void) {
                 CHECK(matrix_empty(), "F%u reached the matrix", f + 1);
             }
         }
-        fresh();
-        press(0x86u);
-        fields(1);
-        CHECK(!k.menu_request, "F6 requests nothing");
+        for (unsigned alt = 0; alt < 2; alt++) {
+            fresh();
+            if (alt) press(PICOCALC_KEY_ALT);
+            press(PICOCALC_KEY_SHIFT_L);
+            press(PICOCALC_KEY_F6);
+            fields(1);
+            CHECK(k.shot_request, "%sF6 requests a screenshot", alt ? "Alt+" : "");
+            CHECK(!k.menu_request && !k.pause_request && !k.reset_request,
+                  "%sF6 requests only a screenshot", alt ? "Alt+" : "");
+            /* The host's Shift is the Ace's SHIFT, held as it is (§9.2). */
+            m.keys[AK_ROW_MODS] &= (uint8_t)~(1u << AK_COL_SHIFT);
+            CHECK(matrix_empty(), "%sF6 reached the matrix", alt ? "Alt+" : "");
+        }
         fresh();
         press(PICOCALC_KEY_SHIFT_L);
         press(PICOCALC_KEY_F10);

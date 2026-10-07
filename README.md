@@ -79,6 +79,7 @@ writes is under `/ace/`:
   snaps/*.ace           snapshots in the format other Ace emulators use
   states/slot1.sav      the emulator's own saved states, slots 1 to 4
   keymaps/*.map         keyboard mapping layouts (below)
+  shots/SHOT0001.bmp    screenshots, numbered in order
 ```
 
 > [!WARNING]
@@ -126,6 +127,7 @@ Use the following key-bindings to access the emulator itself:
 | specific menu page, then back to the Ace | `F1` Tapes, `F3` Snapshots, `F4` Setup, `F5` Machine |
 | help, shows these key bindings | `Alt`+`H` |
 | the About page | `F10` |
+| screenshot of whatever is on the display, to the card | `F6` |
 | pause | `Alt`+`P` |
 | reset the Ace, keeping its memory | `Alt`+`K` |
 

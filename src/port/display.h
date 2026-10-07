@@ -38,6 +38,13 @@ void display_invalidate(void);
 void display_perf(const char *text);
 void display_status(const char *text);
 
+/* Pixel row y (0-319) of the whole panel as it shows now, ACE_PANEL_W
+ * pixels into px, for a screenshot (shot.h): the guest's rectangle from
+ * the shadow, which holds what was last sent, whether the guest's or a
+ * menu page, valid or not; the two lines as they were last drawn; black
+ * elsewhere, as lcd_init left it. The test pattern is not reproduced. */
+void display_panel_row(unsigned y, uint16_t *px);
+
 /* The bring-up pattern (design.md §15.2 M6): a 1-px white border exactly
  * on the guest's 256x192 rectangle at (32,64), with a 16x16 block in each
  * inside corner (red top-left, green top-right, blue bottom-left, yellow

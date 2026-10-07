@@ -159,6 +159,7 @@ static bool apply_head(keymatrix_t *k) {
     if (!e) return true;
     if (e->flags & KM_MENU) { k->menu_request = true; k->menu_page = e->row; }
     if (e->flags & KM_PAUSE) k->pause_request = true;
+    if (e->flags & KM_SHOT) k->shot_request = true;
     if (e->flags & KM_RESET) k->reset_request = true;
     if (k->n >= ACE_KEY_HELD_MAX) return true;   /* more keys than fingers */
 

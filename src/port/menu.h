@@ -35,8 +35,9 @@ void menu_run(ace_t *m, unsigned page, bool alt);
 /* Pause: the guest's last frame stays, the backlight is dimmed, and the
  * status line says Paused, whether or not it is on. Any key resumes and
  * is not typed; a modifier alone does not, nor does the pause chord's
- * own repeat. Alt+M, Alt+H and the function keys go to the menu instead: returns -1 to resume, or the
- * page, with whether Alt was down in *alt. */
+ * own repeat. Alt+M, Alt+H and the function keys go to the menu instead,
+ * but for F6, which takes a screenshot and stays paused: returns -1 to
+ * resume, or the page, with whether Alt was down in *alt. */
 int pause_run(bool *alt);
 
 #endif /* PICO_ACE_MENU_H */

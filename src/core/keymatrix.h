@@ -26,8 +26,9 @@
 #define KM_SYM    0x04u   /* assert SYMBOL SHIFT with this cell          */
 #define KM_RESET  0x08u   /* no cell: ask to reset the machine (§12)     */
 #define KM_MENU   0x10u   /* no cell: the emulator menu (§12)            */
+#define KM_SHOT   0x20u   /* no cell: a screenshot to the card (§12)     */
 #define KM_PAUSE  0x80u   /* no cell: pause the guest (§12)              */
-#define KM_NOCELL (KM_RESET | KM_MENU | KM_PAUSE)
+#define KM_NOCELL (KM_RESET | KM_MENU | KM_SHOT | KM_PAUSE)
 
 /* The menu's pages (§12), as pico-atom has them: KM_MENU's row is the
  * one it opens. F2 is pico-atom's Discs, and the Ace has no disc. */
@@ -119,6 +120,7 @@ void keymap_binding_str(const keymap_t *e, char *out, size_t n);
 
 /* F1-F5 unshifted; Shift makes them F6-F10, 0x86-0x90 (keyboard.h). */
 #define PICOCALC_KEY_F1       0x81u
+#define PICOCALC_KEY_F6       0x86u
 #define PICOCALC_KEY_F10      0x90u
 
 /* The other keys this table binds (keyboard.h). */
@@ -145,6 +147,7 @@ typedef struct { uint8_t state, code; } picocalc_event_t;
  * Printable characters are themselves, inside Shift where the PicoCalc
  * types them as a Shift chord; CR and LF are Enter, BS and DEL Backspace,
  * ESC is Esc, and the other control characters are Ctrl with a letter.
+ * A function key's code is that key, F6-F10 inside Shift.
  * Returns the count, 0 for a byte no key sends. */
 unsigned keymap_picocalc_text(uint8_t ch, picocalc_event_t out[ACE_KEY_TEXT_EVENTS]);
 
@@ -200,6 +203,7 @@ typedef struct {
     bool menu_request;
     uint8_t menu_page;    /* with menu_request: the entry's row */
     bool pause_request;
+    bool shot_request;
     bool reset_request;   /* the port asks before it resets (§9.2) */
 } keymatrix_t;
 

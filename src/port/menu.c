@@ -25,6 +25,7 @@
 #include "log.h"
 #include "pico_ace_version.h"
 #include "settingsio.h"
+#include "shotio.h"
 #include "snapio.h"
 #include "southbridge.h"
 #include "status.h"
@@ -287,6 +288,7 @@ static void draw_help(void) {
         { "F4",     "Setup" },
         { "F5",     "Machine" },
         { "F10",    "About" },
+        { "F6",     "Screenshot" },
         { "Alt+M",  "Menu" },
         { "Alt+H",  "These keys" },
         { "Alt+P",  "Pause" },
@@ -700,6 +702,13 @@ static void keys(void) {
         if (c == PICOCALC_KEY_ALT) { s.alt = st != KEY_EV_RELEASED; continue; }
         if (st != KEY_EV_PRESSED) continue;
         if (s.alt && (c == 'm' || c == 'M')) { s.done = true; break; }
+        /* F6 on any page: the page as it is, then its status row says
+         * how it went. */
+        if (c == PICOCALC_KEY_F6) {
+            say(" %s", shotio_take(s.card));
+            draw();
+            continue;
+        }
         switch (s.page) {
         case P_TAPES:   key_tapes(c); break;
         case P_SNAPS:   key_snaps(c); break;
@@ -840,6 +849,14 @@ int pause_run(bool *alt_out) {
                 if (c == PICOCALC_KEY_CTRL || c == PICOCALC_KEY_SHIFT_L ||
                     c == PICOCALC_KEY_SHIFT_R) continue;
                 if (alt && (c == 'P' || c == 'p')) continue;
+                /* F6 takes the paused frame and stays paused, saying how
+                 * it went where Paused was. */
+                if (c == PICOCALC_KEY_F6) {
+                    char said[ACE_TEXT_COLS + 1];
+                    snprintf(said, sizeof said, "Paused: %s", shotio_take(false));
+                    display_status(said);
+                    continue;
+                }
                 page = menu_key(alt, c);
                 done = true;
             }

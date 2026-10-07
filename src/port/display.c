@@ -100,6 +100,15 @@ void display_present(const uint8_t *screen, const uint8_t *charset, display_stat
     if (st) *st = s;
 }
 
+/* Pixel row r of a text line, the panel's width. */
+static void text_row(const text_line_t *l, unsigned r, uint16_t *px) {
+    for (unsigned c = 0; c < ACE_TEXT_COLS; c++) {
+        uint8_t bits = s_font[(uint8_t)(l->text[c] & 0x7F) * ACE_GLYPH_ROWS + r];
+        for (unsigned b = 0; b < ACE_GLYPH_COLS; b++)
+            *px++ = (bits & (0x80u >> b)) ? TEXT_INK : ACE_PAPER_RGB565;
+    }
+}
+
 static void draw_line(text_line_t *l, const char *text) {
     char line[ACE_TEXT_COLS];
     size_t n = strnlen(text, ACE_TEXT_COLS);
@@ -112,12 +121,7 @@ static void draw_line(text_line_t *l, const char *text) {
     lcd_blit_begin(0, l->y, ACE_PANEL_W, ACE_GLYPH_ROWS);
     for (unsigned r = 0; r < ACE_GLYPH_ROWS; r++) {
         cur ^= 1u;
-        uint16_t *px = s_line[cur];
-        for (unsigned c = 0; c < ACE_TEXT_COLS; c++) {
-            uint8_t bits = s_font[(uint8_t)(line[c] & 0x7F) * ACE_GLYPH_ROWS + r];
-            for (unsigned b = 0; b < ACE_GLYPH_COLS; b++)
-                *px++ = (bits & (0x80u >> b)) ? TEXT_INK : ACE_PAPER_RGB565;
-        }
+        text_row(l, r, s_line[cur]);
         lcd_blit_row(s_line[cur], ACE_PANEL_W);
     }
     lcd_blit_end();
@@ -129,6 +133,17 @@ void display_perf(const char *text) {
 
 void display_status(const char *text) {
     draw_line(&s_status, text);
+}
+
+void display_panel_row(unsigned y, uint16_t *px) {
+    for (unsigned x = 0; x < ACE_PANEL_W; x++) px[x] = ACE_PAPER_RGB565;
+    if (y >= ACE_SCREEN_Y && y < ACE_SCREEN_Y + ACE_SCREEN_H)
+        render_row(&s_render, s_shadow.screen, s_shadow.charset, y - ACE_SCREEN_Y,
+                   px + ACE_SCREEN_X);
+    else if (y >= s_perf.y && y < s_perf.y + ACE_GLYPH_ROWS)
+        text_row(&s_perf, y - s_perf.y, px);
+    else if (y >= s_status.y && y < s_status.y + ACE_GLYPH_ROWS)
+        text_row(&s_status, y - s_status.y, px);
 }
 
 void display_test_pattern(void) {

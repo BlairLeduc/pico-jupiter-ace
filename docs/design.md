@@ -1008,8 +1008,8 @@ Alt down comes from this layer only):
 | Alt+K | reset, RAM kept (M15, as pico-atom's; Alt+R before) |
 
 Avoid Alt+`,` `.` Space `B` (MCU's own) and Alt+I (the MCU's Insert) (HW
-§6.3). F1, F3–F5 and F10 open emulator pages directly, as pico-atom's do
-(§12).
+§6.3). F1, F3–F5 and F10 open emulator pages directly, as pico-atom's do,
+and F6 takes a screenshot (§12).
 
 ### 9.3 Settling the matrix by execution
 
@@ -1077,6 +1077,7 @@ after every park.
   snaps/*.ace           snapshots from the archive (§10.5)
   states/slotN.sav      our own save states, four slots (§10.5)
   keymaps/*.map         game layouts (§9.4)
+  shots/SHOTnnnn.bmp    screenshots, F6 (§12)
 ```
 
 The same shape as pico-atom's `/atom/`, so the two can share a card. The
@@ -1372,6 +1373,20 @@ EL §10, with the Ace's specifics:
   pico-atom's Discs, and does nothing: the Ace has no disc. A page opened
   this way returns to the guest when closed. **Alt+K** resets, as
   pico-atom's BREAK does.
+- **F6** (Shift+F1, `0x86` by the MCU's `keyboard.h`; unverified on the
+  board) saves the whole 320×320 panel as it shows, guest or menu page, to
+  `/ace/shots/SHOTnnnn.bmp`, numbered on from the highest there. From the
+  guest it parks it for the write alone (`PARK_SHOT`), keeps the held
+  keys, and says the file on the status line for 3 s; in the menu the
+  status row says it, and in pause the status line, which stays paused.
+  There is no framebuffer (§7.1), so the image is regenerated row by row
+  from the presenter's shadow and its two text lines (`display_panel_row`)
+  and encoded as it goes: 24-bit uncompressed BMP, 307,254 bytes, chosen
+  because every viewer opens it and it needs no compressor and no buffer
+  of the image. Written as `.new` and renamed once whole; the keyboard is
+  polled between writes, for the southbridge's watchdog (HW §6.1).
+  `test_shot` decodes the encoder's output and compares every pixel with
+  the generator's.
 - The menu is a 32×24 text page rendered through §7.2's generator with the
   Ace's own font, in mixed case as the Ace has it; pico-atom's is upper
   case because the Atom's is. pico-atom's rows from the top are kept, and
