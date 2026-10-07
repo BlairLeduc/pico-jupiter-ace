@@ -20,10 +20,6 @@ jobs:
       - name: Build
         run: cmake --build build/host -j
 
-      # src/core/font.c is generated from third_party/font8x8 (design.md §7.5).
-      - name: The font is the upstream one
-        run: tools/mkfont.py --check
-
       # ZEXDOC, ZEXALL and FUSE's tests are GPL and not committed. Without
       # them those tests skip, and a skipped ZEXALL is an unverified CPU
       # (design.md §5.4), so CI fetches them every run.

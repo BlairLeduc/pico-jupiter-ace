@@ -453,7 +453,7 @@ the two with a rename (§4.6). `PICO_ATOM_` becomes `PICO_ACE_`, and `atom_`
 becomes `ace_`.
 
 ```
-src/core/    config.h  hot.h  z80.c  ace.c  render.c  font.c  snappool.c  beeper.c
+src/core/    config.h  hot.h  z80.c  ace.c  render.c  romfont.c  snappool.c  beeper.c
              keymatrix.c  keymap_picocalc.c  keylayout.c  tape.c  cassette.c
              tap.c  snap_ace.c  snapshot.c  settings.c  status.c
 src/port/    main.c  core0.c  core1.c  menu_*.c  board.c  lcd.c  display.c
@@ -893,8 +893,13 @@ when bit 5 of the count is set), and the copyright sign from `$1FF4`. It
 still does not depend on character RAM. `test_boot` requires it to equal
 the character RAM the ROM writes, in all three machines, and a planted bug
 fails that. The menu, the PAUSED line and the perf line use it, and the menu
-is in mixed case. `font8x8` is no longer in the firmware; it stays as the
-font of `test_golden`'s `font.ppm` and `test_render`'s checks.
+is in mixed case.
+
+**Removed, 2026-10-06, before release:** `font8x8` had stayed only as the
+font of `test_golden`'s `font.ppm` and two of `test_render`'s checks, and
+is gone from the tree with `tools/mkfont.py` and `src/core/font.c`.
+`test_render` checks the row generator's bit order with a glyph of its
+own, and draws its redefined glyph over the ROM's set.
 
 ### 7.6 Golden images
 
@@ -903,7 +908,8 @@ character and every glyph, rendered to PPM and committed after being looked at
 (EL §5.7). As built in M4, `test_golden` renders five scenes and compares
 them with `test/host/golden/`: `boot` (the real ROM after `2 2 + .`),
 `inverse`, `redefined`, `glyphs` (all 256 codes in the ROM's set) and
-`font` (the same in §7.5's font). The ROM's set is the one it writes at
+`font` (the same in §7.5's font); `font` went with that font, 2026-10-06,
+leaving four. The ROM's set is the one it writes at
 boot, read back from character RAM. `test_golden --write DIR` writes them
 for inspection; on a mismatch the test writes `<name>.actual.ppm`.
 
@@ -1002,8 +1008,8 @@ Alt down comes from this layer only):
 | Alt+K | reset, RAM kept (M15, as pico-atom's; Alt+R before) |
 
 Avoid Alt+`,` `.` Space `B` (MCU's own) and Alt+I (the MCU's Insert) (HW
-§6.3). F1, F3–F5 and F10 open emulator pages directly, as pico-atom's do
-(§12).
+§6.3). F1, F3–F5 and F10 open emulator pages directly, as pico-atom's do,
+and F6 takes a screenshot (§12).
 
 ### 9.3 Settling the matrix by execution
 
@@ -1071,6 +1077,7 @@ after every park.
   snaps/*.ace           snapshots from the archive (§10.5)
   states/slotN.sav      our own save states, four slots (§10.5)
   keymaps/*.map         game layouts (§9.4)
+  shots/SHOTnnnn.bmp    screenshots, F6 (§12)
 ```
 
 The same shape as pico-atom's `/atom/`, so the two can share a card. The
@@ -1366,6 +1373,22 @@ EL §10, with the Ace's specifics:
   pico-atom's Discs, and does nothing: the Ace has no disc. A page opened
   this way returns to the guest when closed. **Alt+K** resets, as
   pico-atom's BREAK does.
+- **F6** (Shift+F1, `0x86`, HW §6.2) saves the whole 320×320 panel as it shows, guest or menu page, to
+  `/ace/shots/SHOTnnnn.bmp`, numbered on from the highest there. From the
+  guest it parks it for the write alone (`PARK_SHOT`), keeps the held
+  keys, and says the file on the status line for 3 s; in the menu the
+  status row says it, and in pause the status line, which stays paused.
+  There is no framebuffer (§7.1), so the image is regenerated row by row
+  from the presenter's shadow and its two text lines (`display_panel_row`)
+  and encoded as it goes: 24-bit uncompressed BMP, 307,254 bytes, chosen
+  because every viewer opens it and it needs no compressor and no buffer
+  of the image. Written as `.new` and renamed once whole; the keyboard is
+  polled between writes, for the southbridge's watchdog (HW §6.1).
+  `test_shot` decodes the encoder's output and compares every pixel with
+  the generator's. The owner checked F6 on a Pico 2 W on 2026-10-07,
+  from the guest and from the menu: each shot took about 0.5 s, timed by
+  eye, not from the log, for about 600 single-block writes. The same
+  checks passed on a Plus 2 W the same day; its time was not noted.
 - The menu is a 32×24 text page rendered through §7.2's generator with the
   Ace's own font, in mixed case as the Ace has it; pico-atom's is upper
   case because the Atom's is. pico-atom's rows from the top are kept, and

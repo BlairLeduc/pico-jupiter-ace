@@ -15,7 +15,6 @@ set(PICO_ACE_CORE_SOURCES
     src/core/ace.c
     src/core/beeper.c
     src/core/cassette.c
-    src/core/font.c
     src/core/keylayout.c
     src/core/keymap_picocalc.c
     src/core/keymatrix.c
@@ -23,6 +22,7 @@ set(PICO_ACE_CORE_SOURCES
     src/core/romfont.c
     src/core/settings.c
     src/core/sha1.c
+    src/core/shot.c
     src/core/snap_ace.c
     src/core/snappool.c
     src/core/snapshot.c
@@ -260,6 +260,7 @@ else()
         src/port/park.c
         src/port/sd.c
         src/port/settingsio.c
+        src/port/shotio.c
         src/port/southbridge.c
         src/port/storage.c
         src/port/snapio.c

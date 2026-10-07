@@ -16,7 +16,9 @@
 #include "kbd.h"
 #include "keymatrix.h"
 #include "log.h"
+#include "core1.h"
 #include "menu.h"
+#include "shotio.h"
 #include "tapeio.h"
 
 static volatile uint32_t g_park = PARK_NONE;
@@ -149,6 +151,9 @@ bool park_serve(void) {
         if (page >= 0) menu_run(s_m, (unsigned)page, alt);
         break;
     }
+    case PARK_SHOT:
+        core1_note(shotio_take(false));
+        break;
     }
     release();
     return false;

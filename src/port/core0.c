@@ -126,8 +126,8 @@ static const char *card_text(void) {
 }
 
 /* The keys that ask the emulator rather than the guest for something
- * (design.md §12): the menu and pause park the guest at the next
- * boundary; Alt+K resets the CPU now, RAM kept. Returns the park, or
+ * (design.md §12): the menu, pause and a screenshot park the guest at
+ * the next boundary; Alt+K resets the CPU now, RAM kept. Returns the park, or
  * PARK_NONE. */
 static uint32_t requests(keymatrix_t *k, ace_t *m) {
     uint32_t why = PARK_NONE;
@@ -137,7 +137,8 @@ static uint32_t requests(keymatrix_t *k, ace_t *m) {
     }
     if (k->menu_request) why = PARK_MENU;
     else if (k->pause_request) why = PARK_PAUSE;
-    k->reset_request = k->pause_request = k->menu_request = false;
+    else if (k->shot_request) why = PARK_SHOT;
+    k->reset_request = k->pause_request = k->menu_request = k->shot_request = false;
     return why;
 }
 
@@ -268,13 +269,14 @@ void core0_run(ace_t *m, keymatrix_t *k) {
          * start again from now, as if the guest had just started: a
          * window across the park would count its silence as consumed
          * samples. After a hold, the menu or a pause the keys start again
-         * from none held: theirs were not the guest's. A tape request
+         * from none held: theirs were not the guest's. A screenshot's are,
+         * and their releases wait in the ring for it. A tape request
          * goes first, then whatever the keys asked for. */
         while (why != PARK_NONE || ace_tape_pending(m) || unsaved(m)) {
             uint32_t w = ace_tape_pending(m) || unsaved(m) ? PARK_TAPE : why;
             uint32_t parked = park(w, page, alt);
             if (w != PARK_TAPE) {
-                keymatrix_init(k);
+                if (w != PARK_SHOT) keymatrix_init(k);
                 why = PARK_NONE;
             }
             apply_ui(m);

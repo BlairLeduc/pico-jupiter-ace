@@ -160,11 +160,13 @@ const keymap_t keymap_picocalc[] = {
     /* The function keys open the menu at a page, as pico-atom's do
      * (§12): F2 is its Discs, and the Ace has no disc, so F2 is
      * nothing. The Ace has no function keys, so they are the menu's
-     * everywhere. */
+     * everywhere. F6, Shift+F1, takes a screenshot; the menu and pause
+     * take it from here too (menu.c). */
     { PICOCALC_KEY_F1 + 0, KM_PAGE_TAPE,     0, KM_MENU },
     { PICOCALC_KEY_F1 + 2, KM_PAGE_SNAPSHOT, 0, KM_MENU },
     { PICOCALC_KEY_F1 + 3, KM_PAGE_SETUP,    0, KM_MENU },
     { PICOCALC_KEY_F1 + 4, KM_PAGE_MACHINE,  0, KM_MENU },
+    { PICOCALC_KEY_F6,     NOCELL,              KM_SHOT },
     { PICOCALC_KEY_F10,    KM_PAGE_ABOUT,    0, KM_MENU },
 };
 
@@ -308,7 +310,12 @@ uint8_t keymap_picocalc_canonical(uint8_t code) {
     case PICOCALC_KEY_INSERT: return PICOCALC_KEY_ENTER;
     case PC_PAGE_UP:         return PICOCALC_KEY_UP;
     case PC_PAGE_DOWN:       return PICOCALC_KEY_DOWN;
-    default:                 return code;
+    case PICOCALC_KEY_F10:   return PICOCALC_KEY_F1 + 4u;
+    default:
+        /* F6-F9 are Shift+F1-F4. */
+        if (code >= PICOCALC_KEY_F6 && code <= PICOCALC_KEY_F1 + 8u)
+            return (uint8_t)(code - 5u);
+        return code;
     }
 }
 
@@ -327,6 +334,10 @@ unsigned keymap_picocalc_text(uint8_t ch, picocalc_event_t out[ACE_KEY_TEXT_EVEN
     } else if (ch >= 0x20u && ch <= 0x7Eu) {
         code = ch;
         /* A code that is not its own key's base is a Shift chord. */
+        if (keymap_picocalc_canonical(ch) != ch) mod = PICOCALC_KEY_SHIFT_L;
+    } else if ((ch >= PICOCALC_KEY_F1 && ch <= PICOCALC_KEY_F1 + 8u) || ch == PICOCALC_KEY_F10) {
+        /* The function keys as their own codes; F6-F10 are Shift+F1-F5. */
+        code = ch;
         if (keymap_picocalc_canonical(ch) != ch) mod = PICOCALC_KEY_SHIFT_L;
     } else {
         return 0;

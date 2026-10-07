@@ -9,4 +9,9 @@
  * core 0's log for ever. Launched with multicore_launch_core1. */
 void core1_main(void);
 
+/* Core 1: say this on the status line for a few seconds in place of what
+ * it says, whether or not it is on, as a screenshot's result is said
+ * (shotio.h). */
+void core1_note(const char *text);
+
 #endif /* PICO_ACE_CORE1_H */

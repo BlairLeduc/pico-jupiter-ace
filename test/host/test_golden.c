@@ -15,7 +15,6 @@
 
 #include <string.h>
 
-#include "font.h"
 #include "guest.h"
 #include "render.h"
 #include "test_util.h"
@@ -84,18 +83,11 @@ static void scene_glyphs(uint8_t *screen, uint8_t *charset) {
     memcpy(charset, g_rom_charset, ACE_CHARSET_BYTES);
 }
 
-/* The emulator's own font (§7.5), checked by eye once. */
-static void scene_font(uint8_t *screen, uint8_t *charset) {
-    all_codes(screen);
-    memcpy(charset, ace_font, ACE_CHARSET_BYTES);
-}
-
 static const scene_t scenes[] = {
     { "boot",      scene_boot },
     { "inverse",   scene_inverse },
     { "redefined", scene_redefined },
     { "glyphs",    scene_glyphs },
-    { "font",      scene_font },
 };
 
 static void render_rgb(const uint8_t *screen, const uint8_t *charset, uint8_t *rgb) {
