@@ -1387,7 +1387,8 @@ EL §10, with the Ace's specifics:
   `test_shot` decodes the encoder's output and compares every pixel with
   the generator's. The owner checked F6 on a Pico 2 W on 2026-10-07,
   from the guest and from the menu: each shot took about 0.5 s, timed by
-  eye, not from the log, for about 600 single-block writes.
+  eye, not from the log, for about 600 single-block writes. The same
+  checks passed on a Plus 2 W the same day; its time was not noted.
 - The menu is a 32×24 text page rendered through §7.2's generator with the
   Ace's own font, in mixed case as the Ace has it; pico-atom's is upper
   case because the Atom's is. pico-atom's rows from the top are kept, and
