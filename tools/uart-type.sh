@@ -8,8 +8,9 @@
 # it (keymap_picocalc_text, called from uart_keys in src/port/core0.c), so a
 # hardware run can be driven from the machine capturing it. Characters type
 # as themselves, the shifted ones inside Shift as the PicoCalc sends them;
-# CR and LF are Enter, BS and DEL Backspace, ESC is Esc (BREAK), and the
-# other control characters are Ctrl chords. The events go through
+# CR and LF are Enter, BS and DEL Backspace, ESC is Esc (BREAK), the
+# other control characters are Ctrl chords, and \x81-\x85 are F1-F5,
+# \x86-\x89 and \x90 F6-F10 (so '\x86' takes a screenshot). The events go through
 # keymatrix to the guest, as the keyboard's do; tools/uart-screen.sh reads
 # the screen back.
 #

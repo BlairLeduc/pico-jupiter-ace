@@ -27,6 +27,17 @@
 /* The battery gauge and the die, for the heartbeat (design.md §14). */
 #define BAT_POLL_US  5000000u
 #define TEMP_POLL_US 1000000u
+/* A note stays on the status line this long (core1_note). */
+#define NOTE_US      3000000u
+
+static char     s_note[ACE_TEXT_COLS + 1];
+static uint32_t s_note_until;
+
+void core1_note(const char *text) {
+    snprintf(s_note, sizeof s_note, "%s", text);
+    s_note_until = time_us_32() + NOTE_US;
+    display_status(s_note);
+}
 
 /* The perf line at the top (design.md §7.4, §14), as pico-atom has it:
  * core 0's last second, core 1's longest present and dropped snapshots
@@ -46,8 +57,13 @@ static void draw_perf(uint32_t present_max_us, uint32_t dropped) {
 }
 
 /* The status line at the foot (§12): the cassette from the snapshot's
- * few bytes, and the deck's name, which is core 1's own. */
+ * few bytes, and the deck's name, which is core 1's own; or a note,
+ * until it has been up for NOTE_US. */
 static void draw_status(const ace_status_t *st) {
+    if (s_note[0]) {
+        if ((int32_t)(time_us_32() - s_note_until) < 0) return;
+        s_note[0] = 0;
+    }
     char text[ACE_TEXT_COLS + 1] = "";
     if (g_ui.status) status_format(st, tapeio_inserted(), text);
     display_status(text);
