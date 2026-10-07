@@ -1373,8 +1373,7 @@ EL §10, with the Ace's specifics:
   pico-atom's Discs, and does nothing: the Ace has no disc. A page opened
   this way returns to the guest when closed. **Alt+K** resets, as
   pico-atom's BREAK does.
-- **F6** (Shift+F1, `0x86` by the MCU's `keyboard.h`; unverified on the
-  board) saves the whole 320×320 panel as it shows, guest or menu page, to
+- **F6** (Shift+F1, `0x86`, HW §6.2) saves the whole 320×320 panel as it shows, guest or menu page, to
   `/ace/shots/SHOTnnnn.bmp`, numbered on from the highest there. From the
   guest it parks it for the write alone (`PARK_SHOT`), keeps the held
   keys, and says the file on the status line for 3 s; in the menu the
@@ -1386,7 +1385,8 @@ EL §10, with the Ace's specifics:
   of the image. Written as `.new` and renamed once whole; the keyboard is
   polled between writes, for the southbridge's watchdog (HW §6.1).
   `test_shot` decodes the encoder's output and compares every pixel with
-  the generator's.
+  the generator's. The owner checked F6 on the device on 2026-10-07; the
+  write time was not recorded.
 - The menu is a 32×24 text page rendered through §7.2's generator with the
   Ace's own font, in mixed case as the Ace has it; pico-atom's is upper
   case because the Atom's is. pico-atom's rows from the top are kept, and
