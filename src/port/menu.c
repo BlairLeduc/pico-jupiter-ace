@@ -694,19 +694,36 @@ static void key_machine(uint8_t c) {
     }
 }
 
+/* F6 takes one screenshot a press. The MCU's auto-repeat arrives as more
+ * presses, and the SD write polls the keyboard, so it rearms only on the
+ * release (hardware-notes.md §6.2), which is F1's if Shift went first.
+ * True when this event is F6 going down afresh. */
+static bool s_shot_down;
+
+static bool shot_press(uint8_t st, uint8_t c) {
+    if (keymap_picocalc_canonical(c) != keymap_picocalc_canonical(PICOCALC_KEY_F6)) return false;
+    if (st == KEY_EV_RELEASED) s_shot_down = false;
+    if (st != KEY_EV_PRESSED || c != PICOCALC_KEY_F6 || s_shot_down) return false;
+    s_shot_down = true;
+    return true;
+}
+
 /* Presses only: releases and the MCU's held reports move nothing. Alt is
  * tracked so that Alt+M closes the menu as it opened it. */
 static void keys(void) {
     uint8_t st, c;
     while (!s.done && (kbd_pop(&st, &c) || kbd_pop_uart(&st, &c))) {
         if (c == PICOCALC_KEY_ALT) { s.alt = st != KEY_EV_RELEASED; continue; }
+        bool shoot = shot_press(st, c);
         if (st != KEY_EV_PRESSED) continue;
         if (s.alt && (c == 'm' || c == 'M')) { s.done = true; break; }
         /* F6 on any page: the page as it is, then its status row says
-         * how it went. */
+         * how it went. Its repeats do nothing. */
         if (c == PICOCALC_KEY_F6) {
-            say(" %s", shotio_take(s.card));
-            draw();
+            if (shoot) {
+                say(" %s", shotio_take(s.card));
+                draw();
+            }
             continue;
         }
         switch (s.page) {
@@ -729,6 +746,7 @@ static void keys(void) {
 void menu_run(ace_t *m, unsigned page, bool alt) {
     memset(&s, 0, sizeof s);
     s.m = m;
+    s_shot_down = false;
     s.alt = alt;       /* Alt+M or Alt+H has it held; the function keys do not */
 
     s.card = storage_mount() == 0;
@@ -835,6 +853,7 @@ int pause_run(bool *alt_out) {
 
     /* It was asked for with Alt held. */
     bool alt = true, done = false;
+    s_shot_down = false;
     int page = -1;
     uint32_t last_poll = time_us_32();
     while (!done) {
@@ -845,16 +864,20 @@ int pause_run(bool *alt_out) {
             uint8_t st, c;
             while (!done && (kbd_pop(&st, &c) || kbd_pop_uart(&st, &c))) {
                 if (c == PICOCALC_KEY_ALT) { alt = st != KEY_EV_RELEASED; continue; }
+                bool shoot = shot_press(st, c);
                 if (st != KEY_EV_PRESSED) continue;
                 if (c == PICOCALC_KEY_CTRL || c == PICOCALC_KEY_SHIFT_L ||
                     c == PICOCALC_KEY_SHIFT_R) continue;
                 if (alt && (c == 'P' || c == 'p')) continue;
                 /* F6 takes the paused frame and stays paused, saying how
-                 * it went where Paused was. */
+                 * it went where Paused was; its repeats neither take
+                 * another nor resume. */
                 if (c == PICOCALC_KEY_F6) {
-                    char said[ACE_TEXT_COLS + 1];
-                    snprintf(said, sizeof said, "Paused: %s", shotio_take(false));
-                    display_status(said);
+                    if (shoot) {
+                        char said[ACE_TEXT_COLS + 1];
+                        snprintf(said, sizeof said, "Paused: %s", shotio_take(false));
+                        display_status(said);
+                    }
                     continue;
                 }
                 page = menu_key(alt, c);

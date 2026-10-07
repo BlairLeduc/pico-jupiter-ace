@@ -448,6 +448,28 @@ int main(void) {
             m.keys[AK_ROW_MODS] &= (uint8_t)~(1u << AK_COL_SHIFT);
             CHECK(matrix_empty(), "%sF6 reached the matrix", alt ? "Alt+" : "");
         }
+
+        /* F6 is Shift+F1, so a Shift let go first turns its release into
+         * F1's (hardware-notes.md §6.2). A screenshot keeps the held set
+         * (core0.c), so that release must let go of F6, or the next F6
+         * is taken for its auto-repeat and asks for nothing. */
+        CHECK(keymap_picocalc_canonical(PICOCALC_KEY_F6) == PICOCALC_KEY_F1 &&
+              keymap_picocalc_canonical(PICOCALC_KEY_F10) == PICOCALC_KEY_F1 + 4u,
+              "F6 and F10 are F1's and F5's keys");
+        fresh();
+        press(PICOCALC_KEY_SHIFT_L);
+        press(PICOCALC_KEY_F6);
+        fields(ACE_KEY_MIN_FIELDS);
+        CHECK(k.shot_request, "F6 requests a screenshot");
+        k.shot_request = false;
+        release(PICOCALC_KEY_SHIFT_L);
+        release(PICOCALC_KEY_F1);
+        fields(ACE_KEY_GAP_FIELDS + 2);
+        CHECK(k.n == 0, "F1's release left %u key(s) held", k.n);
+        press(PICOCALC_KEY_SHIFT_L);
+        press(PICOCALC_KEY_F6);
+        fields(1);
+        CHECK(k.shot_request, "a second F6 requests another");
         fresh();
         press(PICOCALC_KEY_SHIFT_L);
         press(PICOCALC_KEY_F10);

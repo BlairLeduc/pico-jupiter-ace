@@ -310,7 +310,12 @@ uint8_t keymap_picocalc_canonical(uint8_t code) {
     case PICOCALC_KEY_INSERT: return PICOCALC_KEY_ENTER;
     case PC_PAGE_UP:         return PICOCALC_KEY_UP;
     case PC_PAGE_DOWN:       return PICOCALC_KEY_DOWN;
-    default:                 return code;
+    case PICOCALC_KEY_F10:   return PICOCALC_KEY_F1 + 4u;
+    default:
+        /* F6-F9 are Shift+F1-F4. */
+        if (code >= PICOCALC_KEY_F6 && code <= PICOCALC_KEY_F1 + 8u)
+            return (uint8_t)(code - 5u);
+        return code;
     }
 }
 
@@ -333,7 +338,7 @@ unsigned keymap_picocalc_text(uint8_t ch, picocalc_event_t out[ACE_KEY_TEXT_EVEN
     } else if ((ch >= PICOCALC_KEY_F1 && ch <= PICOCALC_KEY_F1 + 8u) || ch == PICOCALC_KEY_F10) {
         /* The function keys as their own codes; F6-F10 are Shift+F1-F5. */
         code = ch;
-        if (ch >= PICOCALC_KEY_F6) mod = PICOCALC_KEY_SHIFT_L;
+        if (keymap_picocalc_canonical(ch) != ch) mod = PICOCALC_KEY_SHIFT_L;
     } else {
         return 0;
     }
