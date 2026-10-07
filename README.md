@@ -5,6 +5,8 @@ Pico 2 or compatible board. Unfortunately, a board based on the RP2040
 (Pico or the like) is not supported as it is too slow to run the Z80
 in real time.
 
+![emulator](/assets/emulator.png)
+
 The Jupiter Ace (Jupiter Cantab, 1982) is a small British home computer
 that runs Forth instead of BASIC. It has a Z80A at 3.25 MHz, an 8 KiB ROM
 holding the Forth system, a 32×24 character screen whose characters can
@@ -93,6 +95,8 @@ files, scanned magazines, and the Ace's manuals. Put `.tap` files in
 `/ace/tapes/` and `.ace` files in `/ace/snaps/`. The TOSEC collection's
 Jupiter Ace set holds much the same files.
 
+![TUTTUT](/assets/tuttut.png)
+
 ## Using it
 
 The PicoCalc boots straight to the Ace's prompt: a blank screen with a
@@ -130,6 +134,8 @@ Use the following key-bindings to access the emulator itself:
 | screenshot of whatever is on the display, to the card | `F6` |
 | pause | `Alt`+`P` |
 | reset the Ace, keeping its memory | `Alt`+`K` |
+
+![menu](/assets/menu.png)
 
 A page opened with a function key or `Alt`+`H` goes back to the Ace when
 you leave it. In the menu the arrows move, `Enter` chooses, left and
