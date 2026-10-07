@@ -1022,7 +1022,7 @@ Backspace is `0x08` and Enter is `0x0a`. Alt `0xa1`, both Shift keys
 `0xa2`/`0xa3`, and Ctrl `0xa5` were observed; Symbol `0xa4` was not.
 `F1`–`F5` arrive as `0x81`–`0x85`, and `F10` as `0x90`, the MCU's Shift+`F5`
 (verified on a Plus 2 W, and `F10` also on a Pico 2 W, September 2026).
-`F6` arrives as `0x86`, the MCU's Shift+`F1` (checked on the device,
+`F6` arrives as `0x86`, the MCU's Shift+`F1` (checked on a Pico 2 W,
 October 2026). A function key
 pressed with Alt still held arrives as itself, so match it whatever the Alt
 state.

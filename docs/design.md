@@ -1385,8 +1385,12 @@ EL §10, with the Ace's specifics:
   of the image. Written as `.new` and renamed once whole; the keyboard is
   polled between writes, for the southbridge's watchdog (HW §6.1).
   `test_shot` decodes the encoder's output and compares every pixel with
-  the generator's. The owner checked F6 on the device on 2026-10-07; the
-  write time was not recorded.
+  the generator's. The owner checked F6 on a Pico 2 W on 2026-10-07,
+  from the guest and from the menu: each shot took about 2 s, timed by
+  eye, not from the log. That is the driver's single-block writes
+  (`disk_write` sends one `CMD24` a sector and waits out each one's
+  busy), about 600 of them; the keyboard polls between writes keep the
+  watchdog fed.
 - The menu is a 32×24 text page rendered through §7.2's generator with the
   Ace's own font, in mixed case as the Ace has it; pico-atom's is upper
   case because the Atom's is. pico-atom's rows from the top are kept, and
