@@ -11,6 +11,7 @@
  *   FF_FS_REENTRANT 0, LOCK 0    the card belongs to core 1 alone (§4.3)
  *   FF_USE_FIND 0, STRFUNC 0     not needed yet
  *   FF_USE_LFN 1                 long names, static buffer, not reentrant
+ *   FF_FS_NORTC 0                the shell's time, get_fattime() in diskio.c
  */
 /*----------------------------------------------------------------------------/
 /  FatFs - Generic FAT Filesystem Module  R0.15 w/patch1                      /
@@ -271,7 +272,7 @@
 /  Note that enabling exFAT discards ANSI C (C89) compatibility. */
 
 
-#define FF_FS_NORTC		1
+#define FF_FS_NORTC		0
 #define FF_NORTC_MON	1
 #define FF_NORTC_MDAY	1
 #define FF_NORTC_YEAR	2026

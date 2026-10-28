@@ -2,6 +2,7 @@
 # system compiler and no Pico SDK. One binary per area; exit 77 is a skip.
 
 set(PICO_ACE_HOST_TESTS
+    test_fattime
     test_keymap
     test_settings
     test_shot
