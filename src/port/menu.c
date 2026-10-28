@@ -15,6 +15,8 @@
 
 #include "pico/stdlib.h"
 
+#include "picocalc_shell.h"
+
 #include "ace_rom.h"
 #include "board.h"
 #include "display.h"
@@ -54,7 +56,7 @@
 
 /* pico-atom's items, less Discs. The function keys open the first four
  * (keymatrix.h's KM_PAGE_*). */
-enum { I_TAPES, I_SNAPS, I_SETUP, I_MACHINE, I_RESET, I_SAVE, I_ABOUT, I_COUNT };
+enum { I_TAPES, I_SNAPS, I_SETUP, I_MACHINE, I_RESET, I_SAVE, I_SHELL, I_ABOUT, I_COUNT };
 
 /* The Tapes page: the deck's controls, then the files. Play is the
  * signal's (design.md §10.4), for a loader that never calls the ROM.
@@ -135,7 +137,7 @@ static const char *on_off(bool v) {
 static void draw_main(void) {
     static const char *const items[I_COUNT] = {
         " Tapes...", " Snapshots...", " Setup...", " Machine...", " Reset",
-        " Save settings", " About...",
+        " Save settings", " Exit to shell", " About...",
     };
     for (int i = 0; i < I_COUNT; i++)
         textpage_line(s_scr, ROW_TOP + i, items[i], i == s.item);
@@ -492,6 +494,27 @@ static void apply_machine(void) {
     s.done = true;             /* straight into the new machine */
 }
 
+/* Back to the PicoCalc shell (§12): UF2 Loader's stage3 loads it from
+ * the card, and the running program is lost, as by a power-on. Every
+ * card write has closed its file by now, since the menu does its card
+ * work synchronously; a recording not on the card yet refuses it, as it
+ * does Apply. Returns only if it cannot go, saying why. */
+static void exit_to_shell(void) {
+    uint32_t from, to;
+    if (ace_cassette_unsaved(s.m, &from, &to)) { say(" A recording is not saved yet", ""); return; }
+    if (!picocalc_shell_loader_present()) { say(" Not started by UF2 Loader", ""); return; }
+    if (!picocalc_shell_card_present()) { say(" No card to load the shell", ""); return; }
+    log_core1("  menu         : exit to the shell\n");
+    say(" Exiting to the shell...", "");
+    draw();
+    if (s.card) storage_unmount();
+    busy_wait_ms(100);   /* the UART's last line */
+    picocalc_shell_exit();
+    /* Only if the card went between the check and the call. */
+    s.card = storage_mount() == 0;
+    say(" Cannot return to the shell", "");
+}
+
 static void open_item(void) {
     s.status[0] = 0;
     switch (s.item) {
@@ -501,6 +524,7 @@ static void open_item(void) {
     case I_MACHINE: open_machine(); break;
     case I_RESET:   g_ui.reset = true; s.done = true; break;
     case I_SAVE:    save_settings(); break;
+    case I_SHELL:   exit_to_shell(); break;
     case I_ABOUT:   open_about(); break;
     }
 }

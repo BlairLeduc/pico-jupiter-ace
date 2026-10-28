@@ -15,6 +15,7 @@ set(PICO_ACE_CORE_SOURCES
     src/core/ace.c
     src/core/beeper.c
     src/core/cassette.c
+    src/core/fattime.c
     src/core/keylayout.c
     src/core/keymap_picocalc.c
     src/core/keymatrix.c
@@ -268,6 +269,8 @@ else()
         src/port/textpage.c
     )
     pico_ace_firmware(pico-ace)
+    # picocalc_shell.h, the shell's return call and its time (design.md §12).
+    target_include_directories(pico-ace SYSTEM PRIVATE third_party/picocalc-shell)
     if (PICO_ACE_BOOT_RAM)
         string(TOUPPER ${PICO_ACE_BOOT_RAM} boot_ram)
         if (NOT boot_ram MATCHES "^(3K|19K|51K)$")
@@ -284,6 +287,7 @@ else()
         hardware_dma
         hardware_i2c
         hardware_irq
+        hardware_powman
         hardware_pwm
         hardware_spi
         hardware_sync

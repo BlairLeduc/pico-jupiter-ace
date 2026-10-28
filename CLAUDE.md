@@ -198,6 +198,13 @@ From `hardware-notes.md` §10. Each one cost real debugging time on pico-atom:
   `DMA_IRQ_0` at priority `0x40`, and the refill path in SRAM.
 - **Core 1 never calls `sleep_us`/`sleep_ms`**: their alarm IRQ runs on
   core 0, in the middle of the guest. Use `busy_wait_us_32` (HW §9.7).
+- **The PicoCalc shell** (`third_party/picocalc-shell/picocalc_shell.h`,
+  verbatim, `THIRD-PARTY.md`): the menu's *Exit to shell* reboots into it
+  through UF2 Loader's stage3, and `get_fattime()` stamps files with the
+  time it keeps (design.md §10.1, §12). Never stop or set that timer, or
+  write POWMAN scratch 0–2: the shell owns them. Verified on a Plus 2 on
+  2026-10-28: settings saved, *Exit to shell*, and the file's time correct
+  in the shell; with no card, *Exit to shell* refused.
 - **Core 0 never calls `printf` once the guest runs.** It logs into a ring
   that core 1 drains.
 - Poll the keyboard from core 1's loop in thread context. Build held-key

@@ -1084,6 +1084,20 @@ The same shape as pico-atom's `/atom/`, so the two can share a card. The
 card is optional: the ROM is in the firmware (§10.2), and without a card the
 machine runs on the defaults, with no tapes or saved states.
 
+A file is stamped with the **PicoCalc shell's time** (`get_fattime()` in
+`diskio.c`, `fattime.c`), as pico-atom's are. The shell keeps UTC in the
+RP2350's always-on timer, which survives its reboot into the emulator, and
+its local offset in POWMAN's scratch registers; `picocalc_shell_time()`
+reads both. The stamp is local time at the offset the shell had when it
+started the emulator. With no clock set (a power-on that started the
+emulator without the shell, or a copy installed from BOOTSEL), it is
+2026-01-01 00:00, the date `FF_FS_NORTC` gave before. The calendar is in
+the core and `test_fattime` checks it against the system's `gmtime` across
+FAT's 1980–2107. Verified on a Plus 2 on 2026-10-28: with the emulator
+started from the shell, Save settings wrote the settings file, and back in
+the shell its date and time were correct. Not checked: the unset clock's
+fixed date, and a stamp after the shell's offset has changed.
+
 ### 10.2 The ROM
 
 **The project ships the ROM** (§18 item 2). It lives at `roms/ace.rom` in
@@ -1367,7 +1381,8 @@ EL §10, with the Ace's specifics:
   the files), Snapshots (slot, save, load, delete, every slot's state, then
   the `.ace` files), Setup (status line, perf line, backlight, volume, keys,
   fast tape), Machine (RAM size, staged, applied by *Apply and restart*,
-  with a warning that the program is lost), Reset, Save settings, About.
+  with a warning that the program is lost), Reset, Save settings, Exit to
+  shell, About.
 - **F1** Tapes, **F3** Snapshots, **F4** Setup, **F5** Machine, **F10**
   About, **Alt+H** a page of these keys, as pico-atom's. **F2** is
   pico-atom's Discs, and does nothing: the Ace has no disc. A page opened
@@ -1442,6 +1457,18 @@ refuses it. The settings file gains pico-atom's `status` (default on)
 and `backlight` (1-15; unset leaves the panel's own, and a save keeps
 what the file has), and Save settings writes them and `layout`. Alt+R is
 gone for Alt+K.
+**After M15** (2026-10-28), pico-atom's *Exit to shell* joined the main
+page, between *Save settings* and *About*. Under UF2 Loader with the
+PicoCalc shell installed as `/BOOT2350.UF2`, it reboots into the shell
+through the loader's stage3 (`picocalc_shell_exit()`, from
+`third_party/picocalc-shell/picocalc_shell.h`), and the running program is
+lost, as by a power-on. It unmounts the card first. It refuses, and says
+why on the status row, when a recording is not on the card yet (as Apply
+does), when the firmware was not started by the loader, or when there is
+no card to load the shell from. Verified on a Plus 2 on 2026-10-28:
+started from the shell, settings saved, then *Exit to shell* reached the
+shell; with the card out, it refused. Not checked: the refusal for an
+unsaved recording, or for firmware not started by the loader.
 
 ---
 
